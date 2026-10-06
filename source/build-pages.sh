@@ -24,17 +24,17 @@ cat <<'HEAD'
 HEAD
 cat out/tesseract-cad-tools.html
 cat <<'TAIL'
-<script>if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function () {});</script>
-</body>
-</html>
 TAIL
+echo '<script>'; sed "s/__VERSION__/$VER/" pages-extra.js; echo '</script>'
+echo '</body>'; echo '</html>'
 } > site/index.html
 sed "s/__VERSION__/$VER/" sw-template.js > site/sw.js
 cp out/cad-worker.js out/libredwg-web.wasm site/
 cp readme-pages.md site/README.md
+cp manifest.webmanifest 404.html site/
 touch site/.nojekyll
 cp /usr/share/common-licenses/GPL-3 site/LICENSE
 mkdir -p site/source/src
 cp src/* site/source/src/
-cp worker-src.js dxf-parser.js patchmem.mjs build.sh build-pages.sh sw-template.js make-icons.py aci.txt package.json package-lock.json site/source/
+cp pages-extra.js manifest.webmanifest 404.html worker-src.js dxf-parser.js patchmem.mjs build.sh build-pages.sh sw-template.js make-icons.py aci.txt package.json package-lock.json site/source/
 echo "built site v$VER"; ls -la site
