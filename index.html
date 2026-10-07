@@ -110,6 +110,20 @@ input{font:inherit;color:inherit}
 #spaces button:active{background:var(--chip)}
 #spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 #spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
+/* properties sheet */
+#propsPanel{max-height:min(82%,640px)}
+.prop-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.prop-row:last-child{border-bottom:0}
+.prop-row > label{font-size:12.5px;color:var(--muted)}
+.prop-row select,.prop-row input,.prop-row textarea{width:100%;min-width:0;padding:8px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:15px}
+.prop-row textarea{min-height:64px;resize:vertical;font-family:var(--font)}
+.prop-row input.changed,.prop-row select.changed,.prop-row textarea.changed{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.prop-sub{font-size:11.5px;color:var(--muted);grid-column:2}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.swatches button{width:30px;height:30px;border-radius:7px;border:1px solid rgba(128,128,128,.45);font-size:9.5px;font-weight:600;color:var(--fg);background:var(--chip)}
+.swatches button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.swatches input{width:84px;padding:6px 8px;font-size:14px}
+.prop-head{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;padding:10px 0 2px}
 /* full screen: only the drawing, the strip and the view buttons */
 body.fs #top, body.fs #tools{display:none}
 #welcome{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(180deg,rgba(20,22,26,.55),rgba(20,22,26,.85));color:#ece8df}
@@ -178,6 +192,7 @@ body.fs #top, body.fs #tools{display:none}
     <div id="prompt" hidden>
       <div id="promptBar">
         <div id="promptText"><span class="tool" id="toolName">View</span><span id="promptMsg"></span></div>
+        <button class="pb" id="btnProps" title="Change properties" aria-label="Change properties" hidden><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>
         <button class="pb" id="btnKeys" title="Type a value" aria-label="Type a value" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
         <button class="pb" id="btnBack" title="Back: remove the last point" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg></button>
         <button class="pb ok" id="btnDone" title="Done" aria-label="Done"><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg></button>
@@ -212,6 +227,11 @@ body.fs #top, body.fs #tools{display:none}
       <button data-g="edit"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg>Edit</button>
       <button data-g="draw"><svg viewBox="0 0 24 24"><path d="M3 21 21 3M3 21h5M3 21v-5"/><circle cx="17" cy="17" r="3"/></svg>Draw</button>
     </div>
+    <section class="sheet" id="propsPanel" aria-label="Properties">
+      <header><h2 id="propsTitle">Properties</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body" id="propsBody"></div>
+      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="propsApply">Apply</button></div>
+    </section>
     <section class="sheet" id="spacesPanel" aria-label="Model and layouts">
       <header><h2>Model and layouts</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body"><nav id="spaces" aria-label="Model and layouts"></nav></div>
@@ -493,11 +513,11 @@ class SnapGrid {
 // ===================== Scene build =====================
 const KEY_SEP = '\u0001';
 function makeScene() { return { items: [], viewports: [], bbox: emptyBox(), snap: new SnapGrid(), textBox: emptyBox(), nFills: 0, nTexts: 0 }; }
-let curAl = 1; // opacity of the entity being emitted (set in emitEntity)
-function sceneKey(S, layer, aci, lt, item, al) {
-  if (al == null) al = curAl;
-  const k = layer + KEY_SEP + aci + KEY_SEP + (lt || '') + KEY_SEP + al;
-  let e = item.pathMap.get(k); if (!e) { e = { layer, aci, lt: lt || '', al, path: new Path2D(), n: 0 }; item.pathMap.set(k, e); item.paths.push(e); } return e;
+let curAl = 1, curLts = 1, curScene = null; // opacity and linetype scale of the entity being emitted (set in emitEntity)
+function sceneKey(S, layer, aci, lt, item, al, lts) {
+  if (al == null) al = curAl; if (lts == null) lts = lt ? curLts : 1;
+  const k = layer + KEY_SEP + aci + KEY_SEP + (lt || '') + KEY_SEP + al + KEY_SEP + lts;
+  let e = item.pathMap.get(k); if (!e) { e = { layer, aci, lt: lt || '', al, lts, path: new Path2D(), n: 0 }; item.pathMap.set(k, e); item.paths.push(e); } return e;
 }
 function resolveLayer(e, ctx) { return (e.L === '0' && ctx.layer) ? ctx.layer : (e.L || '0'); }
 // Colour is an ACI number (1..255) or a true colour string '#rrggbb'.
@@ -509,6 +529,9 @@ function resolveLt(e, ctx, layer) { let lt = e.lt || ''; if (!lt || /^bylayer$/i
 function buildScene(space) {
   const S = makeScene();
   const D = state.drawing;
+  // A layout's own full-sheet viewport (lowest id, 1:1) is the sheet itself, not a window into the model.
+  if (space.paper) { let mv = null; for (const e of space.ents) if (e.t === 'VIEWPORT' && (mv === null || e.vid < mv.vid)) mv = e; if (mv && Math.abs((mv.h || 0) / (mv.vh || 1) - 1) < 1e-6) S.sheetVid = mv.vid; }
+  curScene = S;
   for (const e of space.ents) {
     const item = { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 };
     try { emitEntity(e, IDM, { layer: null, color: null, lt: '' }, S, item, 0); } catch (err) { console.warn('emit failed', e.t, err); }
@@ -597,8 +620,10 @@ function hatchLoopToPath(S, path, loop, M, flatOut) { // returns flat polygon
     for (const ed of loop.e) {
       const q = [];
       if (ed.t === 1) { const a = mApply(M, ed.a), b = mApply(M, ed.b); q.push(a[0], a[1], b[0], b[1]); }
-      else if (ed.t === 2) arcPoints(ed.c, ed.r, ed.ccw ? ed.a0 : ed.a1, ed.ccw ? ed.a1 : ed.a0, true, q, M, Math.PI / 16);
-      else if (ed.t === 3) { const m = ed.m; const k = ed.k; const a0 = ed.ccw ? ed.a0 : ed.a1, a1 = ed.ccw ? ed.a1 : ed.a0; ellipsePoints(ed.c, m, k, a0, a1, q, M); if (!ed.ccw) { const r = []; for (let i = q.length - 2; i >= 0; i -= 2) r.push(q[i], q[i + 1]); q.length = 0; for (const v of r) q.push(v); } }
+      // Clockwise hatch arc/ellipse edges store their angles negated (DXF/DWG convention): the edge runs
+      // clockwise from -start to -end. Build it counter-clockwise from -end to -start, then reverse.
+      else if (ed.t === 2) arcPoints(ed.c, ed.r, ed.ccw ? ed.a0 : -ed.a1, ed.ccw ? ed.a1 : -ed.a0, true, q, M, Math.PI / 16);
+      else if (ed.t === 3) { const m = ed.m; const k = ed.k; const a0 = ed.ccw ? ed.a0 : -ed.a1, a1 = ed.ccw ? ed.a1 : -ed.a0; ellipsePoints(ed.c, m, k, a0, a1, q, M); if (!ed.ccw) { const r = []; for (let i = q.length - 2; i >= 0; i -= 2) r.push(q[i], q[i + 1]); q.length = 0; for (const v of r) q.push(v); } }
       else if (ed.t === 4) splinePoints(ed, q, M);
       if (q.length < 4) continue;
       if (!ed.ccw && ed.t === 2) { const r = []; for (let i = q.length - 2; i >= 0; i -= 2) r.push(q[i], q[i + 1]); q.length = 0; for (const v of r) q.push(v); }
@@ -614,7 +639,7 @@ function hatchLoopToPath(S, path, loop, M, flatOut) { // returns flat polygon
 }
 
 function emitEntity(e, M, ctx, S, item, depth) {
-  const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al;
+  const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al; curLts = (e.lts || 1) * (ctx.lts || 1);
   switch (e.t) {
     case 'LINE': { const a = mApply(M, e.a), b = mApply(M, e.b); const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitPoly(S, item, [a[0], a[1], b[0], b[1]], false, key, M); S.snap.add(a[0], a[1], 1); S.snap.add(b[0], b[1], 1); S.snap.add((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 2); break; }
     case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; } break; }
@@ -631,7 +656,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
     case 'MTEXT': { const sc = mScaleOf(M); const p = mApply(M, e.p); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const w = (e.w || 0) * sc; let lines = mtextPlain(e.s); if (!lines.join('').trim()) break; lines = wrapLines(lines, h, w); const t = { layer, aci, al, x: p[0], y: p[1], h, rot, lines, at: e.at || 1, ls: e.ls || 1, mt: true, w, id: e.id }; item.texts.push(t); let mw = 0; for (const ln of lines) mw = Math.max(mw, textWidthUnits(ln, h)); textItemBox(item, t, Math.max(mw, w * 0.5), h + (lines.length - 1) * h * 1.667 * t.ls, S); S.snap.add(p[0], p[1], 4); break; }
     case 'INSERT': {
       if (depth > 12) break; const blk = state.drawing.blocks[e.n]; if (!blk) break;
-      const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer), al };
+      const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer), al, lts: curLts };
       const g = getBlockGeom(e.n, ctx2, depth);
       if (!item.inst) item.inst = [];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -676,7 +701,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
       break;
     }
     case 'VIEWPORT': {
-      if (e.vid === 1 || !e.on) break;
+      if (e.vid === 1 || !e.on || (curScene && curScene.sheetVid === e.vid)) break;
       const x0 = e.ce[0] - e.w / 2, y0 = e.ce[1] - e.h / 2, x1 = e.ce[0] + e.w / 2, y1 = e.ce[1] + e.h / 2;
       const key = sceneKey(S, layer, aci, '', item); const pts = [x0, y0, x1, y0, x1, y1, x0, y1];
       emitPoly(S, item, pts, true, key, M); S.viewports.push({ x0, y0, x1, y1, vc: e.vc, sc: e.h / (e.vh || 1), layer, id: e.id });
@@ -699,7 +724,7 @@ function textItemBox(item, t, w, totalH, S) {
 const blockCache = new Map();
 function newItem(e) { return { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 }; }
 function getBlockGeom(name, ctx, depth) {
-  const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '') + '|' + (ctx.al == null ? 1 : ctx.al);
+  const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '') + '|' + (ctx.al == null ? 1 : ctx.al) + '|' + (ctx.lts || 1);
   let g = blockCache.get(key); if (g) return g;
   const blk = state.drawing.blocks[name]; const S2 = makeScene(); const it = newItem({ t: 'BLOCKDEF', id: -1 });
   for (const sub of blk.ents) { try { emitEntity(sub, IDM, ctx, S2, it, depth + 1); } catch (err) { console.warn('block emit', name, sub.t, err); } }
@@ -718,7 +743,7 @@ function transformFill(f, M) {
 }
 function flattenBlock(g, M, S, item) {
   const dm = domMatrix(M);
-  for (const k of g.paths) { const key = sceneKey(S, k.layer, k.aci, k.lt, item, k.al); key.path.addPath(k.path, dm); key.n += k.n; }
+  for (const k of g.paths) { const key = sceneKey(S, k.layer, k.aci, k.lt, item, k.al, k.lts); key.path.addPath(k.path, dm); key.n += k.n; }
   for (const f of g.fills) item.fills.push(transformFill(f, M));
   for (const w of g.wipes) { const path = new Path2D(); path.addPath(w.path, dm); item.wipes.push({ layer: w.layer, path }); }
   for (const t of g.texts) item.texts.push(transformText(t, M));
@@ -841,7 +866,7 @@ function drawScene(S, V, onLight, clipWorld) {
       if (!k.n || !layerOn(k.layer)) continue;
       const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } setAl(k.al);
       let wantDash = null;
-      if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; for (const v of pat) { const a = Math.abs(v) * ltscale; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
+      if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; const f = ltscale * (k.lts || 1); for (const v of pat) { const a = Math.abs(v) * f; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
       ctx.stroke(k.path);
     }
@@ -1013,21 +1038,40 @@ function pickAt(wx, wy, tolWorld, S) {
   }
   return best;
 }
-function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item}
+// ----- Layout viewports: map between the sheet (paper) and the model seen through a viewport -----
+function vpAt(x, y) { const sp = curSpace(); if (!sp || !sp.paper) return null; const S = getScene(state.spaceIdx); for (let i = S.viewports.length - 1; i >= 0; i--) { const vp = S.viewports[i]; if (!layerOn(vp.layer)) continue; if (x >= vp.x0 && x <= vp.x1 && y >= vp.y0 && y <= vp.y1) return vp; } return null; }
+function paperToModel(vp, p) { const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; return [(p[0] - cx) / vp.sc + vp.vc[0], (p[1] - cy) / vp.sc + vp.vc[1]]; }
+function modelToPaper(vp, m) { const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; return [(m[0] - vp.vc[0]) * vp.sc + cx, (m[1] - vp.vc[1]) * vp.sc + cy]; }
+function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item,vp}
   const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
   if (!state.drawing || !state.snapOn) return { x: w[0], y: w[1], kind: 0 };
   const S = getScene(state.spaceIdx);
+  let best = null;
   const sn = S.snap.query(w[0], w[1], tol);
-  if (sn) return { x: sn.x, y: sn.y, kind: sn.kind };
+  if (sn) best = { x: sn.x, y: sn.y, kind: sn.kind, d: Math.hypot(sn.x - w[0], sn.y - w[1]) };
+  // In a layout, also snap to the model geometry visible through the viewport under the finger
+  const vp = vpAt(w[0], w[1]); let MS = null, m = null, mt = 0;
+  if (vp) { MS = getScene(0); m = paperToModel(vp, w); mt = tol / vp.sc; const s2 = MS.snap.query(m[0], m[1], mt); if (s2) { const q = modelToPaper(vp, [s2.x, s2.y]); const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (!best || d < best.d) best = { x: q[0], y: q[1], kind: s2.kind, d, vp }; } }
+  if (best) return best;
   const hit = pickAt(w[0], w[1], tol * 0.8, S);
-  if (hit && hit.x != null) {
+  if (hit && hit.x != null && !(vp && hit.item.ent.t === 'VIEWPORT')) {
     // intersection with another entity near the point?
     const hit2 = findIntersection(w[0], w[1], tol, S, hit.item);
     if (hit2) return { x: hit2[0], y: hit2[1], kind: 5, item: hit.item };
     return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
   }
+  if (vp) { const h = pickAt(m[0], m[1], mt * 0.8, MS); if (h && h.x != null) { const i2 = findIntersection(m[0], m[1], mt, MS, h.item); const q = modelToPaper(vp, i2 || [h.x, h.y]); return { x: q[0], y: q[1], kind: i2 ? 5 : 6, item: h.item, vp }; } }
+  if (hit && hit.x != null) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
   return { x: w[0], y: w[1], kind: 0 };
 }
+// Measuring in a layout: points inside one viewport are measured in the model (real size), otherwise on the sheet.
+function measureSpace(pts) {
+  const sp = curSpace(); if (!sp || !sp.paper || !pts.length) return { pts, vp: null };
+  const v0 = vpAt(pts[0][0], pts[0][1]); if (!v0) return { pts, vp: null, sheet: true };
+  for (const p of pts) if (vpAt(p[0], p[1]) !== v0) return { pts, vp: null, sheet: true };
+  return { pts: pts.map(p => paperToModel(v0, p)), vp: v0 };
+}
+function scaleNote(ms) { if (ms.vp) { const k = 1 / ms.vp.sc; return ['Measured', 'in model through viewport (1:' + (k >= 10 ? fmtNum(k, 0) : fmtNum(k, 2)) + ')']; } if (ms.sheet) return ['Measured', 'on the sheet (paper size)']; return null; }
 function findIntersection(wx, wy, tol, S, itemA) {
   const near = []; for (const it of S.items) { if (it === itemA || it.isText) continue; const bb = it.bbox; if (wx < bb[0] - tol || wx > bb[2] + tol || wy < bb[1] - tol || wy > bb[3] + tol) continue; near.push(it); if (near.length > 6) break; }
   let best = null;
@@ -1042,6 +1086,7 @@ function findIntersection(wx, wy, tol, S, itemA) {
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
 let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 7;
+function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
   holdTimer = null; if (!state.drawing || pointers.size !== 1 || dragMoved) return;
@@ -1064,7 +1109,7 @@ function stopEdgePan() { if (edgeRaf) cancelAnimationFrame(edgeRaf); edgeRaf = 0
 cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
 cv.addEventListener('pointerdown', (ev) => {
   cv.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, X: ev.offsetX, Y: ev.offsetY });
-  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
+  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing && loupeAllowed()) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
   if (pointers.size === 2) { cancelHold(); if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
 });
 cv.addEventListener('pointermove', (ev) => {
@@ -1103,14 +1148,15 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, e
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') cancelTool(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
-function hoverAt(X, Y) { const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
+function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
   if (!state.drawing) return;
   const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
-  const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 12 / V.s);
-  if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, ev);
+  const V = state.view; const w = toWorld(X, Y, V); let hit = pickAt(w[0], w[1], 12 / V.s);
+  if (state.tool && (state.tool.name === 'area' || state.tool.name === 'info')) { const vp = vpAt(w[0], w[1]); if (vp && (!hit || hit.item.ent.t === 'VIEWPORT')) { const m = paperToModel(vp, w); const h = pickAt(m[0], m[1], 12 / V.s / vp.sc, getScene(0)); if (h) hit = { ...h, vp, model: true }; } }
+  if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, ev, w);
   requestFast();
 }
 function finishBoxSelect(b) {
@@ -1179,7 +1225,8 @@ function updateChrome() {
   $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
-  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
+  $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t));
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
 function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
@@ -1196,9 +1243,12 @@ function startTool(name, keepSel) {
   updateChrome(); maybeHoldTip(name);
   requestFast();
 }
+// Anonymous *U blocks are dynamic blocks in a non-default state
+function blockLabel(n) { return /^\*U/i.test(n || '') ? 'Dynamic block' : 'Block · ' + n; }
 function describeItem(it) {
-  const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? 'Block ' + e.n : e.t], ['Layer', resolveLayer(e, { layer: null })]];
-  const col = e.c === 256 ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);
+  const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t], ['Layer', resolveLayer(e, { layer: null })]];
+  const col = e.rgb ? 'RGB ' + e.rgb : (e.c === 256 || e.c == null) ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);
+  rows.push(['Linetype', ltName(e.lt) + (e.lts && e.lts !== 1 ? ' ×' + fmtNum(e.lts, 3) : '')]); if (e.al != null) rows.push(['Transparency', alName(e.al)]);
   if (e.t === 'LINE') { const L = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]); rows.push(['Length', fmtLenAll(L)], ['Angle', fmtNum(deg(Math.atan2(e.b[1] - e.a[1], e.b[0] - e.a[0])), 2) + '°'], ['ΔX', fmtLen(e.b[0] - e.a[0])], ['ΔY', fmtLen(e.b[1] - e.a[1])]); }
   else if (e.t === 'PLINE' || e.t === 'SPLINE' || e.t === 'LEADER') { const poly = it.polys[0] || []; rows.push(['Length', fmtLenAll(polyLength(poly, false))]); if (it.closed && it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))]); rows.push(['Vertices', String(e.v ? e.v.length : (e.fit && e.fit.length) || (e.cp && e.cp.length) || poly.length / 2)]); }
   else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]);
@@ -1214,26 +1264,40 @@ function makeTool(name) {
   const T = { name, pts: [], phase: 'pick', start() { }, onTap() { }, onDone() { }, onBack() { if (this.pts.length) { this.pts.pop(); state.lastPt = this.pts.length ? this.pts[this.pts.length - 1] : null; this.update(); } }, onCancel() { }, update() { }, draw: null, boxSelect: false, onTyped(v) { if (v.pt) this.onTap({ x: v.pt[0], y: v.pt[1], kind: 0 }, null); else if (v.num != null && this.onNum) this.onNum(v.num); } };
   const addPt = (sn) => { T.pts.push([sn.x, sn.y]); state.lastPt = [sn.x, sn.y]; };
   switch (name) {
-    case 'select': case 'box':
-      T.boxSelect = name === 'box';
-      T.start = () => { setPrompt(name === 'box' ? 'Drag a box to select (right-to-left also picks crossing objects). Tap to add single objects.' : 'Tap an object to select it; tap again to deselect. Drag to pan.'); T.onSelChange(); };
-      T.onSelChange = () => { const n = state.selection.size; if (n) setResult([['Selected', n + ' object' + (n === 1 ? '' : 's')], ['Next', 'Edit → Move, Copy, Rotate… or Delete']]); else setResult(null); };
-      T.onTap = (sn, hit) => { if (hit) { const id = hit.item.ent.id; if (state.selection.has(id)) state.selection.delete(id); else state.selection.add(id); if (state.selection.size === 1 && hit && state.selection.has(id)) setResult(describeItem(hit.item)); else T.onSelChange(); } else { state.selection.clear(); T.onSelChange(); } };
+    case 'select':
+      T.start = () => { setPrompt('Tap an object to select it; tap again to deselect. Drag to pan.'); T.onSelChange(); };
+      T.onSelChange = () => { showSelection(); };
+      T.onTap = (sn, hit) => { if (hit && !hit.model) { const id = hit.item.ent.id; if (state.selection.has(id)) state.selection.delete(id); else state.selection.add(id); } else state.selection.clear(); T.onSelChange(); };
       T.onCancel = () => { state.selection.clear(); };
+      break;
+    case 'box': // window / crossing selection: tap two opposite corners, or drag
+      T.boxSelect = true; T.corner = null;
+      const boxMsg = 'Tap one corner, then the opposite corner (or drag). Left→right: objects fully inside. Right→left: also objects crossing the box.';
+      T.start = () => { setPrompt(boxMsg); T.onSelChange(); };
+      T.onSelChange = () => { showSelection(); };
+      T.onTap = (sn, hit, ev, w) => {
+        if (!w) return;
+        if (!T.corner) { T.corner = w; setPrompt('Now tap the opposite corner.'); return; }
+        const V = state.view; const a = toScreen(T.corner[0], T.corner[1], V), b = toScreen(w[0], w[1], V); T.corner = null;
+        finishBoxSelect({ x0: a[0], y0: a[1], x1: b[0], y1: b[1] }); setPrompt(boxMsg); T.onSelChange();
+      };
+      T.onBack = () => { T.corner = null; setPrompt(boxMsg); };
+      T.onCancel = () => { T.corner = null; state.selection.clear(); };
+      T.draw = (c, V, acc) => { if (T.corner) { const p = toScreen(T.corner[0], T.corner[1], V); c.save(); c.strokeStyle = acc; c.lineWidth = 2; c.beginPath(); c.moveTo(p[0] - 9, p[1]); c.lineTo(p[0] + 9, p[1]); c.moveTo(p[0], p[1] - 9); c.lineTo(p[0], p[1] + 9); c.stroke(); c.restore(); if (state.hoverScreen) drawBoxSel(c, { x0: p[0], y0: p[1], x1: state.hoverScreen[0], y1: state.hoverScreen[1] }); } if (state.boxSel) drawBoxSel(c); };
       break;
     case 'info':
       T.start = () => setPrompt('Tap an object to read its properties.');
-      T.onTap = (sn, hit) => { state.selection.clear(); if (hit) { state.selection.add(hit.item.ent.id); setResult(describeItem(hit.item)); } else setResult(null); };
+      T.onTap = (sn, hit) => { state.selection.clear(); if (hit) { if (!hit.model) state.selection.add(hit.item.ent.id); setResult(describeItem(hit.item).concat(hit.model ? [['Seen', 'through viewport (model object)']] : [])); if (!hit.model) updateChrome(); } else setResult(null); };
       break;
     case 'coord':
       T.start = () => setPrompt('Tap a point to read its coordinates. Press and hold to magnify for an exact point.');
-      T.onTap = (sn) => { addPt(sn); setResult([['X', fmtNum(sn.x, 3)], ['Y', fmtNum(sn.y, 3)], ['Snap', SNAP_NAMES[sn.kind].toLowerCase()]]); T.pts = [[sn.x, sn.y]]; };
+      T.onTap = (sn) => { addPt(sn); const ms = measureSpace([[sn.x, sn.y]]); const q = ms.pts[0]; const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)], ['Snap', SNAP_NAMES[sn.kind].toLowerCase()]]; if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)]); setResult(rows); T.pts = [[sn.x, sn.y]]; };
       T.draw = (c, V, acc) => drawDots(c, T.pts, V, acc);
       break;
     case 'dist':
       T.total = 0;
       T.start = () => { setPrompt('Tap the first point.'); };
-      T.update = () => { const n = T.pts.length; if (n === 0) { setPrompt('Tap the first point.'); setResult(null); } else if (n === 1) { setPrompt('Tap the second point (or type @length<angle).'); setResult(null); } else { const a = T.pts[n - 2], b = T.pts[n - 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); let tot = 0; for (let i = 1; i < n; i++) tot += Math.hypot(T.pts[i][0] - T.pts[i - 1][0], T.pts[i][1] - T.pts[i - 1][1]); const rows = [['Distance', fmtLenAll(L)], ['ΔX', fmtLen(b[0] - a[0])], ['ΔY', fmtLen(b[1] - a[1])], ['Angle', fmtNum(deg(Math.atan2(b[1] - a[1], b[0] - a[0])), 2) + '°']]; if (n > 2) rows.push(['Running total', fmtLenAll(tot)]); setResult(rows); setPrompt('Tap the next point to continue measuring, or Done to start over.'); } };
+      T.update = () => { const n = T.pts.length; if (n === 0) { setPrompt('Tap the first point.'); setResult(null); } else if (n === 1) { setPrompt('Tap the second point (or type @length<angle).'); setResult(null); } else { const ms = measureSpace(T.pts); const P = ms.pts; const a = P[n - 2], b = P[n - 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); let tot = 0; for (let i = 1; i < n; i++) tot += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); const rows = [['Distance', fmtLenAll(L)], ['ΔX', fmtLen(b[0] - a[0])], ['ΔY', fmtLen(b[1] - a[1])], ['Angle', fmtNum(deg(Math.atan2(b[1] - a[1], b[0] - a[0])), 2) + '°']]; if (n > 2) rows.push(['Running total', fmtLenAll(tot)]); const note = scaleNote(ms); if (note) rows.push(note); setResult(rows); setPrompt('Tap the next point to continue measuring, or Done to start over.'); } };
       T.onTap = (sn) => { addPt(sn); T.update(); };
       T.onDone = () => { T.pts = []; state.lastPt = null; T.update(); };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); drawPolyScreen(c, T.pts, V, false); drawDots(c, T.pts, V, acc); };
@@ -1241,14 +1305,14 @@ function makeTool(name) {
     case 'area':
       T.mode = 'points';
       T.start = () => { setPrompt('Tap the corners of the area in order, then Done. Or tap a closed shape (hatch, polyline, circle) when no points are placed.'); };
-      T.update = () => { const n = T.pts.length; if (n >= 3) { const flat = []; for (const p of T.pts) flat.push(p[0], p[1]); const A = Math.abs(polyArea(flat)); const P = polyLength(flat, true); setResult([['Area', fmtArea(A)], ['Area (' + (UNIT_NAME[state.drawing.header.units] || 'units') + '²)', fmtNum(A, 0)], ['Perimeter', fmtLenAll(P)], ['Points', String(n)]]); setPrompt('Keep tapping corners, Back removes the last, Done finishes.'); } else if (n > 0) { setPrompt('Tap the next corner (' + n + ' placed).'); setResult(null); } else { setResult(null); } };
-      T.onTap = (sn, hit) => { if (T.pts.length === 0 && hit && hit.item.closed && hit.item.fillPoly && (hit.item.hatch || hit.item.ent.t !== 'INSERT') && sn.kind !== 1 && sn.kind !== 2) { const fp = hit.item.fillPoly.slice(0, -2); const A = Math.abs(polyArea(fp)); setResult([['Object', hit.item.ent.t], ['Area', fmtArea(A)], ['Perimeter', fmtLenAll(polyLength(fp, true))]]); state.selection.clear(); state.selection.add(hit.item.ent.id); setPrompt('Area of the tapped object. Tap elsewhere to start placing points.'); return; } state.selection.clear(); addPt(sn); T.update(); };
+      T.update = () => { const n = T.pts.length; if (n >= 3) { const ms = measureSpace(T.pts); const flat = []; for (const p of ms.pts) flat.push(p[0], p[1]); const A = Math.abs(polyArea(flat)); const P = polyLength(flat, true); const rows = [['Area', fmtArea(A)], ['Area (' + (UNIT_NAME[state.drawing.header.units] || 'units') + '²)', fmtNum(A, 0)], ['Perimeter', fmtLenAll(P)], ['Points', String(n)]]; const note = scaleNote(ms); if (note) rows.push(note); setResult(rows); setPrompt('Keep tapping corners, Back removes the last, Done finishes.'); } else if (n > 0) { setPrompt('Tap the next corner (' + n + ' placed).'); setResult(null); } else { setResult(null); } };
+      T.onTap = (sn, hit) => { if (T.pts.length === 0 && hit && hit.item.closed && hit.item.fillPoly && (hit.item.hatch || hit.item.ent.t !== 'INSERT') && sn.kind !== 1 && sn.kind !== 2) { const fp = hit.item.fillPoly.slice(0, -2); const A = Math.abs(polyArea(fp)); setResult([['Object', hit.item.ent.t], ['Area', fmtArea(A)], ['Perimeter', fmtLenAll(polyLength(fp, true))]].concat(hit.model ? [['Measured', 'in model through viewport']] : [])); state.selection.clear(); if (!hit.model) state.selection.add(hit.item.ent.id); setPrompt('Area of the tapped object. Tap elsewhere to start placing points.'); return; } state.selection.clear(); addPt(sn); T.update(); };
       T.onDone = () => { if (T.pts.length >= 3) { T.update(); toast('Area measured'); T.closed = true; } T.pts = []; state.lastPt = null; };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 3) { c.fillStyle = acc; c.globalAlpha = 0.15; c.beginPath(); const p0 = toScreen(T.pts[0][0], T.pts[0][1], V); c.moveTo(p0[0], p0[1]); for (let i = 1; i < T.pts.length; i++) { const p = toScreen(T.pts[i][0], T.pts[i][1], V); c.lineTo(p[0], p[1]); } c.closePath(); c.fill(); c.globalAlpha = 1; } drawPolyScreen(c, T.pts, V, T.pts.length >= 3); drawDots(c, T.pts, V, acc); };
       break;
     case 'angle':
       T.start = () => setPrompt('Tap the vertex (corner) of the angle.');
-      T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = T.pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
+      T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = measureSpace(T.pts.slice(0, 3)).pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
       T.onTap = (sn) => { if (T.pts.length >= 3) { T.pts = []; setResult(null); } addPt(sn); T.update(); };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 2) { drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false); } if (T.pts.length >= 3) { drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); const v = toScreen(T.pts[0][0], T.pts[0][1], V); const a1 = -Math.atan2(T.pts[1][1] - T.pts[0][1], T.pts[1][0] - T.pts[0][0]), a2 = -Math.atan2(T.pts[2][1] - T.pts[0][1], T.pts[2][0] - T.pts[0][0]); let d = a2 - a1; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; c.beginPath(); c.arc(v[0], v[1], 28, a1, a1 + d, d < 0); c.stroke(); } drawDots(c, T.pts, V, acc); };
       break;
@@ -1356,7 +1420,7 @@ function makeTool(name) {
   }
   return T;
 }
-function drawBoxSel(c) { const b = state.boxSel; if (!b) return; const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
+function drawBoxSel(c, bx) { const b = bx || state.boxSel; if (!b) return; const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
 function arc3pt(a, b, c) {
   const ax = a[0], ay = a[1], bx = b[0], by = b[1], cx = c[0], cy = c[1];
   const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)); if (Math.abs(d) < 1e-12) return null;
@@ -1380,7 +1444,10 @@ function transformEntity(e, M) {
     case 'MTEXT': { e.p = P(e.p); e.h *= sc; if (e.w) e.w *= sc; const d = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); e.rot = normAng(Math.atan2(d[1], d[0]) + (det < 0 ? Math.PI : 0)); if (det < 0) e.rot = normAng(e.rot + Math.PI); break; }
     case 'INSERT': { e.p = P(e.p); const xv = mVec(M, [Math.cos(e.rot || 0) * (e.sx || 1), Math.sin(e.rot || 0) * (e.sx || 1)]); const yv = mVec(M, [-Math.sin(e.rot || 0) * (e.sy || 1), Math.cos(e.rot || 0) * (e.sy || 1)]); e.rot = Math.atan2(xv[1], xv[0]); e.sx = Math.hypot(xv[0], xv[1]); const cross = xv[0] * yv[1] - xv[1] * yv[0]; e.sy = Math.hypot(yv[0], yv[1]) * (cross < 0 ? -1 : 1); if (e.cs) e.cs *= sc; if (e.rs) e.rs *= sc; if (e.att) for (const a of e.att) { a.p = P(a.p); a.ap = P(a.ap); a.h *= sc; const d = mVec(M, [Math.cos(a.rot || 0), Math.sin(a.rot || 0)]); a.rot = Math.atan2(d[1], d[0]); } break; }
     case 'HATCH': {
-      for (const loop of e.paths) { if (loop.v) loop.v = loop.v.map(v => { const q = P(v); return [q[0], q[1], det < 0 ? -(v[2] || 0) : (v[2] || 0)]; }); else for (const ed of loop.e) { if (ed.t === 1) { ed.a = P(ed.a); ed.b = P(ed.b); } else if (ed.t === 2) { const d0 = mVec(M, [Math.cos(ed.a0), Math.sin(ed.a0)]), d1 = mVec(M, [Math.cos(ed.a1), Math.sin(ed.a1)]); ed.c = P(ed.c); ed.r *= sc; ed.a0 = Math.atan2(d0[1], d0[0]); ed.a1 = Math.atan2(d1[1], d1[0]); if (det < 0) ed.ccw = ed.ccw ? 0 : 1; } else if (ed.t === 3) { ed.c = P(ed.c); ed.m = mVec(M, ed.m); if (det < 0) { const a0 = ed.a0, a1 = ed.a1; ed.a0 = normAng(-a1); ed.a1 = normAng(-a0); ed.ccw = ed.ccw ? 0 : 1; } } else if (ed.t === 4) { ed.cp = (ed.cp || []).map(c => { const q = P(c); return [q[0], q[1], c[2] || 1]; }); ed.fit = (ed.fit || []).map(P); } } }
+      for (const loop of e.paths) { if (loop.v) loop.v = loop.v.map(v => { const q = P(v); return [q[0], q[1], det < 0 ? -(v[2] || 0) : (v[2] || 0)]; }); else for (const ed of loop.e) { if (ed.t === 1) { ed.a = P(ed.a); ed.b = P(ed.b); } else if (ed.t === 2) { // clockwise edges store negated angles: work on the real angles, then store back
+            const s0 = ed.ccw ? ed.a0 : -ed.a0, s1 = ed.ccw ? ed.a1 : -ed.a1; const d0 = mVec(M, [Math.cos(s0), Math.sin(s0)]), d1 = mVec(M, [Math.cos(s1), Math.sin(s1)]); const b0 = Math.atan2(d0[1], d0[0]), b1 = Math.atan2(d1[1], d1[0]);
+            ed.c = P(ed.c); ed.r *= sc; const ccw = det < 0 ? !ed.ccw : !!ed.ccw; ed.ccw = ccw ? 1 : 0; ed.a0 = ccw ? b0 : -b0; ed.a1 = ccw ? b1 : -b1; }
+          else if (ed.t === 3) { ed.c = P(ed.c); ed.m = mVec(M, ed.m); if (det < 0) ed.ccw = ed.ccw ? 0 : 1; /* parameters are relative to the major axis; a mirror only reverses direction */ } else if (ed.t === 4) { ed.cp = (ed.cp || []).map(c => { const q = P(c); return [q[0], q[1], c[2] || 1]; }); ed.fit = (ed.fit || []).map(P); } } }
       if (e.pat) { e.pat.lines = e.pat.lines.map(ln => { const dir = mVec(M, [Math.cos(ln.a), Math.sin(ln.a)]); return { a: Math.atan2(dir[1], dir[0]), b: P(ln.b), o: mVec(M, ln.o), d: ln.d.map(v => v * sc) }; }); e.pat.sc *= sc; e.pat.ang += ang; }
       break;
     }
@@ -1419,6 +1486,100 @@ function deleteSelection() {
   const sp = curSpace(); const items = []; sp.ents.forEach((e, i) => { if (state.selection.has(e.id)) items.push({ ent: e, index: i }); });
   if (!items.length) return; pushUndo({ type: 'remove', space: state.spaceIdx, items }); applyAction(state.undo[state.undo.length - 1], false); state.selection.clear(); toast(items.length + ' deleted'); setResult(null);
 }
+// ===================== Properties =====================
+// Strip content for the current selection (Select / Box select tools)
+function showSelection() {
+  const ids = state.selection; const n = ids.size;
+  if (!n) { setResult(null); return; }
+  if (n === 1) { const S = getScene(state.spaceIdx); const it = S.items.find(i => ids.has(i.ent.id)); if (it) { setResult(describeItem(it)); return; } }
+  setResult([['Selected', n + ' objects'], ['Change', 'tap ✎ for properties, or Edit → Move, Copy, Rotate…']]);
+}
+const ltName = (lt) => (!lt || /^bylayer$/i.test(lt)) ? 'ByLayer' : /^byblock$/i.test(lt) ? 'ByBlock' : lt;
+const alName = (al) => al == null ? 'ByLayer' : al === -1 ? 'ByBlock' : Math.round((1 - al) * 100) + '%';
+function openProps() {
+  const sel = selectedEnts(); if (!sel.length) { toast('Select objects first'); return; }
+  const D = state.drawing; const body = $('propsBody'); body.innerHTML = '';
+  const same = (f) => { const v0 = f(sel[0]); for (const e of sel) if (f(e) !== v0) return undefined; return v0; };
+  const one = sel.length === 1 ? sel[0] : null; const types = new Set(sel.map(e => e.dim ? 'DIM' : e.t)); const t1 = types.size === 1 ? [...types][0] : null;
+  $('propsTitle').textContent = one ? (one.dim ? 'Dimension' : one.t === 'INSERT' ? blockLabel(one.n) : one.t.charAt(0) + one.t.slice(1).toLowerCase()) : sel.length + ' objects';
+  const ch = {}; // field -> new value (only fields the user touched)
+  const row = (label, el, sub) => { const r = document.createElement('div'); r.className = 'prop-row'; const l = document.createElement('label'); l.textContent = label; r.append(l, el); if (sub) { const d = document.createElement('div'); d.className = 'prop-sub'; d.textContent = sub; r.append(d); } body.append(r); return r; };
+  const head = (t) => { const h = document.createElement('div'); h.className = 'prop-head'; h.textContent = t; body.append(h); };
+  const mark = (el) => el.classList.add('changed');
+  const numInput = (val, key, conv) => { const i = document.createElement('input'); i.type = 'text'; i.inputMode = 'decimal'; i.value = val === undefined ? '' : String(val); if (val === undefined) i.placeholder = 'varies'; i.addEventListener('input', () => { const v = parseFloat(i.value.replace(/,/g, '')); if (isFinite(v)) { ch[key] = conv ? conv(v) : v; mark(i); } else delete ch[key]; }); return i; };
+  head('General');
+  // Layer
+  const selL = document.createElement('select'); const curL = same(e => e.L || '0'); if (curL === undefined) selL.append(new Option('(varies)', '', true, true));
+  for (const l of D.layers.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))) selL.append(new Option(l.name, l.name, false, l.name === curL));
+  selL.addEventListener('change', () => { if (selL.value) { ch.L = selL.value; mark(selL); } }); row('Layer', selL);
+  // Colour
+  const curC = same(e => e.rgb ? 'rgb:' + e.rgb : String(e.c == null ? 256 : e.c));
+  const sw = document.createElement('div'); sw.className = 'swatches'; const btns = [];
+  const pick = (v) => { ch.c = v; for (const b of btns) b.setAttribute('aria-pressed', b.dataset.v === String(v) ? 'true' : 'false'); aciIn.classList.toggle('changed', !btns.some(b => b.dataset.v === String(v))); };
+  for (const v of [256, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 250, 252, 254]) { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = String(v); if (v === 256) b.textContent = 'Layer'; else if (v === 0) b.textContent = 'Block'; else { b.style.background = aciCss(v, false, true); b.title = 'Colour ' + v; } b.setAttribute('aria-pressed', curC === String(v) ? 'true' : 'false'); b.addEventListener('click', () => pick(v)); btns.push(b); sw.append(b); }
+  const aciIn = document.createElement('input'); aciIn.type = 'text'; aciIn.inputMode = 'numeric'; aciIn.placeholder = '1–255'; if (curC && !btns.some(b => b.dataset.v === curC) && !curC.startsWith('rgb')) aciIn.value = curC;
+  aciIn.addEventListener('input', () => { const v = parseInt(aciIn.value, 10); if (v >= 1 && v <= 255) pick(v); }); sw.append(aciIn);
+  const cSub = curC === undefined ? 'varies' : curC.startsWith('rgb:') ? 'now true colour ' + curC.slice(4) : curC === '256' ? 'now ByLayer' : curC === '0' ? 'now ByBlock' : 'now colour ' + curC;
+  row('Colour', sw, cSub);
+  // Linetype
+  const selT = document.createElement('select'); const curT = same(e => ltName(e.lt)); if (curT === undefined) selT.append(new Option('(varies)', '', true, true));
+  const ltNames = ['ByLayer', 'ByBlock', 'Continuous'].concat(Object.keys(D.ltypes || {}).filter(n => !/^(bylayer|byblock|continuous)$/i.test(n)).sort());
+  for (const n of ltNames) selT.append(new Option(n, n, false, n === curT));
+  selT.addEventListener('change', () => { if (selT.value) { ch.lt = selT.value; mark(selT); } }); row('Linetype', selT);
+  row('Linetype scale', numInput(same(e => e.lts || 1), 'lts', v => v > 0 ? v : 1));
+  // Transparency
+  const selA = document.createElement('select'); const curA = same(e => alName(e.al)); if (curA === undefined) selA.append(new Option('(varies)', '', true, true));
+  const aOpts = ['ByLayer', 'ByBlock', '0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%']; if (curA && !aOpts.includes(curA)) aOpts.push(curA);
+  for (const n of aOpts) selA.append(new Option(n, n, false, n === curA));
+  selA.addEventListener('change', () => { const v = selA.value; if (!v) return; ch.al = v === 'ByLayer' ? null : v === 'ByBlock' ? -1 : Math.max(0, 1 - parseFloat(v) / 100); mark(selA); }); row('Transparency', selA);
+  // Type specific
+  if (t1 === 'INSERT') {
+    head('Block');
+    row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
+    row('Scale X', numInput(same(e => +fmtFixed(e.sx || 1, 6)), 'sx', v => v || 1));
+    row('Scale Y', numInput(same(e => +fmtFixed(e.sy || 1, 6)), 'sy', v => v || 1));
+    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'px')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'py')); }
+  } else if (t1 === 'TEXT' || t1 === 'MTEXT') {
+    head('Text');
+    if (one) { const ta = document.createElement(one.t === 'MTEXT' ? 'textarea' : 'input'); const plain = one.t === 'MTEXT' ? mtextPlain(one.s).join('\n') : textPlain(one.s); ta.value = plain; ta.addEventListener('input', () => { if (ta.value !== plain) { ch.s = ta.value; mark(ta); } else delete ch.s; }); row('Contents', ta, one.t === 'MTEXT' ? 'Editing replaces any inline formatting' : null); }
+    row('Height', numInput(same(e => +fmtFixed(e.h, 4)), 'h', v => v > 0 ? v : undefined));
+    row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
+  } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
+    head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
+  }
+  $('propsApply').onclick = () => { for (const k of Object.keys(ch)) if (ch[k] === undefined) delete ch[k]; if (!Object.keys(ch).length) { closeSheets(); return; } applyProps(sel.map(e => e.id), ch); closeSheets(); };
+  openSheet('propsPanel');
+}
+function fmtFixed(v, d) { return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
+function applyProps(ids, ch) {
+  const sp = curSpace(); const idset = new Set(ids); const items = [];
+  for (const e of sp.ents) {
+    if (!idset.has(e.id)) continue; const n = cloneEnt(e);
+    if ('L' in ch) n.L = ch.L;
+    if ('c' in ch) { n.c = ch.c; delete n.rgb; }
+    if ('lt' in ch) { if (ch.lt === 'ByLayer') n.lt = ''; else n.lt = ch.lt; }
+    if ('lts' in ch) { if (Math.abs(ch.lts - 1) < 1e-12) delete n.lts; else n.lts = ch.lts; }
+    if ('al' in ch) { if (ch.al == null) delete n.al; else n.al = ch.al; }
+    if (n.t === 'INSERT' && ('rot' in ch || 'sx' in ch || 'sy' in ch || 'px' in ch || 'py' in ch)) {
+      const blk = state.drawing.blocks[n.n]; const base = blk ? blk.base : [0, 0];
+      const tgt = { ...n, rot: 'rot' in ch ? ch.rot : n.rot, sx: 'sx' in ch ? ch.sx : n.sx, sy: 'sy' in ch ? ch.sy : n.sy, p: ['px' in ch ? ch.px : n.p[0], 'py' in ch ? ch.py : n.p[1]] };
+      const M = mMul(mInsert(tgt, base), mInverse(mInsert(n, base))); transformEntity(n, M); // moves attributes with the block
+      n.rot = tgt.rot; n.sx = tgt.sx; n.sy = tgt.sy; n.p = tgt.p.slice();
+    }
+    if (n.t === 'TEXT' || n.t === 'MTEXT') {
+      if ('rot' in ch) { const d = ch.rot - (n.rot || 0); const anc = (n.t === 'TEXT' && (n.ha || n.va) && n.ap && (n.ap[0] || n.ap[1])) ? n.ap : n.p; const R = mMul(mTranslate(anc[0], anc[1]), mMul(mRotate(d), mTranslate(-anc[0], -anc[1]))); n.p = mApply(R, n.p); if (n.ap && n.t === 'TEXT') n.ap = mApply(R, n.ap); n.rot = ch.rot; }
+      if ('h' in ch) n.h = ch.h;
+      if ('s' in ch) n.s = n.t === 'MTEXT' ? ch.s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\r?\n/g, '\\P') : ch.s.replace(/\r?\n/g, ' ');
+    }
+    if ((n.t === 'CIRCLE' || n.t === 'ARC') && 'r' in ch) n.r = ch.r;
+    items.push({ id: e.id, prev: cloneEnt(e), next: n });
+  }
+  if (!items.length) return;
+  pushUndo({ type: 'modify', space: state.spaceIdx, items }); applyAction(state.undo[state.undo.length - 1], false);
+  toast(items.length === 1 ? 'Properties updated' : items.length + ' objects updated'); showSelection(); requestFull();
+}
+$('btnProps').addEventListener('click', openProps);
+
 // text dialog
 function openTextDialog(pt) {
   const dlg = $('textDlg'); dlg.classList.add('on'); $('txtVal').value = ''; $('txtH').value = state.textH || defaultTextHeight(); setTimeout(() => $('txtVal').focus(), 50);
@@ -1463,7 +1624,7 @@ function buildDxf(D) {
   // entities writer
   const skipped = {};
   const ent = (e, owner, paper) => {
-    const common = (type, sub) => { w(0, type); w(5, H()); w(330, owner); w(100, 'AcDbEntity'); if (paper) w(67, 1); w(8, dxfString(e.L || '0')); if (e.c != null && e.c !== 256) w(62, e.c); if (e.lt && !/^bylayer$/i.test(e.lt)) w(6, dxfString(ltNames.has(e.lt) ? e.lt : 'Continuous')); if (sub) w(100, sub); };
+    const common = (type, sub) => { w(0, type); w(5, H()); w(330, owner); w(100, 'AcDbEntity'); if (paper) w(67, 1); w(8, dxfString(e.L || '0')); if (e.lt && !/^bylayer$/i.test(e.lt)) w(6, dxfString(ltNames.has(e.lt) || /^byblock$/i.test(e.lt) ? e.lt : 'Continuous')); if (e.c != null && e.c !== 256) w(62, e.c); if (e.lts && Math.abs(e.lts - 1) > 1e-12) w(48, e.lts); if (sub) w(100, sub); };
     const pt = (code, p, z) => { w(code, num(p[0])); w(code + 10, num(p[1])); if (z !== false) w(code + 20, '0'); };
     switch (e.t) {
       case 'LINE': common('LINE', 'AcDbLine'); pt(10, e.a); pt(11, e.b); break;
@@ -1710,7 +1871,7 @@ loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.displ
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610070227' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610070300' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }

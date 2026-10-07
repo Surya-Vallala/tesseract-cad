@@ -37,6 +37,7 @@ const hex6 = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0');
 function convEntity(e, idc) {
   const base = { id: idc.n++, hd: e.handle, L: e.layer || '0', c: num(e.colorIndex, 256), lt: e.lineType || '' };
   const al = alphaOf(e.transparencyType, e.transparency); if (al !== undefined) base.al = al;
+  const lts = num(e.lineTypeScale, 1); if (lts > 0 && Math.abs(lts - 1) > 1e-9) base.lts = lts;
   if (typeof e.color === 'number' && e.color > 0 && e.color < 0xffffff) base.rgb = hex6(e.color); // 0 / 0xffffff come back as placeholders
   switch (e.type) {
     case 'LINE': return { ...base, t: 'LINE', a: P(e.startPoint), b: P(e.endPoint) };

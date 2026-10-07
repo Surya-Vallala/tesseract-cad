@@ -105,7 +105,7 @@ function drawScene(S, V, onLight, clipWorld) {
       if (!k.n || !layerOn(k.layer)) continue;
       const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } setAl(k.al);
       let wantDash = null;
-      if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; for (const v of pat) { const a = Math.abs(v) * ltscale; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
+      if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; const f = ltscale * (k.lts || 1); for (const v of pat) { const a = Math.abs(v) * f; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
       ctx.stroke(k.path);
     }

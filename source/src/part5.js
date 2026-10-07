@@ -12,21 +12,40 @@ function pickAt(wx, wy, tolWorld, S) {
   }
   return best;
 }
-function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item}
+// ----- Layout viewports: map between the sheet (paper) and the model seen through a viewport -----
+function vpAt(x, y) { const sp = curSpace(); if (!sp || !sp.paper) return null; const S = getScene(state.spaceIdx); for (let i = S.viewports.length - 1; i >= 0; i--) { const vp = S.viewports[i]; if (!layerOn(vp.layer)) continue; if (x >= vp.x0 && x <= vp.x1 && y >= vp.y0 && y <= vp.y1) return vp; } return null; }
+function paperToModel(vp, p) { const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; return [(p[0] - cx) / vp.sc + vp.vc[0], (p[1] - cy) / vp.sc + vp.vc[1]]; }
+function modelToPaper(vp, m) { const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; return [(m[0] - vp.vc[0]) * vp.sc + cx, (m[1] - vp.vc[1]) * vp.sc + cy]; }
+function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item,vp}
   const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
   if (!state.drawing || !state.snapOn) return { x: w[0], y: w[1], kind: 0 };
   const S = getScene(state.spaceIdx);
+  let best = null;
   const sn = S.snap.query(w[0], w[1], tol);
-  if (sn) return { x: sn.x, y: sn.y, kind: sn.kind };
+  if (sn) best = { x: sn.x, y: sn.y, kind: sn.kind, d: Math.hypot(sn.x - w[0], sn.y - w[1]) };
+  // In a layout, also snap to the model geometry visible through the viewport under the finger
+  const vp = vpAt(w[0], w[1]); let MS = null, m = null, mt = 0;
+  if (vp) { MS = getScene(0); m = paperToModel(vp, w); mt = tol / vp.sc; const s2 = MS.snap.query(m[0], m[1], mt); if (s2) { const q = modelToPaper(vp, [s2.x, s2.y]); const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (!best || d < best.d) best = { x: q[0], y: q[1], kind: s2.kind, d, vp }; } }
+  if (best) return best;
   const hit = pickAt(w[0], w[1], tol * 0.8, S);
-  if (hit && hit.x != null) {
+  if (hit && hit.x != null && !(vp && hit.item.ent.t === 'VIEWPORT')) {
     // intersection with another entity near the point?
     const hit2 = findIntersection(w[0], w[1], tol, S, hit.item);
     if (hit2) return { x: hit2[0], y: hit2[1], kind: 5, item: hit.item };
     return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
   }
+  if (vp) { const h = pickAt(m[0], m[1], mt * 0.8, MS); if (h && h.x != null) { const i2 = findIntersection(m[0], m[1], mt, MS, h.item); const q = modelToPaper(vp, i2 || [h.x, h.y]); return { x: q[0], y: q[1], kind: i2 ? 5 : 6, item: h.item, vp }; } }
+  if (hit && hit.x != null) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
   return { x: w[0], y: w[1], kind: 0 };
 }
+// Measuring in a layout: points inside one viewport are measured in the model (real size), otherwise on the sheet.
+function measureSpace(pts) {
+  const sp = curSpace(); if (!sp || !sp.paper || !pts.length) return { pts, vp: null };
+  const v0 = vpAt(pts[0][0], pts[0][1]); if (!v0) return { pts, vp: null, sheet: true };
+  for (const p of pts) if (vpAt(p[0], p[1]) !== v0) return { pts, vp: null, sheet: true };
+  return { pts: pts.map(p => paperToModel(v0, p)), vp: v0 };
+}
+function scaleNote(ms) { if (ms.vp) { const k = 1 / ms.vp.sc; return ['Measured', 'in model through viewport (1:' + (k >= 10 ? fmtNum(k, 0) : fmtNum(k, 2)) + ')']; } if (ms.sheet) return ['Measured', 'on the sheet (paper size)']; return null; }
 function findIntersection(wx, wy, tol, S, itemA) {
   const near = []; for (const it of S.items) { if (it === itemA || it.isText) continue; const bb = it.bbox; if (wx < bb[0] - tol || wx > bb[2] + tol || wy < bb[1] - tol || wy > bb[3] + tol) continue; near.push(it); if (near.length > 6) break; }
   let best = null;
@@ -41,6 +60,7 @@ function findIntersection(wx, wy, tol, S, itemA) {
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
 let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 7;
+function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
   holdTimer = null; if (!state.drawing || pointers.size !== 1 || dragMoved) return;
@@ -63,7 +83,7 @@ function stopEdgePan() { if (edgeRaf) cancelAnimationFrame(edgeRaf); edgeRaf = 0
 cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
 cv.addEventListener('pointerdown', (ev) => {
   cv.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, X: ev.offsetX, Y: ev.offsetY });
-  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
+  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing && loupeAllowed()) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
   if (pointers.size === 2) { cancelHold(); if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
 });
 cv.addEventListener('pointermove', (ev) => {
@@ -102,14 +122,15 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, e
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') cancelTool(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
-function hoverAt(X, Y) { const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
+function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
   if (!state.drawing) return;
   const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
-  const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 12 / V.s);
-  if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, ev);
+  const V = state.view; const w = toWorld(X, Y, V); let hit = pickAt(w[0], w[1], 12 / V.s);
+  if (state.tool && (state.tool.name === 'area' || state.tool.name === 'info')) { const vp = vpAt(w[0], w[1]); if (vp && (!hit || hit.item.ent.t === 'VIEWPORT')) { const m = paperToModel(vp, w); const h = pickAt(m[0], m[1], 12 / V.s / vp.sc, getScene(0)); if (h) hit = { ...h, vp, model: true }; } }
+  if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, ev, w);
   requestFast();
 }
 function finishBoxSelect(b) {
@@ -178,7 +199,8 @@ function updateChrome() {
   $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
-  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
+  $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t));
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
 function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
@@ -195,9 +217,12 @@ function startTool(name, keepSel) {
   updateChrome(); maybeHoldTip(name);
   requestFast();
 }
+// Anonymous *U blocks are dynamic blocks in a non-default state
+function blockLabel(n) { return /^\*U/i.test(n || '') ? 'Dynamic block' : 'Block · ' + n; }
 function describeItem(it) {
-  const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? 'Block ' + e.n : e.t], ['Layer', resolveLayer(e, { layer: null })]];
-  const col = e.c === 256 ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);
+  const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t], ['Layer', resolveLayer(e, { layer: null })]];
+  const col = e.rgb ? 'RGB ' + e.rgb : (e.c === 256 || e.c == null) ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);
+  rows.push(['Linetype', ltName(e.lt) + (e.lts && e.lts !== 1 ? ' ×' + fmtNum(e.lts, 3) : '')]); if (e.al != null) rows.push(['Transparency', alName(e.al)]);
   if (e.t === 'LINE') { const L = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]); rows.push(['Length', fmtLenAll(L)], ['Angle', fmtNum(deg(Math.atan2(e.b[1] - e.a[1], e.b[0] - e.a[0])), 2) + '°'], ['ΔX', fmtLen(e.b[0] - e.a[0])], ['ΔY', fmtLen(e.b[1] - e.a[1])]); }
   else if (e.t === 'PLINE' || e.t === 'SPLINE' || e.t === 'LEADER') { const poly = it.polys[0] || []; rows.push(['Length', fmtLenAll(polyLength(poly, false))]); if (it.closed && it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))]); rows.push(['Vertices', String(e.v ? e.v.length : (e.fit && e.fit.length) || (e.cp && e.cp.length) || poly.length / 2)]); }
   else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]);
@@ -213,26 +238,40 @@ function makeTool(name) {
   const T = { name, pts: [], phase: 'pick', start() { }, onTap() { }, onDone() { }, onBack() { if (this.pts.length) { this.pts.pop(); state.lastPt = this.pts.length ? this.pts[this.pts.length - 1] : null; this.update(); } }, onCancel() { }, update() { }, draw: null, boxSelect: false, onTyped(v) { if (v.pt) this.onTap({ x: v.pt[0], y: v.pt[1], kind: 0 }, null); else if (v.num != null && this.onNum) this.onNum(v.num); } };
   const addPt = (sn) => { T.pts.push([sn.x, sn.y]); state.lastPt = [sn.x, sn.y]; };
   switch (name) {
-    case 'select': case 'box':
-      T.boxSelect = name === 'box';
-      T.start = () => { setPrompt(name === 'box' ? 'Drag a box to select (right-to-left also picks crossing objects). Tap to add single objects.' : 'Tap an object to select it; tap again to deselect. Drag to pan.'); T.onSelChange(); };
-      T.onSelChange = () => { const n = state.selection.size; if (n) setResult([['Selected', n + ' object' + (n === 1 ? '' : 's')], ['Next', 'Edit → Move, Copy, Rotate… or Delete']]); else setResult(null); };
-      T.onTap = (sn, hit) => { if (hit) { const id = hit.item.ent.id; if (state.selection.has(id)) state.selection.delete(id); else state.selection.add(id); if (state.selection.size === 1 && hit && state.selection.has(id)) setResult(describeItem(hit.item)); else T.onSelChange(); } else { state.selection.clear(); T.onSelChange(); } };
+    case 'select':
+      T.start = () => { setPrompt('Tap an object to select it; tap again to deselect. Drag to pan.'); T.onSelChange(); };
+      T.onSelChange = () => { showSelection(); };
+      T.onTap = (sn, hit) => { if (hit && !hit.model) { const id = hit.item.ent.id; if (state.selection.has(id)) state.selection.delete(id); else state.selection.add(id); } else state.selection.clear(); T.onSelChange(); };
       T.onCancel = () => { state.selection.clear(); };
+      break;
+    case 'box': // window / crossing selection: tap two opposite corners, or drag
+      T.boxSelect = true; T.corner = null;
+      const boxMsg = 'Tap one corner, then the opposite corner (or drag). Left→right: objects fully inside. Right→left: also objects crossing the box.';
+      T.start = () => { setPrompt(boxMsg); T.onSelChange(); };
+      T.onSelChange = () => { showSelection(); };
+      T.onTap = (sn, hit, ev, w) => {
+        if (!w) return;
+        if (!T.corner) { T.corner = w; setPrompt('Now tap the opposite corner.'); return; }
+        const V = state.view; const a = toScreen(T.corner[0], T.corner[1], V), b = toScreen(w[0], w[1], V); T.corner = null;
+        finishBoxSelect({ x0: a[0], y0: a[1], x1: b[0], y1: b[1] }); setPrompt(boxMsg); T.onSelChange();
+      };
+      T.onBack = () => { T.corner = null; setPrompt(boxMsg); };
+      T.onCancel = () => { T.corner = null; state.selection.clear(); };
+      T.draw = (c, V, acc) => { if (T.corner) { const p = toScreen(T.corner[0], T.corner[1], V); c.save(); c.strokeStyle = acc; c.lineWidth = 2; c.beginPath(); c.moveTo(p[0] - 9, p[1]); c.lineTo(p[0] + 9, p[1]); c.moveTo(p[0], p[1] - 9); c.lineTo(p[0], p[1] + 9); c.stroke(); c.restore(); if (state.hoverScreen) drawBoxSel(c, { x0: p[0], y0: p[1], x1: state.hoverScreen[0], y1: state.hoverScreen[1] }); } if (state.boxSel) drawBoxSel(c); };
       break;
     case 'info':
       T.start = () => setPrompt('Tap an object to read its properties.');
-      T.onTap = (sn, hit) => { state.selection.clear(); if (hit) { state.selection.add(hit.item.ent.id); setResult(describeItem(hit.item)); } else setResult(null); };
+      T.onTap = (sn, hit) => { state.selection.clear(); if (hit) { if (!hit.model) state.selection.add(hit.item.ent.id); setResult(describeItem(hit.item).concat(hit.model ? [['Seen', 'through viewport (model object)']] : [])); if (!hit.model) updateChrome(); } else setResult(null); };
       break;
     case 'coord':
       T.start = () => setPrompt('Tap a point to read its coordinates. Press and hold to magnify for an exact point.');
-      T.onTap = (sn) => { addPt(sn); setResult([['X', fmtNum(sn.x, 3)], ['Y', fmtNum(sn.y, 3)], ['Snap', SNAP_NAMES[sn.kind].toLowerCase()]]); T.pts = [[sn.x, sn.y]]; };
+      T.onTap = (sn) => { addPt(sn); const ms = measureSpace([[sn.x, sn.y]]); const q = ms.pts[0]; const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)], ['Snap', SNAP_NAMES[sn.kind].toLowerCase()]]; if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)]); setResult(rows); T.pts = [[sn.x, sn.y]]; };
       T.draw = (c, V, acc) => drawDots(c, T.pts, V, acc);
       break;
     case 'dist':
       T.total = 0;
       T.start = () => { setPrompt('Tap the first point.'); };
-      T.update = () => { const n = T.pts.length; if (n === 0) { setPrompt('Tap the first point.'); setResult(null); } else if (n === 1) { setPrompt('Tap the second point (or type @length<angle).'); setResult(null); } else { const a = T.pts[n - 2], b = T.pts[n - 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); let tot = 0; for (let i = 1; i < n; i++) tot += Math.hypot(T.pts[i][0] - T.pts[i - 1][0], T.pts[i][1] - T.pts[i - 1][1]); const rows = [['Distance', fmtLenAll(L)], ['ΔX', fmtLen(b[0] - a[0])], ['ΔY', fmtLen(b[1] - a[1])], ['Angle', fmtNum(deg(Math.atan2(b[1] - a[1], b[0] - a[0])), 2) + '°']]; if (n > 2) rows.push(['Running total', fmtLenAll(tot)]); setResult(rows); setPrompt('Tap the next point to continue measuring, or Done to start over.'); } };
+      T.update = () => { const n = T.pts.length; if (n === 0) { setPrompt('Tap the first point.'); setResult(null); } else if (n === 1) { setPrompt('Tap the second point (or type @length<angle).'); setResult(null); } else { const ms = measureSpace(T.pts); const P = ms.pts; const a = P[n - 2], b = P[n - 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); let tot = 0; for (let i = 1; i < n; i++) tot += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); const rows = [['Distance', fmtLenAll(L)], ['ΔX', fmtLen(b[0] - a[0])], ['ΔY', fmtLen(b[1] - a[1])], ['Angle', fmtNum(deg(Math.atan2(b[1] - a[1], b[0] - a[0])), 2) + '°']]; if (n > 2) rows.push(['Running total', fmtLenAll(tot)]); const note = scaleNote(ms); if (note) rows.push(note); setResult(rows); setPrompt('Tap the next point to continue measuring, or Done to start over.'); } };
       T.onTap = (sn) => { addPt(sn); T.update(); };
       T.onDone = () => { T.pts = []; state.lastPt = null; T.update(); };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); drawPolyScreen(c, T.pts, V, false); drawDots(c, T.pts, V, acc); };
@@ -240,14 +279,14 @@ function makeTool(name) {
     case 'area':
       T.mode = 'points';
       T.start = () => { setPrompt('Tap the corners of the area in order, then Done. Or tap a closed shape (hatch, polyline, circle) when no points are placed.'); };
-      T.update = () => { const n = T.pts.length; if (n >= 3) { const flat = []; for (const p of T.pts) flat.push(p[0], p[1]); const A = Math.abs(polyArea(flat)); const P = polyLength(flat, true); setResult([['Area', fmtArea(A)], ['Area (' + (UNIT_NAME[state.drawing.header.units] || 'units') + '²)', fmtNum(A, 0)], ['Perimeter', fmtLenAll(P)], ['Points', String(n)]]); setPrompt('Keep tapping corners, Back removes the last, Done finishes.'); } else if (n > 0) { setPrompt('Tap the next corner (' + n + ' placed).'); setResult(null); } else { setResult(null); } };
-      T.onTap = (sn, hit) => { if (T.pts.length === 0 && hit && hit.item.closed && hit.item.fillPoly && (hit.item.hatch || hit.item.ent.t !== 'INSERT') && sn.kind !== 1 && sn.kind !== 2) { const fp = hit.item.fillPoly.slice(0, -2); const A = Math.abs(polyArea(fp)); setResult([['Object', hit.item.ent.t], ['Area', fmtArea(A)], ['Perimeter', fmtLenAll(polyLength(fp, true))]]); state.selection.clear(); state.selection.add(hit.item.ent.id); setPrompt('Area of the tapped object. Tap elsewhere to start placing points.'); return; } state.selection.clear(); addPt(sn); T.update(); };
+      T.update = () => { const n = T.pts.length; if (n >= 3) { const ms = measureSpace(T.pts); const flat = []; for (const p of ms.pts) flat.push(p[0], p[1]); const A = Math.abs(polyArea(flat)); const P = polyLength(flat, true); const rows = [['Area', fmtArea(A)], ['Area (' + (UNIT_NAME[state.drawing.header.units] || 'units') + '²)', fmtNum(A, 0)], ['Perimeter', fmtLenAll(P)], ['Points', String(n)]]; const note = scaleNote(ms); if (note) rows.push(note); setResult(rows); setPrompt('Keep tapping corners, Back removes the last, Done finishes.'); } else if (n > 0) { setPrompt('Tap the next corner (' + n + ' placed).'); setResult(null); } else { setResult(null); } };
+      T.onTap = (sn, hit) => { if (T.pts.length === 0 && hit && hit.item.closed && hit.item.fillPoly && (hit.item.hatch || hit.item.ent.t !== 'INSERT') && sn.kind !== 1 && sn.kind !== 2) { const fp = hit.item.fillPoly.slice(0, -2); const A = Math.abs(polyArea(fp)); setResult([['Object', hit.item.ent.t], ['Area', fmtArea(A)], ['Perimeter', fmtLenAll(polyLength(fp, true))]].concat(hit.model ? [['Measured', 'in model through viewport']] : [])); state.selection.clear(); if (!hit.model) state.selection.add(hit.item.ent.id); setPrompt('Area of the tapped object. Tap elsewhere to start placing points.'); return; } state.selection.clear(); addPt(sn); T.update(); };
       T.onDone = () => { if (T.pts.length >= 3) { T.update(); toast('Area measured'); T.closed = true; } T.pts = []; state.lastPt = null; };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 3) { c.fillStyle = acc; c.globalAlpha = 0.15; c.beginPath(); const p0 = toScreen(T.pts[0][0], T.pts[0][1], V); c.moveTo(p0[0], p0[1]); for (let i = 1; i < T.pts.length; i++) { const p = toScreen(T.pts[i][0], T.pts[i][1], V); c.lineTo(p[0], p[1]); } c.closePath(); c.fill(); c.globalAlpha = 1; } drawPolyScreen(c, T.pts, V, T.pts.length >= 3); drawDots(c, T.pts, V, acc); };
       break;
     case 'angle':
       T.start = () => setPrompt('Tap the vertex (corner) of the angle.');
-      T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = T.pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
+      T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = measureSpace(T.pts.slice(0, 3)).pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
       T.onTap = (sn) => { if (T.pts.length >= 3) { T.pts = []; setResult(null); } addPt(sn); T.update(); };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 2) { drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false); } if (T.pts.length >= 3) { drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); const v = toScreen(T.pts[0][0], T.pts[0][1], V); const a1 = -Math.atan2(T.pts[1][1] - T.pts[0][1], T.pts[1][0] - T.pts[0][0]), a2 = -Math.atan2(T.pts[2][1] - T.pts[0][1], T.pts[2][0] - T.pts[0][0]); let d = a2 - a1; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; c.beginPath(); c.arc(v[0], v[1], 28, a1, a1 + d, d < 0); c.stroke(); } drawDots(c, T.pts, V, acc); };
       break;
@@ -355,7 +394,7 @@ function makeTool(name) {
   }
   return T;
 }
-function drawBoxSel(c) { const b = state.boxSel; if (!b) return; const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
+function drawBoxSel(c, bx) { const b = bx || state.boxSel; if (!b) return; const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
 function arc3pt(a, b, c) {
   const ax = a[0], ay = a[1], bx = b[0], by = b[1], cx = c[0], cy = c[1];
   const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)); if (Math.abs(d) < 1e-12) return null;

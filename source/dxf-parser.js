@@ -33,6 +33,7 @@ export function parseDxf(text, name) {
     const tv = first(g, 440); if (tv !== undefined) { const v = parseInt(tv, 10) >>> 0; const type = v >>> 24, a = v & 255; if ((type & 3) === 1) o.al = -1; else if ((type & 2) && a < 255) o.al = Math.round(a / 255 * 1000) / 1000; }
     const tc = first(g, 420); if (tc !== undefined) { const v = parseInt(tc, 10); if (!isNaN(v)) o.rgb = '#' + (v & 0xffffff).toString(16).padStart(6, '0'); }
     if (num(g, 60, 0) === 1) o.hidden = true;
+    const lts = num(g, 48, 1); if (lts > 0 && Math.abs(lts - 1) > 1e-9) o.lts = lts;
     return o;
   }
 

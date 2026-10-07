@@ -12,7 +12,10 @@ function transformEntity(e, M) {
     case 'MTEXT': { e.p = P(e.p); e.h *= sc; if (e.w) e.w *= sc; const d = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); e.rot = normAng(Math.atan2(d[1], d[0]) + (det < 0 ? Math.PI : 0)); if (det < 0) e.rot = normAng(e.rot + Math.PI); break; }
     case 'INSERT': { e.p = P(e.p); const xv = mVec(M, [Math.cos(e.rot || 0) * (e.sx || 1), Math.sin(e.rot || 0) * (e.sx || 1)]); const yv = mVec(M, [-Math.sin(e.rot || 0) * (e.sy || 1), Math.cos(e.rot || 0) * (e.sy || 1)]); e.rot = Math.atan2(xv[1], xv[0]); e.sx = Math.hypot(xv[0], xv[1]); const cross = xv[0] * yv[1] - xv[1] * yv[0]; e.sy = Math.hypot(yv[0], yv[1]) * (cross < 0 ? -1 : 1); if (e.cs) e.cs *= sc; if (e.rs) e.rs *= sc; if (e.att) for (const a of e.att) { a.p = P(a.p); a.ap = P(a.ap); a.h *= sc; const d = mVec(M, [Math.cos(a.rot || 0), Math.sin(a.rot || 0)]); a.rot = Math.atan2(d[1], d[0]); } break; }
     case 'HATCH': {
-      for (const loop of e.paths) { if (loop.v) loop.v = loop.v.map(v => { const q = P(v); return [q[0], q[1], det < 0 ? -(v[2] || 0) : (v[2] || 0)]; }); else for (const ed of loop.e) { if (ed.t === 1) { ed.a = P(ed.a); ed.b = P(ed.b); } else if (ed.t === 2) { const d0 = mVec(M, [Math.cos(ed.a0), Math.sin(ed.a0)]), d1 = mVec(M, [Math.cos(ed.a1), Math.sin(ed.a1)]); ed.c = P(ed.c); ed.r *= sc; ed.a0 = Math.atan2(d0[1], d0[0]); ed.a1 = Math.atan2(d1[1], d1[0]); if (det < 0) ed.ccw = ed.ccw ? 0 : 1; } else if (ed.t === 3) { ed.c = P(ed.c); ed.m = mVec(M, ed.m); if (det < 0) { const a0 = ed.a0, a1 = ed.a1; ed.a0 = normAng(-a1); ed.a1 = normAng(-a0); ed.ccw = ed.ccw ? 0 : 1; } } else if (ed.t === 4) { ed.cp = (ed.cp || []).map(c => { const q = P(c); return [q[0], q[1], c[2] || 1]; }); ed.fit = (ed.fit || []).map(P); } } }
+      for (const loop of e.paths) { if (loop.v) loop.v = loop.v.map(v => { const q = P(v); return [q[0], q[1], det < 0 ? -(v[2] || 0) : (v[2] || 0)]; }); else for (const ed of loop.e) { if (ed.t === 1) { ed.a = P(ed.a); ed.b = P(ed.b); } else if (ed.t === 2) { // clockwise edges store negated angles: work on the real angles, then store back
+            const s0 = ed.ccw ? ed.a0 : -ed.a0, s1 = ed.ccw ? ed.a1 : -ed.a1; const d0 = mVec(M, [Math.cos(s0), Math.sin(s0)]), d1 = mVec(M, [Math.cos(s1), Math.sin(s1)]); const b0 = Math.atan2(d0[1], d0[0]), b1 = Math.atan2(d1[1], d1[0]);
+            ed.c = P(ed.c); ed.r *= sc; const ccw = det < 0 ? !ed.ccw : !!ed.ccw; ed.ccw = ccw ? 1 : 0; ed.a0 = ccw ? b0 : -b0; ed.a1 = ccw ? b1 : -b1; }
+          else if (ed.t === 3) { ed.c = P(ed.c); ed.m = mVec(M, ed.m); if (det < 0) ed.ccw = ed.ccw ? 0 : 1; /* parameters are relative to the major axis; a mirror only reverses direction */ } else if (ed.t === 4) { ed.cp = (ed.cp || []).map(c => { const q = P(c); return [q[0], q[1], c[2] || 1]; }); ed.fit = (ed.fit || []).map(P); } } }
       if (e.pat) { e.pat.lines = e.pat.lines.map(ln => { const dir = mVec(M, [Math.cos(ln.a), Math.sin(ln.a)]); return { a: Math.atan2(dir[1], dir[0]), b: P(ln.b), o: mVec(M, ln.o), d: ln.d.map(v => v * sc) }; }); e.pat.sc *= sc; e.pat.ang += ang; }
       break;
     }
@@ -51,6 +54,100 @@ function deleteSelection() {
   const sp = curSpace(); const items = []; sp.ents.forEach((e, i) => { if (state.selection.has(e.id)) items.push({ ent: e, index: i }); });
   if (!items.length) return; pushUndo({ type: 'remove', space: state.spaceIdx, items }); applyAction(state.undo[state.undo.length - 1], false); state.selection.clear(); toast(items.length + ' deleted'); setResult(null);
 }
+// ===================== Properties =====================
+// Strip content for the current selection (Select / Box select tools)
+function showSelection() {
+  const ids = state.selection; const n = ids.size;
+  if (!n) { setResult(null); return; }
+  if (n === 1) { const S = getScene(state.spaceIdx); const it = S.items.find(i => ids.has(i.ent.id)); if (it) { setResult(describeItem(it)); return; } }
+  setResult([['Selected', n + ' objects'], ['Change', 'tap ✎ for properties, or Edit → Move, Copy, Rotate…']]);
+}
+const ltName = (lt) => (!lt || /^bylayer$/i.test(lt)) ? 'ByLayer' : /^byblock$/i.test(lt) ? 'ByBlock' : lt;
+const alName = (al) => al == null ? 'ByLayer' : al === -1 ? 'ByBlock' : Math.round((1 - al) * 100) + '%';
+function openProps() {
+  const sel = selectedEnts(); if (!sel.length) { toast('Select objects first'); return; }
+  const D = state.drawing; const body = $('propsBody'); body.innerHTML = '';
+  const same = (f) => { const v0 = f(sel[0]); for (const e of sel) if (f(e) !== v0) return undefined; return v0; };
+  const one = sel.length === 1 ? sel[0] : null; const types = new Set(sel.map(e => e.dim ? 'DIM' : e.t)); const t1 = types.size === 1 ? [...types][0] : null;
+  $('propsTitle').textContent = one ? (one.dim ? 'Dimension' : one.t === 'INSERT' ? blockLabel(one.n) : one.t.charAt(0) + one.t.slice(1).toLowerCase()) : sel.length + ' objects';
+  const ch = {}; // field -> new value (only fields the user touched)
+  const row = (label, el, sub) => { const r = document.createElement('div'); r.className = 'prop-row'; const l = document.createElement('label'); l.textContent = label; r.append(l, el); if (sub) { const d = document.createElement('div'); d.className = 'prop-sub'; d.textContent = sub; r.append(d); } body.append(r); return r; };
+  const head = (t) => { const h = document.createElement('div'); h.className = 'prop-head'; h.textContent = t; body.append(h); };
+  const mark = (el) => el.classList.add('changed');
+  const numInput = (val, key, conv) => { const i = document.createElement('input'); i.type = 'text'; i.inputMode = 'decimal'; i.value = val === undefined ? '' : String(val); if (val === undefined) i.placeholder = 'varies'; i.addEventListener('input', () => { const v = parseFloat(i.value.replace(/,/g, '')); if (isFinite(v)) { ch[key] = conv ? conv(v) : v; mark(i); } else delete ch[key]; }); return i; };
+  head('General');
+  // Layer
+  const selL = document.createElement('select'); const curL = same(e => e.L || '0'); if (curL === undefined) selL.append(new Option('(varies)', '', true, true));
+  for (const l of D.layers.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))) selL.append(new Option(l.name, l.name, false, l.name === curL));
+  selL.addEventListener('change', () => { if (selL.value) { ch.L = selL.value; mark(selL); } }); row('Layer', selL);
+  // Colour
+  const curC = same(e => e.rgb ? 'rgb:' + e.rgb : String(e.c == null ? 256 : e.c));
+  const sw = document.createElement('div'); sw.className = 'swatches'; const btns = [];
+  const pick = (v) => { ch.c = v; for (const b of btns) b.setAttribute('aria-pressed', b.dataset.v === String(v) ? 'true' : 'false'); aciIn.classList.toggle('changed', !btns.some(b => b.dataset.v === String(v))); };
+  for (const v of [256, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 250, 252, 254]) { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = String(v); if (v === 256) b.textContent = 'Layer'; else if (v === 0) b.textContent = 'Block'; else { b.style.background = aciCss(v, false, true); b.title = 'Colour ' + v; } b.setAttribute('aria-pressed', curC === String(v) ? 'true' : 'false'); b.addEventListener('click', () => pick(v)); btns.push(b); sw.append(b); }
+  const aciIn = document.createElement('input'); aciIn.type = 'text'; aciIn.inputMode = 'numeric'; aciIn.placeholder = '1–255'; if (curC && !btns.some(b => b.dataset.v === curC) && !curC.startsWith('rgb')) aciIn.value = curC;
+  aciIn.addEventListener('input', () => { const v = parseInt(aciIn.value, 10); if (v >= 1 && v <= 255) pick(v); }); sw.append(aciIn);
+  const cSub = curC === undefined ? 'varies' : curC.startsWith('rgb:') ? 'now true colour ' + curC.slice(4) : curC === '256' ? 'now ByLayer' : curC === '0' ? 'now ByBlock' : 'now colour ' + curC;
+  row('Colour', sw, cSub);
+  // Linetype
+  const selT = document.createElement('select'); const curT = same(e => ltName(e.lt)); if (curT === undefined) selT.append(new Option('(varies)', '', true, true));
+  const ltNames = ['ByLayer', 'ByBlock', 'Continuous'].concat(Object.keys(D.ltypes || {}).filter(n => !/^(bylayer|byblock|continuous)$/i.test(n)).sort());
+  for (const n of ltNames) selT.append(new Option(n, n, false, n === curT));
+  selT.addEventListener('change', () => { if (selT.value) { ch.lt = selT.value; mark(selT); } }); row('Linetype', selT);
+  row('Linetype scale', numInput(same(e => e.lts || 1), 'lts', v => v > 0 ? v : 1));
+  // Transparency
+  const selA = document.createElement('select'); const curA = same(e => alName(e.al)); if (curA === undefined) selA.append(new Option('(varies)', '', true, true));
+  const aOpts = ['ByLayer', 'ByBlock', '0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%']; if (curA && !aOpts.includes(curA)) aOpts.push(curA);
+  for (const n of aOpts) selA.append(new Option(n, n, false, n === curA));
+  selA.addEventListener('change', () => { const v = selA.value; if (!v) return; ch.al = v === 'ByLayer' ? null : v === 'ByBlock' ? -1 : Math.max(0, 1 - parseFloat(v) / 100); mark(selA); }); row('Transparency', selA);
+  // Type specific
+  if (t1 === 'INSERT') {
+    head('Block');
+    row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
+    row('Scale X', numInput(same(e => +fmtFixed(e.sx || 1, 6)), 'sx', v => v || 1));
+    row('Scale Y', numInput(same(e => +fmtFixed(e.sy || 1, 6)), 'sy', v => v || 1));
+    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'px')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'py')); }
+  } else if (t1 === 'TEXT' || t1 === 'MTEXT') {
+    head('Text');
+    if (one) { const ta = document.createElement(one.t === 'MTEXT' ? 'textarea' : 'input'); const plain = one.t === 'MTEXT' ? mtextPlain(one.s).join('\n') : textPlain(one.s); ta.value = plain; ta.addEventListener('input', () => { if (ta.value !== plain) { ch.s = ta.value; mark(ta); } else delete ch.s; }); row('Contents', ta, one.t === 'MTEXT' ? 'Editing replaces any inline formatting' : null); }
+    row('Height', numInput(same(e => +fmtFixed(e.h, 4)), 'h', v => v > 0 ? v : undefined));
+    row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
+  } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
+    head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
+  }
+  $('propsApply').onclick = () => { for (const k of Object.keys(ch)) if (ch[k] === undefined) delete ch[k]; if (!Object.keys(ch).length) { closeSheets(); return; } applyProps(sel.map(e => e.id), ch); closeSheets(); };
+  openSheet('propsPanel');
+}
+function fmtFixed(v, d) { return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
+function applyProps(ids, ch) {
+  const sp = curSpace(); const idset = new Set(ids); const items = [];
+  for (const e of sp.ents) {
+    if (!idset.has(e.id)) continue; const n = cloneEnt(e);
+    if ('L' in ch) n.L = ch.L;
+    if ('c' in ch) { n.c = ch.c; delete n.rgb; }
+    if ('lt' in ch) { if (ch.lt === 'ByLayer') n.lt = ''; else n.lt = ch.lt; }
+    if ('lts' in ch) { if (Math.abs(ch.lts - 1) < 1e-12) delete n.lts; else n.lts = ch.lts; }
+    if ('al' in ch) { if (ch.al == null) delete n.al; else n.al = ch.al; }
+    if (n.t === 'INSERT' && ('rot' in ch || 'sx' in ch || 'sy' in ch || 'px' in ch || 'py' in ch)) {
+      const blk = state.drawing.blocks[n.n]; const base = blk ? blk.base : [0, 0];
+      const tgt = { ...n, rot: 'rot' in ch ? ch.rot : n.rot, sx: 'sx' in ch ? ch.sx : n.sx, sy: 'sy' in ch ? ch.sy : n.sy, p: ['px' in ch ? ch.px : n.p[0], 'py' in ch ? ch.py : n.p[1]] };
+      const M = mMul(mInsert(tgt, base), mInverse(mInsert(n, base))); transformEntity(n, M); // moves attributes with the block
+      n.rot = tgt.rot; n.sx = tgt.sx; n.sy = tgt.sy; n.p = tgt.p.slice();
+    }
+    if (n.t === 'TEXT' || n.t === 'MTEXT') {
+      if ('rot' in ch) { const d = ch.rot - (n.rot || 0); const anc = (n.t === 'TEXT' && (n.ha || n.va) && n.ap && (n.ap[0] || n.ap[1])) ? n.ap : n.p; const R = mMul(mTranslate(anc[0], anc[1]), mMul(mRotate(d), mTranslate(-anc[0], -anc[1]))); n.p = mApply(R, n.p); if (n.ap && n.t === 'TEXT') n.ap = mApply(R, n.ap); n.rot = ch.rot; }
+      if ('h' in ch) n.h = ch.h;
+      if ('s' in ch) n.s = n.t === 'MTEXT' ? ch.s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\r?\n/g, '\\P') : ch.s.replace(/\r?\n/g, ' ');
+    }
+    if ((n.t === 'CIRCLE' || n.t === 'ARC') && 'r' in ch) n.r = ch.r;
+    items.push({ id: e.id, prev: cloneEnt(e), next: n });
+  }
+  if (!items.length) return;
+  pushUndo({ type: 'modify', space: state.spaceIdx, items }); applyAction(state.undo[state.undo.length - 1], false);
+  toast(items.length === 1 ? 'Properties updated' : items.length + ' objects updated'); showSelection(); requestFull();
+}
+$('btnProps').addEventListener('click', openProps);
+
 // text dialog
 function openTextDialog(pt) {
   const dlg = $('textDlg'); dlg.classList.add('on'); $('txtVal').value = ''; $('txtH').value = state.textH || defaultTextHeight(); setTimeout(() => $('txtVal').focus(), 50);
@@ -95,7 +192,7 @@ function buildDxf(D) {
   // entities writer
   const skipped = {};
   const ent = (e, owner, paper) => {
-    const common = (type, sub) => { w(0, type); w(5, H()); w(330, owner); w(100, 'AcDbEntity'); if (paper) w(67, 1); w(8, dxfString(e.L || '0')); if (e.c != null && e.c !== 256) w(62, e.c); if (e.lt && !/^bylayer$/i.test(e.lt)) w(6, dxfString(ltNames.has(e.lt) ? e.lt : 'Continuous')); if (sub) w(100, sub); };
+    const common = (type, sub) => { w(0, type); w(5, H()); w(330, owner); w(100, 'AcDbEntity'); if (paper) w(67, 1); w(8, dxfString(e.L || '0')); if (e.lt && !/^bylayer$/i.test(e.lt)) w(6, dxfString(ltNames.has(e.lt) || /^byblock$/i.test(e.lt) ? e.lt : 'Continuous')); if (e.c != null && e.c !== 256) w(62, e.c); if (e.lts && Math.abs(e.lts - 1) > 1e-12) w(48, e.lts); if (sub) w(100, sub); };
     const pt = (code, p, z) => { w(code, num(p[0])); w(code + 10, num(p[1])); if (z !== false) w(code + 20, '0'); };
     switch (e.t) {
       case 'LINE': common('LINE', 'AcDbLine'); pt(10, e.a); pt(11, e.b); break;

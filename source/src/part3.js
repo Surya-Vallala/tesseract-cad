@@ -34,11 +34,11 @@ class SnapGrid {
 // ===================== Scene build =====================
 const KEY_SEP = '\u0001';
 function makeScene() { return { items: [], viewports: [], bbox: emptyBox(), snap: new SnapGrid(), textBox: emptyBox(), nFills: 0, nTexts: 0 }; }
-let curAl = 1; // opacity of the entity being emitted (set in emitEntity)
-function sceneKey(S, layer, aci, lt, item, al) {
-  if (al == null) al = curAl;
-  const k = layer + KEY_SEP + aci + KEY_SEP + (lt || '') + KEY_SEP + al;
-  let e = item.pathMap.get(k); if (!e) { e = { layer, aci, lt: lt || '', al, path: new Path2D(), n: 0 }; item.pathMap.set(k, e); item.paths.push(e); } return e;
+let curAl = 1, curLts = 1, curScene = null; // opacity and linetype scale of the entity being emitted (set in emitEntity)
+function sceneKey(S, layer, aci, lt, item, al, lts) {
+  if (al == null) al = curAl; if (lts == null) lts = lt ? curLts : 1;
+  const k = layer + KEY_SEP + aci + KEY_SEP + (lt || '') + KEY_SEP + al + KEY_SEP + lts;
+  let e = item.pathMap.get(k); if (!e) { e = { layer, aci, lt: lt || '', al, lts, path: new Path2D(), n: 0 }; item.pathMap.set(k, e); item.paths.push(e); } return e;
 }
 function resolveLayer(e, ctx) { return (e.L === '0' && ctx.layer) ? ctx.layer : (e.L || '0'); }
 // Colour is an ACI number (1..255) or a true colour string '#rrggbb'.
@@ -50,6 +50,9 @@ function resolveLt(e, ctx, layer) { let lt = e.lt || ''; if (!lt || /^bylayer$/i
 function buildScene(space) {
   const S = makeScene();
   const D = state.drawing;
+  // A layout's own full-sheet viewport (lowest id, 1:1) is the sheet itself, not a window into the model.
+  if (space.paper) { let mv = null; for (const e of space.ents) if (e.t === 'VIEWPORT' && (mv === null || e.vid < mv.vid)) mv = e; if (mv && Math.abs((mv.h || 0) / (mv.vh || 1) - 1) < 1e-6) S.sheetVid = mv.vid; }
+  curScene = S;
   for (const e of space.ents) {
     const item = { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 };
     try { emitEntity(e, IDM, { layer: null, color: null, lt: '' }, S, item, 0); } catch (err) { console.warn('emit failed', e.t, err); }
@@ -138,8 +141,10 @@ function hatchLoopToPath(S, path, loop, M, flatOut) { // returns flat polygon
     for (const ed of loop.e) {
       const q = [];
       if (ed.t === 1) { const a = mApply(M, ed.a), b = mApply(M, ed.b); q.push(a[0], a[1], b[0], b[1]); }
-      else if (ed.t === 2) arcPoints(ed.c, ed.r, ed.ccw ? ed.a0 : ed.a1, ed.ccw ? ed.a1 : ed.a0, true, q, M, Math.PI / 16);
-      else if (ed.t === 3) { const m = ed.m; const k = ed.k; const a0 = ed.ccw ? ed.a0 : ed.a1, a1 = ed.ccw ? ed.a1 : ed.a0; ellipsePoints(ed.c, m, k, a0, a1, q, M); if (!ed.ccw) { const r = []; for (let i = q.length - 2; i >= 0; i -= 2) r.push(q[i], q[i + 1]); q.length = 0; for (const v of r) q.push(v); } }
+      // Clockwise hatch arc/ellipse edges store their angles negated (DXF/DWG convention): the edge runs
+      // clockwise from -start to -end. Build it counter-clockwise from -end to -start, then reverse.
+      else if (ed.t === 2) arcPoints(ed.c, ed.r, ed.ccw ? ed.a0 : -ed.a1, ed.ccw ? ed.a1 : -ed.a0, true, q, M, Math.PI / 16);
+      else if (ed.t === 3) { const m = ed.m; const k = ed.k; const a0 = ed.ccw ? ed.a0 : -ed.a1, a1 = ed.ccw ? ed.a1 : -ed.a0; ellipsePoints(ed.c, m, k, a0, a1, q, M); if (!ed.ccw) { const r = []; for (let i = q.length - 2; i >= 0; i -= 2) r.push(q[i], q[i + 1]); q.length = 0; for (const v of r) q.push(v); } }
       else if (ed.t === 4) splinePoints(ed, q, M);
       if (q.length < 4) continue;
       if (!ed.ccw && ed.t === 2) { const r = []; for (let i = q.length - 2; i >= 0; i -= 2) r.push(q[i], q[i + 1]); q.length = 0; for (const v of r) q.push(v); }
@@ -155,7 +160,7 @@ function hatchLoopToPath(S, path, loop, M, flatOut) { // returns flat polygon
 }
 
 function emitEntity(e, M, ctx, S, item, depth) {
-  const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al;
+  const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al; curLts = (e.lts || 1) * (ctx.lts || 1);
   switch (e.t) {
     case 'LINE': { const a = mApply(M, e.a), b = mApply(M, e.b); const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitPoly(S, item, [a[0], a[1], b[0], b[1]], false, key, M); S.snap.add(a[0], a[1], 1); S.snap.add(b[0], b[1], 1); S.snap.add((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 2); break; }
     case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; } break; }
@@ -172,7 +177,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
     case 'MTEXT': { const sc = mScaleOf(M); const p = mApply(M, e.p); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const w = (e.w || 0) * sc; let lines = mtextPlain(e.s); if (!lines.join('').trim()) break; lines = wrapLines(lines, h, w); const t = { layer, aci, al, x: p[0], y: p[1], h, rot, lines, at: e.at || 1, ls: e.ls || 1, mt: true, w, id: e.id }; item.texts.push(t); let mw = 0; for (const ln of lines) mw = Math.max(mw, textWidthUnits(ln, h)); textItemBox(item, t, Math.max(mw, w * 0.5), h + (lines.length - 1) * h * 1.667 * t.ls, S); S.snap.add(p[0], p[1], 4); break; }
     case 'INSERT': {
       if (depth > 12) break; const blk = state.drawing.blocks[e.n]; if (!blk) break;
-      const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer), al };
+      const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer), al, lts: curLts };
       const g = getBlockGeom(e.n, ctx2, depth);
       if (!item.inst) item.inst = [];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -217,7 +222,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
       break;
     }
     case 'VIEWPORT': {
-      if (e.vid === 1 || !e.on) break;
+      if (e.vid === 1 || !e.on || (curScene && curScene.sheetVid === e.vid)) break;
       const x0 = e.ce[0] - e.w / 2, y0 = e.ce[1] - e.h / 2, x1 = e.ce[0] + e.w / 2, y1 = e.ce[1] + e.h / 2;
       const key = sceneKey(S, layer, aci, '', item); const pts = [x0, y0, x1, y0, x1, y1, x0, y1];
       emitPoly(S, item, pts, true, key, M); S.viewports.push({ x0, y0, x1, y1, vc: e.vc, sc: e.h / (e.vh || 1), layer, id: e.id });
@@ -240,7 +245,7 @@ function textItemBox(item, t, w, totalH, S) {
 const blockCache = new Map();
 function newItem(e) { return { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 }; }
 function getBlockGeom(name, ctx, depth) {
-  const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '') + '|' + (ctx.al == null ? 1 : ctx.al);
+  const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '') + '|' + (ctx.al == null ? 1 : ctx.al) + '|' + (ctx.lts || 1);
   let g = blockCache.get(key); if (g) return g;
   const blk = state.drawing.blocks[name]; const S2 = makeScene(); const it = newItem({ t: 'BLOCKDEF', id: -1 });
   for (const sub of blk.ents) { try { emitEntity(sub, IDM, ctx, S2, it, depth + 1); } catch (err) { console.warn('block emit', name, sub.t, err); } }
@@ -259,7 +264,7 @@ function transformFill(f, M) {
 }
 function flattenBlock(g, M, S, item) {
   const dm = domMatrix(M);
-  for (const k of g.paths) { const key = sceneKey(S, k.layer, k.aci, k.lt, item, k.al); key.path.addPath(k.path, dm); key.n += k.n; }
+  for (const k of g.paths) { const key = sceneKey(S, k.layer, k.aci, k.lt, item, k.al, k.lts); key.path.addPath(k.path, dm); key.n += k.n; }
   for (const f of g.fills) item.fills.push(transformFill(f, M));
   for (const w of g.wipes) { const path = new Path2D(); path.addPath(w.path, dm); item.wipes.push({ layer: w.layer, path }); }
   for (const t of g.texts) item.texts.push(transformText(t, M));

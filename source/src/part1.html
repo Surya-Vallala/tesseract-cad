@@ -95,6 +95,20 @@ input{font:inherit;color:inherit}
 #spaces button:active{background:var(--chip)}
 #spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 #spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
+/* properties sheet */
+#propsPanel{max-height:min(82%,640px)}
+.prop-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.prop-row:last-child{border-bottom:0}
+.prop-row > label{font-size:12.5px;color:var(--muted)}
+.prop-row select,.prop-row input,.prop-row textarea{width:100%;min-width:0;padding:8px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:15px}
+.prop-row textarea{min-height:64px;resize:vertical;font-family:var(--font)}
+.prop-row input.changed,.prop-row select.changed,.prop-row textarea.changed{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.prop-sub{font-size:11.5px;color:var(--muted);grid-column:2}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.swatches button{width:30px;height:30px;border-radius:7px;border:1px solid rgba(128,128,128,.45);font-size:9.5px;font-weight:600;color:var(--fg);background:var(--chip)}
+.swatches button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.swatches input{width:84px;padding:6px 8px;font-size:14px}
+.prop-head{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;padding:10px 0 2px}
 /* full screen: only the drawing, the strip and the view buttons */
 body.fs #top, body.fs #tools{display:none}
 #welcome{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(180deg,rgba(20,22,26,.55),rgba(20,22,26,.85));color:#ece8df}
@@ -163,6 +177,7 @@ body.fs #top, body.fs #tools{display:none}
     <div id="prompt" hidden>
       <div id="promptBar">
         <div id="promptText"><span class="tool" id="toolName">View</span><span id="promptMsg"></span></div>
+        <button class="pb" id="btnProps" title="Change properties" aria-label="Change properties" hidden><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>
         <button class="pb" id="btnKeys" title="Type a value" aria-label="Type a value" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
         <button class="pb" id="btnBack" title="Back: remove the last point" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg></button>
         <button class="pb ok" id="btnDone" title="Done" aria-label="Done"><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg></button>
@@ -197,6 +212,11 @@ body.fs #top, body.fs #tools{display:none}
       <button data-g="edit"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg>Edit</button>
       <button data-g="draw"><svg viewBox="0 0 24 24"><path d="M3 21 21 3M3 21h5M3 21v-5"/><circle cx="17" cy="17" r="3"/></svg>Draw</button>
     </div>
+    <section class="sheet" id="propsPanel" aria-label="Properties">
+      <header><h2 id="propsTitle">Properties</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body" id="propsBody"></div>
+      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="propsApply">Apply</button></div>
+    </section>
     <section class="sheet" id="spacesPanel" aria-label="Model and layouts">
       <header><h2>Model and layouts</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body"><nav id="spaces" aria-label="Model and layouts"></nav></div>
