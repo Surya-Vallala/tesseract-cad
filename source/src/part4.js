@@ -175,17 +175,21 @@ function drawPattern(f, V, col, wr) {
 }
 
 // ===================== Overlay (selection, tool graphics, snap) =====================
+const SEL_BLUE = '#2f8cff', CROSS_GREEN = '#22b573';
 function drawOverlay() {
   const V = V0(); const dpr = state.dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const S = state.drawing ? getScene(state.spaceIdx) : null; if (!S) return;
   const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#f0a640';
   // selection
+  // selection: translucent blue glow with a thin solid core (no dashes)
   if (state.selection.size) {
-    ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.strokeStyle = acc; ctx.lineWidth = 2.2 / V.s; ctx.setLineDash([6 / V.s, 4 / V.s]);
-    for (const it of S.items) if (state.selection.has(it.ent.id)) highlightItem(it, V);
+    const sel = []; for (const it of S.items) if (state.selection.has(it.ent.id)) sel.push(it);
+    ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.setLineDash([]); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = SEL_BLUE;
+    ctx.globalAlpha = 0.3; ctx.lineWidth = 6 / V.s; for (const it of sel) highlightItem(it, V);
+    ctx.globalAlpha = 0.85; ctx.lineWidth = 1.6 / V.s; for (const it of sel) highlightItem(it, V);
     ctx.restore();
   }
-  if (state.hoverItem && !state.selection.has(state.hoverItem.ent.id)) { ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.strokeStyle = acc; ctx.globalAlpha = 0.6; ctx.lineWidth = 2 / V.s; highlightItem(state.hoverItem, V); ctx.restore(); }
+  if (state.hoverItem && !state.selection.has(state.hoverItem.ent.id)) { ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.strokeStyle = SEL_BLUE; ctx.globalAlpha = 0.45; ctx.lineWidth = 3 / V.s; highlightItem(state.hoverItem, V); ctx.restore(); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (state.tool && state.tool.draw) state.tool.draw(ctx, V, acc);
   // snap marker

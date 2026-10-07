@@ -18,6 +18,8 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - Properties: select objects and tap ✎ to change layer, colour (for blocks, optionally the block's contents too), linetype, linetype scale and transparency, plus rotation, scale and position (blocks), contents, height and rotation (text), and radius (circles, arcs)
 - Draw order: follows the drawing's own order (AutoCAD SORTENTSTABLE); Edit → Order brings objects to front/back, above/under another object, or sends all hatches to back
 - Undo/redo in the top bar; closing or opening another drawing with unsaved edits asks Save / Discard / Cancel (Save keeps an edited copy on the phone under Recent)
+- **Tabs:** open up to 5 drawings at once; each keeps its own view, layers, selection and undo history
+- Select similar: with something selected, pick every object of the same type on the same layer (blocks by name, hatches by pattern)
 - Box select: tap two opposite corners (or drag). Left to right picks objects fully inside; right to left also picks objects crossing the box
 - Draw: line, polyline, rectangle, circle, arc, spline and text, with typed input (`1200`, `@1200,0`, `@1500<90`)
 - Export DXF and PNG; keep recent files on the device

@@ -122,12 +122,13 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, e
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') cancelTool(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
-function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
+function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
   if (!state.drawing) return;
-  const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
+  const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select');
+  const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; if (picking) showCoord(sn.x, sn.y, sn.kind);
   const V = state.view; const w = toWorld(X, Y, V); let hit = pickAt(w[0], w[1], 12 / V.s);
   if (state.tool && (state.tool.name === 'area' || state.tool.name === 'info')) { const vp = vpAt(w[0], w[1]); if (vp && (!hit || hit.item.ent.t === 'VIEWPORT')) { const m = paperToModel(vp, w); const h = pickAt(m[0], m[1], 12 / V.s / vp.sc, getScene(0)); if (h) hit = { ...h, vp, model: true }; } }
   if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, ev, w);
@@ -200,7 +201,7 @@ function updateChrome() {
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
   $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
-  $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t));
+  $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t)); $('btnSimilar').hidden = $('btnProps').hidden;
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
 function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
@@ -406,7 +407,7 @@ function makeTool(name) {
   }
   return T;
 }
-function drawBoxSel(c, bx) { const b = bx || state.boxSel; if (!b) return; const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
+function drawBoxSel(c, bx) { const b = bx || state.boxSel; if (!b) return; const acc = b.x1 < b.x0 ? CROSS_GREEN : SEL_BLUE; c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
 function arc3pt(a, b, c) {
   const ax = a[0], ay = a[1], bx = b[0], by = b[1], cx = c[0], cy = c[1];
   const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)); if (Math.abs(d) < 1e-12) return null;

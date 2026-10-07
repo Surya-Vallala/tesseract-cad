@@ -26,7 +26,7 @@ function transformEntity(e, M) {
   return e;
 }
 function cloneEnt(e) { return structuredClone(e); }
-function pushUndo(action) { state.undo.push(action); if (state.undo.length > 100) state.undo.shift(); state.redo.length = 0; state.dirty = true; updateUndoBtns(); }
+function pushUndo(action) { const wasDirty = state.dirty; state.undo.push(action); if (state.undo.length > 100) state.undo.shift(); state.redo.length = 0; state.dirty = true; updateUndoBtns(); if (!wasDirty) renderTabs(); }
 function updateUndoBtns() { const show = !!(state.drawing && $('welcome').style.display === 'none'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; $('btnUndo').title = state.undo.length ? 'Undo (' + state.undo.length + ')' : 'Nothing to undo'; }
 function applyAction(a, reverse) {
   const sp = state.drawing.spaces[a.space]; const ents = sp.ents;
@@ -188,6 +188,22 @@ function applyProps(ids, ch) {
   toast(items.length === 1 ? 'Properties updated' : items.length + ' objects updated'); showSelection(); requestFull();
 }
 $('btnProps').addEventListener('click', openProps);
+// ----- Select similar (AutoCAD default: same type and layer; blocks by name, hatches by pattern) -----
+function similarKey(e) {
+  if (e.t === 'INSERT') { if (e.dim) return 'DIM|' + e.L; const n = e.n || ''; return 'INS|' + e.L + '|' + (/^\*U/i.test(n) ? dynSignature(n) : n); }
+  if (e.t === 'HATCH') return 'HATCH|' + e.L + '|' + (e.solid ? 'SOLID' : e.name);
+  return e.t + '|' + e.L;
+}
+// Dynamic block copies are anonymous (*U…); compare what they contain instead of the name
+function dynSignature(n) { const b = state.drawing.blocks[n]; if (!b) return n; return 'U:' + b.ents.map(x => x.t === 'INSERT' ? 'I:' + x.n : x.t).sort().join(','); }
+function selectSimilar() {
+  const sp = curSpace(); if (!sp || !state.selection.size) { toast('Select an object first'); return; }
+  const keys = new Set(sp.ents.filter(e => state.selection.has(e.id)).map(similarKey)); const before = state.selection.size;
+  for (const e of sp.ents) if (!state.selection.has(e.id) && e.t !== 'VIEWPORT' && layerOn(e.L || '0') && keys.has(similarKey(e))) state.selection.add(e.id);
+  const added = state.selection.size - before; toast(added ? added + ' similar object' + (added === 1 ? '' : 's') + ' added · ' + state.selection.size + ' selected' : 'No other similar objects in this space');
+  showSelection(); requestFull();
+}
+$('btnSimilar').addEventListener('click', selectSimilar);
 
 // text dialog
 function openTextDialog(pt) {
@@ -331,10 +347,10 @@ async function renderRecent() {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 async function openRecent(r) {
-  confirmUnsaved(() => {
-    if (r.drawing) { state.fileBytes = r.bytes; state.fileName = r.name; state.kind = r.kind; loadDrawing(r.drawing, r.name); toast('Opened your saved copy with edits'); }
-    else if (r.bytes) parseFile(r.bytes, r.name);
-  });
+  const open = findOpenDoc(r.name); if (open) { switchDoc(open); toast('Already open · switched to it'); return; }
+  if (!canOpenAnother()) return;
+  if (r.drawing) { loadDrawing(r.drawing, r.name, { bytes: r.bytes, kind: r.kind }); toast('Opened your saved copy with edits'); }
+  else if (r.bytes) parseFile(r.bytes, r.name);
 }
 // Ask before throwing away edits: Save (keeps an edited copy on this phone), Discard, or Cancel.
 function confirmUnsaved(then) {
@@ -348,7 +364,13 @@ function confirmUnsaved(then) {
   $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
   $('saveCancel').onclick = () => { done(); };
 }
-function closeDrawing() { state.drawing = null; state.scenes.clear(); state.undo.length = 0; state.redo.length = 0; state.dirty = false; state.selection.clear(); $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderRecent(); requestFull(); }
+function closeDrawing() {
+  const i = docs.indexOf(activeDoc); if (i >= 0) docs.splice(i, 1);
+  activeDoc = null; const back = returnTo && docs.includes(returnTo) ? returnTo : null; returnTo = null;
+  if (docs.length) { restoreDoc(back || docs[Math.max(0, i - 1)]); refreshDocUI(); return; }
+  state.drawing = null; state.scenes = new Map(); blockCache = new Map(); state.undo = []; state.redo = []; state.dirty = false; state.selection = new Set(); state.fileName = ''; state.fileBytes = null;
+  $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderTabs(); renderRecent(); requestFull();
+}
 
 // ===================== Loading =====================
 let worker = null, engineReady = false, currentLoad = null, useBlob = false;
@@ -373,10 +395,10 @@ function wireWorker() {
       if (m.type === 'ready') { engineReady = true; $('engineStatus').textContent = 'DWG engine ready on this device.'; return; }
       if (!currentLoad) { if (m.type === 'error') { $('engineStatus').textContent = m.message; console.warn(m.message); } return; }
       if (m.type === 'progress') showLoading(true, m.stage, m.pct);
-      else if (m.type === 'error') { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && state.fileBytes) { parseFile(state.fileBytes, L.name, true); return; } showLoading(false); toast('Could not open ' + L.name + ': ' + m.message, 7000); }
-      else if (m.type === 'done') { const L = currentLoad; currentLoad = null; recycleWorker(); showLoading(true, 'Preparing view', 95); setTimeout(() => { loadDrawing(m.drawing, L.name); showLoading(false); const ms = Math.round(performance.now() - L.t0); const n = m.drawing.spaces[0].ents.length; toast('Opened in ' + (ms / 1000).toFixed(1) + ' s · ' + n.toLocaleString() + ' objects in model'); saveRecent(false); }, 20); }
+      else if (m.type === 'error') { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && L.buf) { parseFile(L.buf, L.name, true); return; } showLoading(false); toast('Could not open ' + L.name + ': ' + m.message, 7000); }
+      else if (m.type === 'done') { const L = currentLoad; currentLoad = null; recycleWorker(); showLoading(true, 'Preparing view', 95); setTimeout(() => { loadDrawing(m.drawing, L.name, { bytes: L.buf, kind: L.kind }); showLoading(false); const ms = Math.round(performance.now() - L.t0); const n = m.drawing.spaces[0].ents.length; toast('Opened in ' + (ms / 1000).toFixed(1) + ' s · ' + n.toLocaleString() + ' objects in model'); saveRecent(false); }, 20); }
     };
-    worker.onerror = (e) => { const msg = (e && e.message) || 'unknown error'; console.warn('worker error', msg, e && e.filename, e && e.lineno); if (currentLoad && engineReady) { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && state.fileBytes) { parseFile(state.fileBytes, L.name, true); return; } } if (currentLoad) { showLoading(false); toast('File reader failed: ' + msg, 7000); currentLoad = null; } $('engineStatus').textContent = 'DWG engine could not start here (' + msg + '). DXF files still open.'; worker = null; tryBlobFallback(); };
+    worker.onerror = (e) => { const msg = (e && e.message) || 'unknown error'; console.warn('worker error', msg, e && e.filename, e && e.lineno); if (currentLoad && engineReady) { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && L.buf) { parseFile(L.buf, L.name, true); return; } } if (currentLoad) { showLoading(false); toast('File reader failed: ' + msg, 7000); currentLoad = null; } $('engineStatus').textContent = 'DWG engine could not start here (' + msg + '). DXF files still open.'; worker = null; tryBlobFallback(); };
   }
 }
 let blobTried = false;
@@ -394,24 +416,66 @@ function warmUpEngine() { try { const w = getWorker(); if (w) w.postMessage({ ki
 setTimeout(warmUpEngine, 600);
 function showLoading(on, stage, pct) { $('loading').classList.toggle('on', !!on); if (stage) $('loadStage').textContent = stage; if (pct != null) $('loadBar').style.width = pct + '%'; }
 function parseFile(buf, name, retried) {
-  state.fileBytes = buf; state.fileName = name; state.kind = /\.dxf$/i.test(name) ? 'dxf' : 'dwg';
-  showLoading(true, state.kind === 'dxf' ? 'Reading DXF…' : (engineReady ? 'Reading DWG…' : 'Starting DWG engine…'), 3);
-  currentLoad = { name, t0: performance.now(), retried: !!retried };
+  const kind = /\.dxf$/i.test(name) ? 'dxf' : 'dwg';
+  showLoading(true, kind === 'dxf' ? 'Reading DXF…' : (engineReady ? 'Reading DWG…' : 'Starting DWG engine…'), 3);
+  currentLoad = { name, buf, kind, t0: performance.now(), retried: !!retried };
   let tries = 0;
   const send = () => {
     let w; try { w = getWorker(); } catch (e) { showLoading(false); currentLoad = null; toast('Could not start the file reader: ' + e.message, 6000); return; }
     if (!w) { if (++tries > 40) { showLoading(false); currentLoad = null; toast('DWG engine could not start in this view. ' + $('engineStatus').textContent, 8000); return; } setTimeout(send, 250); return; }
-    w.postMessage({ buf: buf.slice(0), name, kind: state.kind });
+    w.postMessage({ buf: buf.slice(0), name, kind });
   };
   send();
 }
-function loadDrawing(D, name) {
-  state.drawing = D; state.scenes.clear(); blockCache.clear(); state.selection.clear(); state.undo.length = 0; state.redo.length = 0; state.dirty = false; state.spaceIdx = 0; lastFull = null;
+// ===================== Open drawings (tabs) =====================
+// Each open drawing keeps its own view, layers, selection, undo history and caches. The active one is
+// swapped into `state`; switching tabs stores it back and restores the other.
+const MAX_DOCS = 5;
+const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind'];
+const docs = []; let activeDoc = null, docSeq = 0;
+function stashActive() { if (!activeDoc) return; for (const k of DOC_KEYS) activeDoc[k] = state[k]; activeDoc.view = { ...state.view }; activeDoc.blockCache = blockCache; }
+function restoreDoc(d) { for (const k of DOC_KEYS) state[k] = d[k]; state.view = { ...d.view }; blockCache = d.blockCache || new Map(); activeDoc = d; lastFull = null; state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.loupe = null; }
+const docTitle = (d) => d.title || docField(d, 'fileName') || 'Drawing';
+function docField(d, k) { return d === activeDoc ? state[k] : d[k]; } // the active drawing lives in `state`
+function docDirty(d) { return !!docField(d, 'dirty'); }
+const isSampleDoc = (d) => { const D = docField(d, 'drawing'); return !!(D && D.sample); };
+function findOpenDoc(name) { return docs.find(d => docField(d, 'fileName') === name && !isSampleDoc(d)); }
+function canOpenAnother() { if (activeDoc && isSampleDoc(activeDoc) && !state.dirty) return true; if (docs.length >= MAX_DOCS) { toast('Up to ' + MAX_DOCS + ' drawings can be open. Close one first (× on its tab).', 4500); return false; } return true; }
+function loadDrawing(D, name, meta) {
+  meta = meta || {};
+  // reuse the tab if it only holds the untouched built-in sample, otherwise open a new tab
+  const reuse = activeDoc && isSampleDoc(activeDoc) && !state.dirty;
+  stashActive();
+  let d = reuse ? activeDoc : null; if (!d) { d = { id: ++docSeq }; docs.push(d); }
+  activeDoc = d; d.title = name;
+  state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
+  state.fileBytes = meta.bytes || null; state.fileName = meta.fileName || name; state.kind = meta.kind || (/\.dxf$/i.test(name) ? 'dxf' : 'dwg');
+  state.hoverItem = null; state.snapMark = null; state.lastPt = null;
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
   $('fileName').textContent = name; $('welcome').style.display = 'none';
-  renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo();
+  renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs();
   startTool('select', true); zoomExtents();
+}
+function refreshDocUI() {
+  $('fileName').textContent = docTitle(activeDoc); $('welcome').style.display = 'none';
+  renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs(); startTool('select', true); requestFull();
+}
+function switchDoc(d) { if (!d || d === activeDoc) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } stashActive(); restoreDoc(d); closeSheets(); refreshDocUI(); }
+let returnTo = null;
+function closeTab(d) { const back = d !== activeDoc ? activeDoc : null; if (back) switchDoc(d); returnTo = back; confirmUnsaved(closeDrawing); }
+function renderTabs() {
+  const bar = $('tabs');
+  bar.hidden = docs.length < 2; if (bar.hidden) { bar.innerHTML = ''; return; }
+  bar.innerHTML = '';
+  for (const d of docs) {
+    const b = document.createElement('div'); b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', d === activeDoc ? 'true' : 'false');
+    const t = document.createElement('button'); t.className = 'tt'; t.textContent = (docDirty(d) ? '• ' : '') + docTitle(d).replace(/\.(dwg|dxf)$/i, ''); t.title = docTitle(d); t.addEventListener('click', () => switchDoc(d));
+    const x = document.createElement('button'); x.className = 'tx'; x.setAttribute('aria-label', 'Close ' + docTitle(d)); x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg>'; x.addEventListener('click', (ev) => { ev.stopPropagation(); closeTab(d); });
+    b.append(t, x); bar.append(b);
+  }
+  const add = document.createElement('button'); add.className = 'tadd'; add.title = 'Open another drawing'; add.setAttribute('aria-label', 'Open another drawing'); add.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'; add.addEventListener('click', () => { if (canOpenAnother()) $('file').click(); }); bar.append(add);
+  const act = bar.querySelector('[aria-selected="true"]'); if (act) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 function updateInfo() { const D = state.drawing; if (!D) return; const nM = D.spaces[0].ents.length; const sk = Object.entries(D.skipped || {}).map(([k, v]) => k + ' ×' + v).join(', '); $('infoText').textContent = (D.sample ? 'Sample drawing' : state.fileName) + ' · ' + nM.toLocaleString() + ' objects in model · ' + (D.spaces.length - 1) + ' layout' + (D.spaces.length === 2 ? '' : 's') + ' · ' + D.layers.length + ' layers · units: ' + (UNIT_NAME[D.header.units] || 'unitless') + (D.parseMs ? ' · parsed in ' + (D.parseMs / 1000).toFixed(1) + ' s' : '') + (sk ? ' · not shown: ' + sk : ''); }
 function renderSpaces() {
@@ -464,9 +528,9 @@ function sampleDrawing() {
 }
 
 // ===================== UI wiring =====================
-$('btnOpen').addEventListener('click', () => { closeSheets(); $('file').click(); }); $('btnOpen2').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const buf = await f.arrayBuffer(); confirmUnsaved(() => parseFile(buf, f.name)); });
-$('btnSample').addEventListener('click', () => confirmUnsaved(() => { state.fileBytes = null; state.fileName = 'Sample plan'; loadDrawing(sampleDrawing(), 'Sample plan (built in)'); }));
+$('btnOpen').addEventListener('click', () => { closeSheets(); if (canOpenAnother()) $('file').click(); }); $('btnOpen2').addEventListener('click', () => { if (canOpenAnother()) $('file').click(); });
+$('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const open = findOpenDoc(f.name); if (open) { switchDoc(open); toast('Already open · switched to its tab'); return; } if (!canOpenAnother()) return; const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
+$('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { switchDoc(open); $('welcome').style.display = 'none'; updateUndoBtns(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
 $('btnFit').addEventListener('click', zoomExtents);
 $('btnSpace').addEventListener('click', () => { if (!state.drawing || $('welcome').style.display !== 'none') { $('file').click(); return; } renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
@@ -483,14 +547,14 @@ $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
 $('miExport').addEventListener('click', () => { closeSheets(); exportDxf(); }); $('miPng').addEventListener('click', () => { closeSheets(); exportPng(); });
-$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = baseName(state.fileName) + EDIT_SUFFIX; $('fileName').textContent = state.fileName; closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
+$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; $('fileName').textContent = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
 $('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); });
 $('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.checked; }); $('chkPat').addEventListener('change', (ev) => { state.patOn = ev.target.checked; requestFull(); });
 $('selLayer').addEventListener('change', (ev) => { state.curLayer = ev.target.value; renderLayers(); toast('New objects go on ' + state.curLayer); });
 try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.canvasLight = true; stage.classList.add('light'); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === 'light' ? 'true' : 'false'); } const u = localStorage.getItem('tct-units'); if (u) { state.unitMode = u; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x.dataset.v === u ? 'true' : 'false'); } } catch (e) { }
-window.addEventListener('beforeunload', (ev) => { if (state.dirty) { ev.preventDefault(); ev.returnValue = ''; } });
+window.addEventListener('beforeunload', (ev) => { if (docs.some(docDirty)) { ev.preventDefault(); ev.returnValue = ''; } });
 setGroup('view'); renderRecent(); resizeCanvas();
 // First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)'; updateUndoBtns();
+loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)'; updateUndoBtns();

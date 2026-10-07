@@ -242,7 +242,7 @@ function textItemBox(item, t, w, totalH, S) {
 }
 
 // ===================== Block geometry cache (instancing) =====================
-const blockCache = new Map();
+let blockCache = new Map(); // per open drawing (swapped with the active tab)
 function newItem(e) { return { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 }; }
 function getBlockGeom(name, ctx, depth) {
   const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '') + '|' + (ctx.al == null ? 1 : ctx.al) + '|' + (ctx.lts || 1);
