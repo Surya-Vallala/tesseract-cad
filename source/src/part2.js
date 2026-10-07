@@ -201,7 +201,7 @@ function wrapLines(lines, h, width) {
 const UNIT_TO_M = { 0: 0.001, 1: 0.0254, 2: 0.3048, 3: 1609.344, 4: 0.001, 5: 0.01, 6: 1, 7: 1000, 8: 0.0000254, 9: 0.0000254 * 0.001, 10: 0.9144, 14: 0.1 };
 const UNIT_NAME = { 0: 'units', 1: 'in', 2: 'ft', 3: 'mi', 4: 'mm', 5: 'cm', 6: 'm', 7: 'km', 8: 'µin', 9: 'mil', 10: 'yd', 14: 'dm' };
 function fmtNum(v, dp) { if (!isFinite(v)) return '—'; const a = Math.abs(v); const d = dp != null ? dp : (a >= 1000 ? 0 : a >= 10 ? 1 : 2); return v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }); }
-function fmtFtIn(m) { const totalIn = m / 0.0254; const sign = totalIn < 0 ? '-' : ''; const ti = Math.abs(totalIn); const ft = Math.floor(ti / 12); let inch = ti - ft * 12; let frac = Math.round(inch * 8); let whole = Math.floor(frac / 8); frac = frac % 8; let f = whole + ''; if (frac) { let n = frac, d = 8; while (n % 2 === 0) { n /= 2; d /= 2; } f += ' ' + n + '/' + d; } return sign + ft + "' " + f + '"'; }
+function fmtFtIn(m) { const totalIn = m / 0.0254; const sign = totalIn < 0 ? '-' : ''; const eighths = Math.round(Math.abs(totalIn) * 8); /* round first, so 11.99" becomes the next foot, not 12" */ const ft = Math.floor(eighths / 96); let frac = eighths - ft * 96; let whole = Math.floor(frac / 8); frac = frac % 8; let f = whole + ''; if (frac) { let n = frac, d = 8; while (n % 2 === 0) { n /= 2; d /= 2; } f += ' ' + n + '/' + d; } return sign + ft + "' " + f + '"'; }
 function fmtLen(v) { // v in drawing units
   const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m = v * toM;
   const mode = state.unitMode;
@@ -211,4 +211,5 @@ function fmtLen(v) { // v in drawing units
   return fmtNum(v) + ' ' + (UNIT_NAME[code] || 'units');
 }
 function fmtLenAll(v) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m = v * toM; const parts = [fmtLen(v)]; if (state.unitMode !== 'm') parts.push(fmtNum(m, 3) + ' m'); if (state.unitMode !== 'ft') parts.push(fmtFtIn(m)); return parts.join('  ·  '); }
+function fmtAreaShort(a) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m2 = a * toM * toM; return state.unitMode === 'ft' ? fmtNum(m2 / 0.09290304, 1) + ' sq ft' : fmtNum(m2, 2) + ' m²'; } // for labels on the drawing
 function fmtArea(a) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m2 = a * toM * toM; const sqft = m2 / 0.09290304; return fmtNum(m2, 2) + ' m²  ·  ' + fmtNum(sqft, 1) + ' sq ft  ·  ' + fmtNum(sqft / 9, 2) + ' sq yd'; }

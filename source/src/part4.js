@@ -230,8 +230,8 @@ function drawSnapMarker(c, X, Y, kind, r, col) {
 // state.loupe = { X, Y (pointer), fx, fy (finger), sn } in screen px.
 const LOUPE_ZOOM = 2, LOUPE_R = 60;
 function drawLoupe(acc) {
-  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = LOUPE_R; const cx = lp.X, cy = lp.Y;
-  const w = toWorld(cx, cy, V); const s2 = V.s * LOUPE_ZOOM; const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
+  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = LOUPE_R; const cx = lp.bx != null ? lp.bx : lp.X, cy = lp.by != null ? lp.by : lp.Y; // bubble centre (moving a handle: above the finger)
+  const w = toWorld(lp.X, lp.Y, V); const s2 = V.s * LOUPE_ZOOM; const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 2; ctx.fillStyle = bgColor(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
@@ -246,7 +246,7 @@ function drawLoupe(acc) {
   ctx.restore();
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
   // snap name and length (or coordinates) just above the bubble (below it near the top edge)
-  const sn = lp.sn; const base = rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (base ? '  ' + fmtLen(Math.hypot(sn.x - base[0], sn.y - base[1])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
+  const sn = lp.sn; const base = state.handleDrag ? null : rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (state.handleDrag ? '  ' + handleDragLabel() : base ? '  ' + fmtLen(mLen(base, [sn.x, sn.y])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
   ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, cssW - 8);
   const lx = clamp(cx - tw / 2, 4, cssW - tw - 4); let ly = cy - R - 24; if (ly < 4) ly = cy + R + 6;
   ctx.fillStyle = 'rgba(20,20,20,.86)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);

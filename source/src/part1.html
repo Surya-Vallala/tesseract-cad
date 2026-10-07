@@ -86,22 +86,22 @@ input{font:inherit;color:inherit}
 #vbtns button:disabled{opacity:.35}
 /* bottom toolbar, two slim rows: group tabs (or, with something selected, a selection row) + tools (or actions) */
 #tools{flex:0 0 auto;display:flex;flex-direction:column;background:var(--bar-bg);color:var(--bar-fg);border-top:1px solid var(--bar-line);padding:0 0 env(safe-area-inset-bottom,0px)}
-#barTop{height:22px;flex:0 0 auto;display:flex;align-items:stretch;padding:0 6px}
-#barTop .gtab{flex:1;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--bar-muted)}
+#barTop{height:26px;flex:0 0 auto;display:flex;align-items:stretch;padding:0 6px}
+#barTop .gtab{flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--bar-muted)}
 #barTop .gtab[aria-selected="true"]{color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
-#barTop.sel{background:var(--selrow-bg);color:var(--selrow-fg);align-items:center;gap:8px;padding:0 0 0 10px;font-size:11.5px;white-space:nowrap}
+#barTop.sel{background:var(--selrow-bg);color:var(--selrow-fg);align-items:center;gap:8px;padding:0 0 0 10px;font-size:12px;white-space:nowrap}
 #barTop.sel b{font-weight:600}
 #barTop.sel .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;opacity:.85}
-#barTop.sel .clr{height:100%;padding:0 10px;font-weight:600;color:inherit;font-size:11.5px}
+#barTop.sel .clr{height:100%;padding:0 12px;font-weight:600;color:inherit;font-size:12px}
 #btnGroup{display:none}
 #btnGroup svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #btnGroup span{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:2px}
 #btnGroup span i{font-style:normal;font-size:9px;opacity:.75}
-#toolRow{height:41px;flex:0 0 auto;min-width:0;display:flex;gap:1px;overflow-x:auto;padding:1px 4px;scrollbar-width:none}
+#toolRow{height:50px;flex:0 0 auto;min-width:0;display:flex;gap:1px;overflow-x:auto;padding:1px 4px;scrollbar-width:none}
 #toolRow::-webkit-scrollbar{display:none}
-.tool{flex:0 0 auto;width:55px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px 2px 1px;border-radius:8px;color:var(--bar-fg)}
-.tool svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.tool span{font-size:9.5px;color:var(--bar-muted);white-space:nowrap;max-width:54px;overflow:hidden;text-overflow:ellipsis}
+.tool{flex:0 0 auto;width:57px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px 2px 2px;border-radius:9px;color:var(--bar-fg)}
+.tool svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tool span{font-size:10.5px;color:var(--bar-muted);white-space:nowrap;max-width:56px;overflow:hidden;text-overflow:ellipsis}
 .tool[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
 .tool[aria-pressed="true"] span{color:var(--accent)}
 .tool.danger{color:var(--danger)}

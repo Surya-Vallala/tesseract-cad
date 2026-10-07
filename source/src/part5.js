@@ -158,13 +158,15 @@ function stopEdgePan() { if (edgeRaf) cancelAnimationFrame(edgeRaf); edgeRaf = 0
 cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
 cv.addEventListener('pointerdown', (ev) => {
   cv.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, X: ev.offsetX, Y: ev.offsetY });
+  if (pointers.size === 1) { const hi = handleAt(ev.offsetX, ev.offsetY); if (hi >= 0) { cancelHold(); dragStart = null; startHandleDrag(hi, ev.offsetX, ev.offsetY); return; } }
   if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing && loupeAllowed()) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
-  if (pointers.size === 2) { cancelHold(); if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
+  if (pointers.size === 2) { cancelHold(); if (state.handleDrag) state.handleDrag = null; if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
 });
 cv.addEventListener('pointermove', (ev) => {
   const p = pointers.get(ev.pointerId);
   if (!p) { if (ev.pointerType === 'mouse' && state.drawing) hoverAt(ev.offsetX, ev.offsetY); return; }
   p.X = ev.offsetX; p.Y = ev.offsetY;
+  if (state.handleDrag && pointers.size === 1) { updateHandleDrag(ev.offsetX, ev.offsetY); return; }
   if (state.loupe && pointers.size === 1) { updatePrecise(ev.offsetX, ev.offsetY); return; }
   if (pointers.size === 2 && pinch0) {
     const [a, b] = [...pointers.values()]; const d = Math.hypot(a.X - b.X, a.Y - b.Y); const mx = (a.X + b.X) / 2, my = (a.Y + b.Y) / 2;
@@ -182,6 +184,7 @@ cv.addEventListener('pointermove', (ev) => {
 });
 function endPointer(ev) {
   const p = pointers.get(ev.pointerId); pointers.delete(ev.pointerId); cancelHold();
+  if (state.handleDrag) { if (pointers.size === 0) endHandleDrag(); return; }
   if (state.loupe) { if (pointers.size === 0) { exitPrecise(ev.type === 'pointerup'); gesture = false; dragStart = null; } return; }
   if (pinch0 && pointers.size < 2) { pinch0 = null; gesture = false; dragStart = null; requestFull(); return; }
   if (p && dragStart && pointers.size === 0) {
@@ -387,8 +390,10 @@ function makeTool(name) {
       break;
     case 'coord':
       T.start = () => setPrompt('Tap a point to read its coordinates. Press and hold to magnify for an exact point.');
-      T.onTap = (sn) => { addPt(sn); const ms = measureSpace([[sn.x, sn.y]]); const q = ms.pts[0]; const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)], ['Snap', SNAP_NAMES[sn.kind].toLowerCase()]]; if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)]); setResult(rows); T.pts = [[sn.x, sn.y]]; };
-      T.draw = (c, V, acc) => drawDots(c, T.pts, V, acc);
+      T.update = () => { const p = T.pts[0]; if (!p) { setResult(null); return; } const ms = measureSpace([p]); const q = ms.pts[0]; const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)]]; if (T.snapKind != null) rows.push(['Snap', SNAP_NAMES[T.snapKind].toLowerCase()]); if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(p[0], 2) + ', ' + fmtNum(p[1], 2)]); setResult(rows); };
+      T.onTap = (sn) => { T.pts = [[sn.x, sn.y]]; state.lastPt = T.pts[0]; T.snapKind = sn.kind; T.update(); };
+      T.onHandleMoved = (i, sn) => { T.snapKind = sn.kind; T.update(); };
+      T.draw = (c, V, acc) => { const p = T.pts[0]; if (!p) return; const q = measureSpace([p]).pts[0]; const s2 = toScreen(p[0], p[1], V); drawChip(c, s2[0] + 12, s2[1] - 22, 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2), 0, null, 'left'); drawHandles(c, V, T.pts, acc); };
       break;
     case 'dist':
       T.total = 0;
@@ -396,7 +401,12 @@ function makeTool(name) {
       T.update = () => { const n = T.pts.length; if (n === 0) { setPrompt('Tap the first point.'); setResult(null); } else if (n === 1) { setPrompt('Tap the second point (or type @length<angle).'); setResult(null); } else { const ms = measureSpace(T.pts); const P = ms.pts; const a = P[n - 2], b = P[n - 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); let tot = 0; for (let i = 1; i < n; i++) tot += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); const rows = [['Distance', fmtLenAll(L)], ['ΔX', fmtLen(b[0] - a[0])], ['ΔY', fmtLen(b[1] - a[1])], ['Angle', fmtNum(deg(Math.atan2(b[1] - a[1], b[0] - a[0])), 2) + '°']]; if (n > 2) rows.push(['Running total', fmtLenAll(tot)]); const note = scaleNote(ms); if (note) rows.push(note); setResult(rows); setPrompt('Tap the next point to continue measuring, or Done to start over.'); } };
       T.onTap = (sn) => { addPt(sn); T.update(); };
       T.onDone = () => { T.pts = []; state.lastPt = null; T.update(); };
-      T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); drawPolyScreen(c, T.pts, V, false); drawDots(c, T.pts, V, acc); };
+      T.draw = (c, V, acc) => {
+        const P = T.pts; c.save(); c.strokeStyle = acc; c.lineWidth = 1.2; c.globalAlpha = 0.7; c.setLineDash([4, 3]); drawPolyScreen(c, P, V, false); c.restore();
+        for (let i = 1; i < P.length; i++) drawDimLine(c, V, P[i - 1], P[i], fmtLen(mLen(P[i - 1], P[i])), acc);
+        if (P.length > 2) { let tot = 0; for (let i = 1; i < P.length; i++) tot += mLen(P[i - 1], P[i]); const e = toScreen(P[P.length - 1][0], P[P.length - 1][1], V); drawChip(c, e[0] + 12, e[1] + 20, 'Total ' + fmtLen(tot), 0, null, 'left'); }
+        drawHandles(c, V, P, acc);
+      };
       break;
     case 'area':
       T.mode = 'points';
@@ -404,13 +414,34 @@ function makeTool(name) {
       T.update = () => { const n = T.pts.length; if (n >= 3) { const ms = measureSpace(T.pts); const flat = []; for (const p of ms.pts) flat.push(p[0], p[1]); const A = Math.abs(polyArea(flat)); const P = polyLength(flat, true); const rows = [['Area', fmtArea(A)], ['Area (' + (UNIT_NAME[state.drawing.header.units] || 'units') + '²)', fmtNum(A, 0)], ['Perimeter', fmtLenAll(P)], ['Points', String(n)]]; const note = scaleNote(ms); if (note) rows.push(note); setResult(rows); setPrompt('Keep tapping corners, Back removes the last, Done finishes.'); } else if (n > 0) { setPrompt('Tap the next corner (' + n + ' placed).'); setResult(null); } else { setResult(null); } };
       T.onTap = (sn, hit) => { if (T.pts.length === 0 && hit && hit.item.closed && hit.item.fillPoly && (hit.item.hatch || hit.item.ent.t !== 'INSERT') && sn.kind !== 1 && sn.kind !== 2) { const fp = hit.item.fillPoly.slice(0, -2); const A = Math.abs(polyArea(fp)); setResult([['Object', hit.item.ent.t], ['Area', fmtArea(A)], ['Perimeter', fmtLenAll(polyLength(fp, true))]].concat(hit.model ? [['Measured', 'in model through viewport']] : [])); state.selection.clear(); if (!hit.model) state.selection.add(hit.item.ent.id); setPrompt('Area of the tapped object. Tap elsewhere to start placing points.'); return; } state.selection.clear(); addPt(sn); T.update(); };
       T.onDone = () => { if (T.pts.length >= 3) { T.update(); toast('Area measured'); T.closed = true; } T.pts = []; state.lastPt = null; };
-      T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 3) { c.fillStyle = acc; c.globalAlpha = 0.15; c.beginPath(); const p0 = toScreen(T.pts[0][0], T.pts[0][1], V); c.moveTo(p0[0], p0[1]); for (let i = 1; i < T.pts.length; i++) { const p = toScreen(T.pts[i][0], T.pts[i][1], V); c.lineTo(p[0], p[1]); } c.closePath(); c.fill(); c.globalAlpha = 1; } drawPolyScreen(c, T.pts, V, T.pts.length >= 3); drawDots(c, T.pts, V, acc); };
+      T.draw = (c, V, acc) => {
+        const P = T.pts, n = P.length; if (!n) return; const S = P.map(p => toScreen(p[0], p[1], V));
+        c.save(); c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]);
+        if (n >= 3) { c.fillStyle = acc; c.globalAlpha = 0.13; c.beginPath(); c.moveTo(S[0][0], S[0][1]); for (let i = 1; i < n; i++) c.lineTo(S[i][0], S[i][1]); c.closePath(); c.fill(); c.globalAlpha = 1; }
+        drawPolyScreen(c, P, V, n >= 3); c.restore();
+        // a dimension on every side, pushed outward; the area and perimeter in the middle
+        let cx = 0, cy = 0; for (const q of S) { cx += q[0]; cy += q[1]; } cx /= n; cy /= n;
+        const sides = n >= 3 ? n : n - 1;
+        if (sides <= 16) for (let i = 0; i < sides; i++) { const a = P[i], b = P[(i + 1) % n]; const A = S[i], B = S[(i + 1) % n]; drawDimLine(c, V, a, b, fmtLen(mLen(a, b)), acc, [(A[0] + B[0]) / 2 - cx, (A[1] + B[1]) / 2 - cy]); }
+        if (n >= 3) { const ms = measureSpace(P); const flat = []; for (const p of ms.pts) flat.push(p[0], p[1]); const ac = polyScreenCentroid(S) || [cx, cy]; drawChip(c, ac[0], ac[1], fmtAreaShort(Math.abs(polyArea(flat))), 0, 'Perimeter ' + fmtLen(polyLength(flat, true))); }
+        drawHandles(c, V, P, acc);
+      };
       break;
     case 'angle':
       T.start = () => setPrompt('Tap the vertex (corner) of the angle.');
       T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = measureSpace(T.pts.slice(0, 3)).pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
       T.onTap = (sn) => { if (T.pts.length >= 3) { T.pts = []; setResult(null); } addPt(sn); T.update(); };
-      T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 2) { drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false); } if (T.pts.length >= 3) { drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); const v = toScreen(T.pts[0][0], T.pts[0][1], V); const a1 = -Math.atan2(T.pts[1][1] - T.pts[0][1], T.pts[1][0] - T.pts[0][0]), a2 = -Math.atan2(T.pts[2][1] - T.pts[0][1], T.pts[2][0] - T.pts[0][0]); let d = a2 - a1; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; c.beginPath(); c.arc(v[0], v[1], 28, a1, a1 + d, d < 0); c.stroke(); } drawDots(c, T.pts, V, acc); };
+      T.draw = (c, V, acc) => {
+        c.save(); c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]);
+        if (T.pts.length >= 2) drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false);
+        if (T.pts.length >= 3) {
+          drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); const v = toScreen(T.pts[0][0], T.pts[0][1], V);
+          const a1 = -Math.atan2(T.pts[1][1] - T.pts[0][1], T.pts[1][0] - T.pts[0][0]), a2 = -Math.atan2(T.pts[2][1] - T.pts[0][1], T.pts[2][0] - T.pts[0][0]); let d = a2 - a1; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+          c.beginPath(); c.arc(v[0], v[1], 30, a1, a1 + d, d < 0); c.stroke(); c.restore();
+          const am = a1 + d / 2; drawChip(c, v[0] + Math.cos(am) * 54, v[1] + Math.sin(am) * 54, fmtNum(Math.abs(deg(d)), 2) + '°');
+        } else c.restore();
+        drawHandles(c, V, T.pts, acc);
+      };
       break;
     case 'order': // draw order: front / back / above or under another object
       T.verb = 'reorder'; T.boxSelect = true;
@@ -533,12 +564,80 @@ function makeTool(name) {
   }
   return T;
 }
+// ----- Live measurement graphics: drawing-style dimensions, value chips and draggable handles (screen space) -----
+const M_TOOLS = new Set(['dist', 'area', 'angle', 'coord']);
+function mLen(a, b) { const P = measureSpace([a, b]).pts; return Math.hypot(P[1][0] - P[0][0], P[1][1] - P[0][1]); } // real length (through a layout viewport too)
+function drawChip(c, x, y, text, ang, sub, align) {
+  c.save(); c.translate(x, y); if (ang) c.rotate(ang);
+  c.font = '600 12px ' + UI_FONT; let W = c.measureText(text).width + 12; let H = 18;
+  if (sub) { c.font = '500 10.5px ' + UI_FONT; W = Math.max(W, c.measureText(sub).width + 12); H = 33; }
+  const x0 = align === 'left' ? 0 : -W / 2;
+  c.fillStyle = 'rgba(18,18,18,.88)'; c.beginPath(); if (c.roundRect) c.roundRect(x0, -H / 2, W, H, 4); else c.rect(x0, -H / 2, W, H); c.fill();
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffffff'; c.font = '600 12px ' + UI_FONT; c.fillText(text, x0 + W / 2, sub ? -7 : 0.5);
+  if (sub) { c.font = '500 10.5px ' + UI_FONT; c.fillStyle = '#d0d0d0'; c.fillText(sub, x0 + W / 2, 8.5); }
+  c.restore();
+}
+// Aligned dimension between world points a and b: extension lines, architectural ticks, value on the line (kept upright).
+// outward: a screen direction the dimension should sit towards (default: above / to the right).
+function drawDimLine(c, V, a, b, text, acc, outward) {
+  const A = toScreen(a[0], a[1], V), B = toScreen(b[0], b[1], V); const dx = B[0] - A[0], dy = B[1] - A[1]; const L = Math.hypot(dx, dy); if (L < 2) return;
+  const ux = dx / L, uy = dy / L; let nx = -uy, ny = ux;
+  if (outward) { if (nx * outward[0] + ny * outward[1] < 0) { nx = -nx; ny = -ny; } } else if (ny > 0.01 || (Math.abs(ny) <= 0.01 && nx < 0)) { nx = -nx; ny = -ny; }
+  const off = 20; const A2 = [A[0] + nx * off, A[1] + ny * off], B2 = [B[0] + nx * off, B[1] + ny * off];
+  c.save(); c.strokeStyle = acc; c.setLineDash([]); c.lineCap = 'butt';
+  c.globalAlpha = 0.85; c.lineWidth = 1.1; c.beginPath(); for (const P of [A, B]) { c.moveTo(P[0] + nx * 4, P[1] + ny * 4); c.lineTo(P[0] + nx * (off + 5), P[1] + ny * (off + 5)); } c.stroke();
+  c.globalAlpha = 1; c.lineWidth = 1.5; c.beginPath(); c.moveTo(A2[0] - ux * 4, A2[1] - uy * 4); c.lineTo(B2[0] + ux * 4, B2[1] + uy * 4); c.stroke();
+  const tx = (ux - uy) * 0.7071 * 6, ty = (uy + ux) * 0.7071 * 6; c.lineWidth = 2.2; c.beginPath(); for (const P of [A2, B2]) { c.moveTo(P[0] - tx, P[1] - ty); c.lineTo(P[0] + tx, P[1] + ty); } c.stroke();
+  c.restore();
+  let ang = Math.atan2(dy, dx); if (ang > Math.PI / 2) ang -= Math.PI; else if (ang <= -Math.PI / 2) ang += Math.PI;
+  c.save(); c.font = '600 12px ' + UI_FONT; const tw = c.measureText(text).width + 12; c.restore();
+  let mx = (A2[0] + B2[0]) / 2, my = (A2[1] + B2[1]) / 2; if (L < tw + 16) { mx += nx * 13; my += ny * 13; } // too short: the value sits just outside
+  drawChip(c, mx, my, text, ang);
+}
+function drawHandles(c, V, pts, acc) {
+  const act = state.handleDrag ? state.handleDrag.i : -1; c.save(); c.setLineDash([]);
+  for (let i = 0; i < pts.length; i++) { const p = toScreen(pts[i][0], pts[i][1], V); const r = i === act ? 9 : 7; c.beginPath(); c.arc(p[0], p[1], r, 0, TAU); c.fillStyle = 'rgba(12,12,13,.82)'; c.fill(); c.lineWidth = 2.4; c.strokeStyle = acc; c.stroke(); c.beginPath(); c.arc(p[0], p[1], 2.2, 0, TAU); c.fillStyle = acc; c.fill(); }
+  c.restore();
+}
+function polyScreenCentroid(S) { const f = []; for (const q of S) f.push(q[0], q[1]); return polyCentroid(f); }
+// Measured points can be dragged: press within reach of a handle, drag (magnifier above the finger, snapping on), let go.
+const HANDLE_HIT = 26;
+function handleAt(X, Y) {
+  const T = state.tool; if (!state.drawing || !T || !M_TOOLS.has(T.name) || !T.pts || !T.pts.length) return -1;
+  const V = state.view; let best = -1, bd = HANDLE_HIT; T.pts.forEach((p, i) => { const q = toScreen(p[0], p[1], V); const d = Math.hypot(q[0] - X, q[1] - Y); if (d < bd) { bd = d; best = i; } }); return best;
+}
+function startHandleDrag(i, X, Y) {
+  const p = state.tool.pts[i]; const q = toScreen(p[0], p[1], state.view);
+  state.handleDrag = { i, gx: q[0] - X, gy: q[1] - Y }; state.loupe = { X: q[0], Y: q[1], fx: X, fy: Y, sn: null }; gesture = false;
+  try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) { }
+  updateHandleDrag(X, Y);
+}
+function updateHandleDrag(X, Y) {
+  const hd = state.handleDrag, lp = state.loupe, T = state.tool; if (!hd || !lp || !T || !T.pts[hd.i]) return;
+  const px = X + hd.gx, py = Y + hd.gy; lp.fx = X; lp.fy = Y; lp.X = px; lp.Y = py;
+  // the magnifier sits above the finger (beside it near the top edge), showing the point being moved
+  if (py - POINTER_LIFT - LOUPE_R > 4) { lp.bx = px; lp.by = py - POINTER_LIFT; } else { lp.bx = px + (px < cssW / 2 ? 1 : -1) * (LOUPE_R + 46); lp.by = Math.max(LOUPE_R + 4, py); }
+  const sn = snapPoint(px, py, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
+  T.pts[hd.i] = [sn.x, sn.y]; if (hd.i === T.pts.length - 1) state.lastPt = T.pts[hd.i];
+  if (T.onHandleMoved) T.onHandleMoved(hd.i, sn); else if (T.update) T.update();
+  requestFast();
+}
+// What the magnifier label shows while a handle moves: the value that is changing
+function handleDragLabel() {
+  const T = state.tool, hd = state.handleDrag; if (!T || !hd) return ''; const P = T.pts, i = hd.i;
+  if (T.name === 'dist') { const o = P[i - 1] || P[i + 1]; return o ? fmtLen(mLen(o, P[i])) : ''; }
+  if (T.name === 'area' && P.length >= 3) { const f = []; for (const p of measureSpace(P).pts) f.push(p[0], p[1]); return fmtAreaShort(Math.abs(polyArea(f))); }
+  if (T.name === 'angle' && P.length >= 3) { const [v, a, b] = measureSpace(P.slice(0, 3)).pts; let d = Math.abs(deg(Math.atan2(b[1] - v[1], b[0] - v[0]) - Math.atan2(a[1] - v[1], a[0] - v[0]))) % 360; if (d > 180) d = 360 - d; return fmtNum(d, 2) + '°'; }
+  if (T.name === 'coord') { const q = measureSpace([P[0]]).pts[0]; return fmtNum(q[0], 2) + ', ' + fmtNum(q[1], 2); }
+  return '';
+}
+function endHandleDrag() { state.handleDrag = null; state.loupe = null; state.snapMark = null; gesture = false; dragStart = null; requestFull(); }
 // ----- Rubber band: while you hold a finger on the drawing (magnifier) or hover a mouse, the next segment or shape
 // follows the live snapped point from the tool's last point.
 function liveSnap() { if (state.loupe && state.loupe.sn) return state.loupe.sn; return state.hoverSn || null; }
 function rubberBase() { const T = state.tool; if (!T || !PICK_TOOLS.has(T.name) || T.phase === 'select' || !state.lastPt) return null; if (T.name === 'rect' || T.name === 'circle' || T.name === 'pdfwin' || T.name === 'text' || T.name === 'coord') return T.pts && T.pts.length === 1 ? T.pts[0] : null; return state.lastPt; }
 function drawRubber(c, V, acc) {
-  const T = state.tool; const lp = liveSnap(); if (!T || !lp || !PICK_TOOLS.has(T.name) || T.phase === 'select') return;
+  const T = state.tool; const lp = liveSnap(); if (state.handleDrag || !T || !lp || !PICK_TOOLS.has(T.name) || T.phase === 'select') return;
   const pts = T.pts || []; const L = toScreen(lp.x, lp.y, V); const S = (p) => toScreen(p[0], p[1], V);
   c.save(); c.strokeStyle = acc; c.lineWidth = 1.6; c.setLineDash([]); c.lineCap = 'round';
   const seg = (a, dash) => { const A = S(a); c.setLineDash(dash ? [6, 5] : []); c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(L[0], L[1]); c.stroke(); };
@@ -548,6 +647,7 @@ function drawRubber(c, V, acc) {
     case 'arc': if (pts.length === 1) seg(pts[0]); else if (pts.length === 2) { const a = arc3pt(pts[0], pts[1], [lp.x, lp.y]); if (a) { const C = S(a.c); c.beginPath(); c.arc(C[0], C[1], a.r * V.s, -a.a0, -a.a1, true); c.stroke(); } else seg(pts[1]); } break;
     case 'spline': if (pts.length) { const flat = catmullPoints(pts.concat([[lp.x, lp.y]]), false, [], null); c.beginPath(); for (let i = 0; i < flat.length; i += 2) { const p = toScreen(flat[i], flat[i + 1], V); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); } c.stroke(); } break;
     case 'area': if (pts.length) { seg(pts[pts.length - 1]); if (pts.length >= 2) seg(pts[0], true); } break;
+    case 'dist': { const b = rubberBase(); if (b) { c.restore(); drawDimLine(c, V, b, [lp.x, lp.y], fmtLen(mLen(b, [lp.x, lp.y])), acc); return; } break; }
     case 'text': case 'coord': case 'pdfwin': break;
     default: { const b = rubberBase(); if (b) seg(b); }
   }
