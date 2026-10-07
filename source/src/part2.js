@@ -9,7 +9,11 @@ const normAng = (a) => { a = a % TAU; if (a < 0) a += TAU; return a; };
 const deg = (r) => r * 180 / Math.PI;
 const rad = (d) => d * Math.PI / 180;
 
-function aciCss(aci, onLight, fill) {
+// Output switches used when drawing for PDF / image export instead of the screen:
+// pdf: draw everything (no small-object culling), lw(lw100) -> line width in output units, color(css, fill) -> printed colour
+const RENDER = { pdf: false, lw: null, color: null };
+function aciCss(aci, onLight, fill) { const c = aciCss0(aci, onLight, fill); return RENDER.color ? RENDER.color(c, fill) : c; }
+function aciCss0(aci, onLight, fill) {
   if (typeof aci === 'string') return aci; // true colour
   aci = aci | 0;
   if (aci < 1 || aci > 255) aci = 7;

@@ -16,27 +16,73 @@ function pickAt(wx, wy, tolWorld, S) {
 function vpAt(x, y) { const sp = curSpace(); if (!sp || !sp.paper) return null; const S = getScene(state.spaceIdx); for (let i = S.viewports.length - 1; i >= 0; i--) { const vp = S.viewports[i]; if (!layerOn(vp.layer)) continue; if (x >= vp.x0 && x <= vp.x1 && y >= vp.y0 && y <= vp.y1) return vp; } return null; }
 function paperToModel(vp, p) { const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; return [(p[0] - cx) / vp.sc + vp.vc[0], (p[1] - cy) / vp.sc + vp.vc[1]]; }
 function modelToPaper(vp, m) { const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; return [(m[0] - vp.vc[0]) * vp.sc + cx, (m[1] - vp.vc[1]) * vp.sc + cy]; }
+// Snap kinds that can be switched on and off (Menu → Snap points). Switched-off kinds are saved on the phone.
+const SNAP_ORDER = [1, 2, 3, 11, 7, 5, 9, 10, 4, 8, 6];
+const SNAP_HELP = { 1: 'ends of lines, arcs and polyline corners', 2: 'middle of lines, arcs and polyline sides', 3: 'centre of circles and arcs', 11: 'centre of closed polylines (rooms, columns)', 7: '0°, 90°, 180°, 270° points of circles, arcs and ellipses', 5: 'where two objects cross', 9: 'from the last point, square to a line, wall or arc', 10: 'from the last point, touching a circle or arc', 4: 'base point of blocks and text', 8: 'point objects', 6: 'any point along an object' };
+const snapOn = {};
+(function loadSnapKinds() { let off = []; try { off = (localStorage.getItem('tct-snaps-off') || '').split(',').filter(Boolean).map(Number); } catch (e) { } for (const k of SNAP_ORDER) snapOn[k] = !off.includes(k); })();
+function saveSnapKinds() { try { localStorage.setItem('tct-snaps-off', SNAP_ORDER.filter(k => !snapOn[k]).join(',')); } catch (e) { } }
 function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item,vp}
   const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
   if (!state.drawing || !state.snapOn) return { x: w[0], y: w[1], kind: 0 };
   const S = getScene(state.spaceIdx);
   let best = null;
-  const sn = S.snap.query(w[0], w[1], tol);
+  const sn = S.snap.query(w[0], w[1], tol, snapOn);
   if (sn) best = { x: sn.x, y: sn.y, kind: sn.kind, d: Math.hypot(sn.x - w[0], sn.y - w[1]) };
   // In a layout, also snap to the model geometry visible through the viewport under the finger
   const vp = vpAt(w[0], w[1]); let MS = null, m = null, mt = 0;
-  if (vp) { MS = getScene(0); m = paperToModel(vp, w); mt = tol / vp.sc; const s2 = MS.snap.query(m[0], m[1], mt); if (s2) { const q = modelToPaper(vp, [s2.x, s2.y]); const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (!best || d < best.d) best = { x: q[0], y: q[1], kind: s2.kind, d, vp }; } }
+  if (vp) { MS = getScene(0); m = paperToModel(vp, w); mt = tol / vp.sc; const s2 = MS.snap.query(m[0], m[1], mt, snapOn); if (s2) { const q = modelToPaper(vp, [s2.x, s2.y]); const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (!best || d < best.d) best = { x: q[0], y: q[1], kind: s2.kind, d, vp }; } }
   if (best) return best;
+  // Perpendicular and tangent work from the previous point of the current tool
+  const base = (snapOn[9] || snapOn[10]) && state.lastPt ? state.lastPt : null;
   const hit = pickAt(w[0], w[1], tol * 0.8, S);
   if (hit && hit.x != null && !(vp && hit.item.ent.t === 'VIEWPORT')) {
-    // intersection with another entity near the point?
-    const hit2 = findIntersection(w[0], w[1], tol, S, hit.item);
-    if (hit2) return { x: hit2[0], y: hit2[1], kind: 5, item: hit.item };
-    return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
+    if (snapOn[5]) { const hit2 = findIntersection(w[0], w[1], tol, S, hit.item); if (hit2) return { x: hit2[0], y: hit2[1], kind: 5, item: hit.item }; }
+    if (base) { const d = dynSnap(hit.item, w, base, tol); if (d) return { x: d[0], y: d[1], kind: d[2], item: hit.item }; }
+    if (snapOn[6]) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
+    return { x: w[0], y: w[1], kind: 0 };
   }
-  if (vp) { const h = pickAt(m[0], m[1], mt * 0.8, MS); if (h && h.x != null) { const i2 = findIntersection(m[0], m[1], mt, MS, h.item); const q = modelToPaper(vp, i2 || [h.x, h.y]); return { x: q[0], y: q[1], kind: i2 ? 5 : 6, item: h.item, vp }; } }
-  if (hit && hit.x != null) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
+  if (vp) {
+    const h = pickAt(m[0], m[1], mt * 0.8, MS);
+    if (h && h.x != null) {
+      if (snapOn[5]) { const i2 = findIntersection(m[0], m[1], mt, MS, h.item); if (i2) { const q = modelToPaper(vp, i2); return { x: q[0], y: q[1], kind: 5, item: h.item, vp }; } }
+      if (base && vpAt(base[0], base[1]) === vp) { const d = dynSnap(h.item, m, paperToModel(vp, base), mt); if (d) { const q = modelToPaper(vp, d); return { x: q[0], y: q[1], kind: d[2], item: h.item, vp }; } }
+      if (snapOn[6]) { const q = modelToPaper(vp, [h.x, h.y]); return { x: q[0], y: q[1], kind: 6, item: h.item, vp }; }
+    }
+  }
+  if (hit && hit.x != null && snapOn[6]) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
   return { x: w[0], y: w[1], kind: 0 };
+}
+// Perpendicular / tangent from `base` to the object under the finger `f`. The snapped point may sit a little away
+// from the finger (up to 4× the snap distance), so you can slide along a wall until it locks on.
+function dynSnap(item, f, base, tol) {
+  const pull = tol * 4; let best = null;
+  const consider = (x, y, kind) => { const d = Math.hypot(x - f[0], y - f[1]); if (d <= pull && Math.hypot(x - base[0], y - base[1]) > tol * 0.05 && (!best || d < best[3])) best = [x, y, kind, d]; };
+  for (const cv of itemCurvesNear(item, f, tol)) {
+    const dx = base[0] - cv.c[0], dy = base[1] - cv.c[1]; const dd = Math.hypot(dx, dy); if (dd < 1e-12) continue; const th = Math.atan2(dy, dx);
+    if (snapOn[9]) for (const a of [th, th + Math.PI]) if (cv.full || angInArc(a, cv.a0, cv.a1, cv.ccw)) consider(cv.c[0] + cv.r * Math.cos(a), cv.c[1] + cv.r * Math.sin(a), 9);
+    if (snapOn[10] && dd > cv.r * (1 + 1e-9)) { const ph = Math.acos(cv.r / dd); for (const a of [th + ph, th - ph]) if (cv.full || angInArc(a, cv.a0, cv.a1, cv.ccw)) consider(cv.c[0] + cv.r * Math.cos(a), cv.c[1] + cv.r * Math.sin(a), 10); }
+  }
+  if (best) return best; // the finger is on a circle or arc: its exact points win over its straight approximation
+  if (snapOn[9]) for (const [p, q] of itemSegsNear(item, f[0], f[1], tol)) {
+    const ux = q[0] - p[0], uy = q[1] - p[1]; const L2 = ux * ux + uy * uy; if (L2 < 1e-18) continue;
+    const t = ((base[0] - p[0]) * ux + (base[1] - p[1]) * uy) / L2; if (t < -1e-9 || t > 1 + 1e-9) continue;
+    consider(p[0] + ux * t, p[1] + uy * t, 9);
+  }
+  return best;
+}
+function itemCurvesNear(it, f, tol) {
+  const out = []; const near = (cv) => Math.abs(Math.hypot(f[0] - cv.c[0], f[1] - cv.c[1]) - cv.r) <= tol;
+  if (it.curves) for (const cv of it.curves) if (near(cv)) out.push(cv);
+  if (it.inst) for (const ins of it.inst) { const cs = ins.g.curves; if (!cs || !cs.length || cs.length > 3000) continue; for (const cv of cs) { const w = curveToWorld(cv, ins.M); if (w && near(w)) out.push(w); } }
+  return out;
+}
+// Straight pieces of an object (blocks included) that pass within `tol` of a point
+function itemSegsNear(it, wx, wy, tol) {
+  const out = []; const polys = it.polys.slice();
+  if (it.inst) for (const ins of it.inst) { if (ins.g.polys.length > 4000) continue; for (const poly of ins.g.polys) { const q = new Array(poly.length); for (let i = 0; i < poly.length; i += 2) { const w = mApply(ins.M, [poly[i], poly[i + 1]]); q[i] = w[0]; q[i + 1] = w[1]; } polys.push(q); } }
+  for (const poly of polys) for (let i = 2; i < poly.length; i += 2) { const x1 = poly[i - 2], y1 = poly[i - 1], x2 = poly[i], y2 = poly[i + 1]; if (Math.max(x1, x2) < wx - tol || Math.min(x1, x2) > wx + tol || Math.max(y1, y2) < wy - tol || Math.min(y1, y2) > wy + tol) continue; out.push([[x1, y1], [x2, y2]]); }
+  return out;
 }
 // Measuring in a layout: points inside one viewport are measured in the model (real size), otherwise on the sheet.
 function measureSpace(pts) {
@@ -49,7 +95,7 @@ function scaleNote(ms) { if (ms.vp) { const k = 1 / ms.vp.sc; return ['Measured'
 function findIntersection(wx, wy, tol, S, itemA) {
   const near = []; for (const it of S.items) { if (it === itemA || it.isText) continue; const bb = it.bbox; if (wx < bb[0] - tol || wx > bb[2] + tol || wy < bb[1] - tol || wy > bb[3] + tol) continue; near.push(it); if (near.length > 6) break; }
   let best = null;
-  const segsNear = (it) => { const out = []; const polys = it.polys.slice(); if (it.inst) for (const ins of it.inst) { if (ins.g.polys.length > 4000) continue; for (const poly of ins.g.polys) { const q = new Array(poly.length); for (let i = 0; i < poly.length; i += 2) { const w = mApply(ins.M, [poly[i], poly[i + 1]]); q[i] = w[0]; q[i + 1] = w[1]; } polys.push(q); } } for (const poly of polys) for (let i = 2; i < poly.length; i += 2) { const x1 = poly[i - 2], y1 = poly[i - 1], x2 = poly[i], y2 = poly[i + 1]; if (Math.max(x1, x2) < wx - tol || Math.min(x1, x2) > wx + tol || Math.max(y1, y2) < wy - tol || Math.min(y1, y2) > wy + tol) continue; out.push([[x1, y1], [x2, y2]]); } return out; };
+  const segsNear = (it) => itemSegsNear(it, wx, wy, tol);
   const A = segsNear(itemA);
   for (const it of near) { for (const sb of segsNear(it)) for (const sa of A) { const p = segIntersect(sa[0], sa[1], sb[0], sb[1]); if (p) { const d = Math.hypot(p[0] - wx, p[1] - wy); if (d <= tol && (!best || d < best.d)) best = { p, d }; } } }
   return best ? best.p : null;
@@ -120,7 +166,7 @@ function endPointer(ev) {
 cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, ev.offsetY, ev.deltaY < 0 ? 1.15 : 1 / 1.15); requestFull(); }, { passive: false });
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
-window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') cancelTool(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
+window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
 function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
@@ -148,6 +194,14 @@ function setPrompt(msg) { promptMsg.textContent = msg; }
 function setResult(rows) { if (!rows) { resultEl.classList.remove('on'); resultEl.innerHTML = ''; } else { resultEl.innerHTML = rows.map(([k, v]) => '<span><b>' + k + '</b>' + v + '</span>').join(''); resultEl.classList.add('on'); } if (typeof updateChrome === 'function') updateChrome(); }
 function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), ms || 1800); }
 function cancelTool() { if (state.tool && state.tool.onCancel) state.tool.onCancel(); state.lastPt = null; state.snapMark = null; startTool(state.tool ? state.tool.name : 'select', true); }
+// × on the instruction bar and Esc: close the tool, drop the selection and go back to the Select pointer
+function exitToSelect() {
+  if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { }
+  if ($('textDlg').classList.contains('on')) $('txtCancel').click();
+  state.selection.clear(); state.hoverItem = null; state.boxSel = null; state.lastPt = null; state.snapMark = null; setResult(null);
+  if (!TOOL_GROUPS[state.group].includes('select')) setGroup('view');
+  startTool('select', true); requestFull();
+}
 function doneTool() { if (state.tool && state.tool.onDone) state.tool.onDone(); }
 function backPoint() { if (state.tool && state.tool.onBack) state.tool.onBack(); requestFast(); }
 function parseTyped(str, base) {
@@ -177,7 +231,7 @@ const ICON = {
   move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', order: '<rect x="3" y="3" width="11" height="11" rx="1"/><path d="M10 10h11v11H10z" fill="currentColor" fill-opacity=".25"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
   line: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>', pline: '<path d="M3 19l5-11 5 7 4-9 4 4"/>', rect: '<rect x="4" y="6" width="16" height="12"/>', circle: '<circle cx="12" cy="12" r="8"/>', arc: '<path d="M4 18a10 10 0 0 1 16 0"/>', spline: '<path d="M3 17c4-12 6 12 10 0s4-6 8-2"/>', text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>'
 };
-const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text' };
+const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area' };
 function renderToolRow() {
   const row = $('toolRow'); row.innerHTML = '';
   for (const t of TOOL_GROUPS[state.group]) { const b = document.createElement('button'); b.className = 'tool' + (t === 'delete' ? ' danger' : ''); b.dataset.tool = t; b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[t] + '</svg><span>' + LABEL[t] + '</span>'; b.setAttribute('aria-pressed', state.tool && state.tool.name === t ? 'true' : 'false'); b.addEventListener('click', () => { if (t === 'fit') { zoomExtents(); return; } startTool(t); }); row.appendChild(b); }
@@ -193,14 +247,14 @@ $('groups').addEventListener('click', (ev) => { const b = ev.target.closest('but
 function closeGroups() { $('groups').classList.remove('open'); if (!document.querySelector('.sheet.open')) $('scrim').classList.remove('on'); }
 $('btnGroup').addEventListener('click', () => { const g = $('groups'); if (g.classList.contains('open')) closeGroups(); else { g.classList.add('open'); $('scrim').classList.add('on'); } });
 // The instruction strip shows only while a tool needs input or there is a result to read.
-const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text']);
+const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text', 'pdfwin']);
 function updateChrome() {
   const t = state.tool ? state.tool.name : 'select'; const hasResult = resultEl.classList.contains('on');
   $('prompt').hidden = !state.drawing || (t === 'select' && !hasResult);
   $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
-  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text', 'pdfwin'].includes(t);
   $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t)); $('btnSimilar').hidden = $('btnProps').hidden;
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
@@ -398,6 +452,12 @@ function makeTool(name) {
       T.start = () => setPrompt('Tap the start point of the arc.');
       T.onTap = (sn) => { addPt(sn); const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the arc.'); else if (n === 2) setPrompt('Tap the end point.'); else { const arc = arc3pt(T.pts[0], T.pts[1], T.pts[2]); if (arc) { addEntities([{ t: 'ARC', L: state.curLayer, c: 256, lt: '', ce: arc.c, r: arc.r, a0: arc.a0, a1: arc.a1 }]); toast('Arc placed'); } else toast('Points are in a line'); T.pts = []; state.lastPt = null; setPrompt('Tap the start point of the arc.'); } };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 1.5; drawPolyScreen(c, T.pts, V, false); drawDots(c, T.pts, V, acc); };
+      break;
+    case 'pdfwin': // pick the area to print
+      T.start = () => setPrompt('Tap one corner of the area to print, then the opposite corner.');
+      T.onTap = (sn) => { addPt(sn); if (T.pts.length === 2) { const [a, b] = T.pts; T.pts = []; state.lastPt = null; if (Math.abs(a[0] - b[0]) < 1e-9 || Math.abs(a[1] - b[1]) < 1e-9) { toast('Pick two opposite corners'); T.start(); return; } pdfWindowPicked([Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]); } else setPrompt('Now tap the opposite corner.'); };
+      T.onBack = () => { T.pts = []; state.lastPt = null; T.start(); };
+      T.draw = (c, V, acc) => { drawDots(c, T.pts, V, acc); const sm = state.snapMark || state.loupe && state.loupe.sn; if (T.pts.length === 1 && sm) { const a = toScreen(T.pts[0][0], T.pts[0][1], V), b = toScreen(sm.x, sm.y, V); c.save(); c.strokeStyle = acc; c.setLineDash([6, 4]); c.lineWidth = 1.5; c.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])); c.restore(); } };
       break;
     case 'text':
       T.start = () => setPrompt('Tap where the text should start (bottom-left of the first letter).');

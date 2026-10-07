@@ -13,7 +13,7 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - Opens **.dwg** (including AutoCAD 2018 format) and **.dxf** files: Model space and all Layouts
 - Shows object and layer **transparency**, true colours, and only the current **visibility state** of dynamic blocks
 - Layers: turn on and off, show all, hide all, invert
-- Measure: length, area, angle and coordinates, with snapping to endpoints, midpoints, centres, intersections and nearest points
+- Measure: length, area, angle and coordinates, with snapping to endpoints, midpoints, centres, geometric centres, quadrants, intersections, perpendicular and tangent (from the last point), insertion points, nodes and nearest points. Menu → Snap points switches each one on or off
 - In layouts, snapping works on the model seen through viewports, and measurements inside a viewport are in real (model) size
 - **Press and hold** on the drawing to get a 4× magnifier, drag to the exact point, and let go to place it
 - Edit: move, copy, rotate, mirror, scale, align, delete, undo and redo
@@ -25,7 +25,9 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - Select similar: with something selected, pick every object of the same type on the same layer (blocks by name, hatches by pattern)
 - Box select: tap two opposite corners (or drag). Left to right picks objects fully inside; right to left also picks objects crossing the box
 - Draw: line, polyline, rectangle, circle, arc, spline and text, with typed input (`1200`, `@1200,0`, `@1500<90`)
-- Export DXF and PNG; keep recent files on the device
+- **Share** (menu → Share drawing): PDF, the original DWG, DXF (with your edits) or a PNG of the screen. PDF options: what to print (view, extents, layout sheet or a window you tap), paper size A4–A0, orientation, scale (fit or 1:1 to 1:1000), colour / grey / black lines, lineweights, and quality (vector, 150 or 300 dpi). PDFs go straight to Android's share sheet; DWG and DXF are saved to the phone first, because Android lets web apps share only PDFs and pictures
+- The × on the instruction bar (or Esc) closes the tool, clears the selection and goes back to Select
+- Keep recent files on the device
 - Themes: Studio Dark (default), Studio Light, Black & White (menu → Theme)
 
 Drawings are read **on the phone itself**. Files are never uploaded anywhere.

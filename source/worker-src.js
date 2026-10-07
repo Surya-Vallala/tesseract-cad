@@ -33,11 +33,16 @@ function alphaOf(type, a) {
   if (type & 2) { if (a >= 255) return undefined; return Math.max(0, Math.round(a / 255 * 1000) / 1000); }
   return undefined;
 }
+// LibreDWG gives lineweights as DWG's 5-bit index: 0..23 = 0.00..2.11 mm, 29 ByLayer, 30 ByBlock, 31 Default.
+// Stored as AutoCAD's DXF value: 1/100 mm, -1 ByLayer, -2 ByBlock, -3 Default.
+const LW_INDEX = [0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211];
+function lwOf(v) { v = num(v, 29); if (v >= 0 && v <= 23) return LW_INDEX[v]; return v === 30 ? -2 : v === 31 ? -3 : -1; }
 const hex6 = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0');
 function convEntity(e, idc) {
   const base = { id: idc.n++, hd: e.handle, L: e.layer || '0', c: num(e.colorIndex, 256), lt: e.lineType || '' };
   const al = alphaOf(e.transparencyType, e.transparency); if (al !== undefined) base.al = al;
   const lts = num(e.lineTypeScale, 1); if (lts > 0 && Math.abs(lts - 1) > 1e-9) base.lts = lts;
+  const lw = lwOf(e.lineweight); if (lw !== -1) base.lw = lw; // lineweight in 1/100 mm; -2 ByBlock, -3 Default (ByLayer is left out)
   if (typeof e.color === 'number' && e.color > 0 && e.color < 0xffffff) base.rgb = hex6(e.color); // 0 / 0xffffff come back as placeholders
   switch (e.type) {
     case 'LINE': return { ...base, t: 'LINE', a: P(e.startPoint), b: P(e.endPoint) };
@@ -188,7 +193,7 @@ function applyDrawOrder(ents, table) {
 
 function slim(db, name, layerAl, drawOrder) {
   const idc = { n: 1 };
-  const layers = (db.tables?.LAYER?.entries || []).map(l => ({ name: l.name, aci: num(l.colorIndex, 7), off: !!l.off, frozen: !!l.frozen, locked: !!l.locked, lw: num(l.lineweight), lt: l.lineType || 'Continuous' }));
+  const layers = (db.tables?.LAYER?.entries || []).map(l => ({ name: l.name, aci: num(l.colorIndex, 7), off: !!l.off, frozen: !!l.frozen, locked: !!l.locked, lw: lwOf(l.lineweight), lt: l.lineType || 'Continuous' }));
   if (layerAl) for (const l of layers) if (layerAl[l.name] != null) l.al = layerAl[l.name];
   if (!layers.find(l => l.name === '0')) layers.unshift({ name: '0', aci: 7, off: false, frozen: false, locked: false, lw: -3, lt: 'Continuous' });
   const ltypes = {};

@@ -163,6 +163,21 @@ body.fs #top, body.fs #tools{display:none}
 #recent button{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;background:var(--chip);font-size:13px;text-align:left}
 #recent button span:last-child{color:var(--muted);font-family:var(--mono);font-size:11px;white-space:nowrap}
 #recent .empty{color:var(--muted);font-size:12.5px;padding:2px 0}
+select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:13px}
+.pdf-info{margin:0;padding:8px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.45}
+.menu-item .seg button{white-space:nowrap}
+.pdf-info b{color:var(--fg);font-weight:500}
+.pdf-info .warn{color:var(--accent)}
+.dlg .note{font-size:12.5px}
+.dlg .note:empty{display:none}
+.snaprow{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:8px}
+.snaprow:active{background:var(--chip)}
+.snaprow svg{width:22px;height:22px;flex:0 0 auto;fill:none;stroke:var(--accent);stroke-width:1.6}
+.snaprow .nm{flex:1;min-width:0;font-size:13.5px}
+.snaprow .nm small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.snaprow input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+.snaprow.off .nm{color:var(--muted)}
+#snapList.disabled{opacity:.45;pointer-events:none}
 /* home screen (no drawing showing): no layers button, tool bar, tabs or drawing-only menu items; the title chip is just a label */
 #app.home #btnLayers, #app.home #tools, #app.home #tabs, #app.home .doc-only{display:none}
 #app.home #btnSpace{pointer-events:none}
@@ -288,12 +303,11 @@ body.fs #top, body.fs #tools{display:none}
       <header><h2>Drawing &amp; settings</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body">
         <button class="menu-item" id="btnOpen"><span>Open a drawing <small>DWG or DXF from this phone</small></span><span>→</span></button>
-        <button class="menu-item doc-only" id="miExport"><span>Export DXF <small id="miExportHint">model space + blocks, zipped</small></span><span>→</span></button>
-        <button class="menu-item doc-only" id="miPng"><span>Export view as PNG <small>what is on screen now</small></span><span>→</span></button>
+        <button class="menu-item doc-only" id="miShare"><span>Share drawing <small>PDF, DWG or DXF</small></span><span>→</span></button>
         <button class="menu-item doc-only" id="miSave"><span>Save edits on this device <small>keeps your changes in Recent</small></span><span>→</span></button>
         <div class="menu-item"><span>Canvas</span><div class="seg" id="segCanvas"><button data-v="dark" aria-pressed="true">Dark</button><button data-v="light">Light</button></div></div>
         <div class="menu-item"><span>Units shown</span><div class="seg" id="segUnits"><button data-v="auto" aria-pressed="true">Drawing</button><button data-v="mm">mm</button><button data-v="m">m</button><button data-v="ft">ft-in</button></div></div>
-        <div class="menu-item"><span>Snap to points</span><input type="checkbox" id="chkSnap" checked></div>
+        <button class="menu-item" id="miSnaps"><span>Snap points <small id="snapSummary">all on</small></span><span>→</span></button>
         <div class="menu-item"><span>Hatch patterns <small>off = faster</small></span><input type="checkbox" id="chkPat" checked></div>
         <div class="menu-item doc-only"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>
         <div class="menu-item doc-only" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
@@ -302,6 +316,43 @@ body.fs #top, body.fs #tools{display:none}
         <div class="about"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Studio | Infra"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Studio | Infra"><span>Tesseract CAD Tools · developed by Tesseract Studio</span><span>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></span></div>
       </div>
     </section>
+    <section class="sheet" id="snapPanel" aria-label="Snap points">
+      <header><h2>Snap points</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <label class="menu-item"><span>Snapping <small>switch every snap on or off</small></span><input type="checkbox" id="chkSnap" checked></label>
+        <div id="snapList"></div>
+      </div>
+      <div class="tools"><button class="btn" id="snapAll">All on</button><button class="btn" id="snapNone">All off</button></div>
+    </section>
+    <section class="sheet" id="sharePanel" aria-label="Share drawing">
+      <header><h2>Share drawing</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <button class="menu-item" id="shPdf"><span>PDF <small>choose the area, paper size, scale and quality</small></span><span>→</span></button>
+        <button class="menu-item" id="shDwg"><span>DWG <small id="shDwgHint">the original file as it was opened</small></span><span>→</span></button>
+        <button class="menu-item" id="shDxf"><span>DXF <small>model space and blocks, with your edits</small></span><span>→</span></button>
+        <button class="menu-item" id="shPng"><span>Image (PNG) <small>what is on screen now</small></span><span>→</span></button>
+      </div>
+    </section>
+    <section class="sheet" id="pdfPanel" aria-label="PDF">
+      <header><h2>PDF</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <div class="menu-item"><span>What to print</span><div class="seg" id="pdfArea"><button data-v="view" aria-pressed="true">View</button><button data-v="extents">Extents</button><button data-v="sheet">Sheet</button><button data-v="window">Window</button></div></div>
+        <div class="menu-item"><span>Paper size</span><select id="pdfPaper" class="pick"><option value="A4">A4 · 297 × 210</option><option value="A3" selected>A3 · 420 × 297</option><option value="A2">A2 · 594 × 420</option><option value="A1">A1 · 841 × 594</option><option value="A0">A0 · 1189 × 841</option><option value="Letter">Letter · 11 × 8.5 in</option><option value="Tabloid">Tabloid · 17 × 11 in</option></select></div>
+        <div class="menu-item"><span>Orientation</span><div class="seg" id="pdfOrient"><button data-v="auto" aria-pressed="true">Auto</button><button data-v="portrait">Portrait</button><button data-v="landscape">Landscape</button></div></div>
+        <div class="menu-item"><span>Scale <small id="pdfScaleHint"></small></span><select id="pdfScale" class="pick"><option value="fit" selected>Fit to paper</option><option value="1">1:1</option><option value="2">1:2</option><option value="5">1:5</option><option value="10">1:10</option><option value="20">1:20</option><option value="25">1:25</option><option value="50">1:50</option><option value="75">1:75</option><option value="100">1:100</option><option value="200">1:200</option><option value="250">1:250</option><option value="500">1:500</option><option value="1000">1:1000</option></select></div>
+        <div class="menu-item"><span>Colour</span><div class="seg" id="pdfColor"><button data-v="color" aria-pressed="true">Colour</button><button data-v="gray">Grey</button><button data-v="bw">Black</button></div></div>
+        <label class="menu-item"><span>Print lineweights <small>off = all lines thin</small></span><input type="checkbox" id="pdfLw" checked></label>
+        <div class="menu-item"><span>Quality</span><div class="seg" id="pdfQual"><button data-v="vector" aria-pressed="true">Vector</button><button data-v="150">150 dpi</button><button data-v="300">300 dpi</button></div></div>
+      </div>
+      <p class="pdf-info" id="pdfInfo"></p>
+      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="pdfGo">Create PDF</button></div>
+    </section>
+    <div id="fileDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="fileTitle"><div class="box">
+      <h3 id="fileTitle">File ready</h3>
+      <p id="fileMsg"></p>
+      <p id="fileNote" class="note"></p>
+      <div class="row"><button class="btn quiet" id="fileClose">Close</button><button class="btn" id="fileSave">Save to phone</button><button class="btn primary" id="fileShare">Share</button></div>
+    </div></div>
     <div id="textDlg"><div class="box"><label for="txtVal">Text</label><input id="txtVal" placeholder="Type the text"><label for="txtH">Height (drawing units)</label><input id="txtH" inputmode="decimal"><div class="row"><button class="btn" id="txtCancel">Cancel</button><button class="btn primary" id="txtOk">Place</button></div></div></div>
     <div id="saveDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="saveTitle"><div class="box">
       <h3 id="saveTitle">Save changes?</h3>

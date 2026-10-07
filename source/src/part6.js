@@ -249,7 +249,7 @@ function buildDxf(D) {
   // entities writer
   const skipped = {};
   const ent = (e, owner, paper) => {
-    const common = (type, sub) => { w(0, type); w(5, H()); w(330, owner); w(100, 'AcDbEntity'); if (paper) w(67, 1); w(8, dxfString(e.L || '0')); if (e.lt && !/^bylayer$/i.test(e.lt)) w(6, dxfString(ltNames.has(e.lt) || /^byblock$/i.test(e.lt) ? e.lt : 'Continuous')); if (e.c != null && e.c !== 256) w(62, e.c); if (e.lts && Math.abs(e.lts - 1) > 1e-12) w(48, e.lts); if (sub) w(100, sub); };
+    const common = (type, sub) => { w(0, type); w(5, H()); w(330, owner); w(100, 'AcDbEntity'); if (paper) w(67, 1); w(8, dxfString(e.L || '0')); if (e.lt && !/^bylayer$/i.test(e.lt)) w(6, dxfString(ltNames.has(e.lt) || /^byblock$/i.test(e.lt) ? e.lt : 'Continuous')); if (e.c != null && e.c !== 256) w(62, e.c); if (e.lw != null && e.lw !== -1) w(370, e.lw); if (e.lts && Math.abs(e.lts - 1) > 1e-12) w(48, e.lts); if (sub) w(100, sub); };
     const pt = (code, p, z) => { w(code, num(p[0])); w(code + 10, num(p[1])); if (z !== false) w(code + 20, '0'); };
     switch (e.t) {
       case 'LINE': common('LINE', 'AcDbLine'); pt(10, e.a); pt(11, e.b); break;
@@ -545,14 +545,14 @@ $('btnFull').addEventListener('click', () => { const on = !document.body.classLi
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs')) setFull(false); });
 $('btnKeys').addEventListener('click', () => { const row = $('promptRow'); row.hidden = !row.hidden; $('btnKeys').setAttribute('aria-pressed', row.hidden ? 'false' : 'true'); if (!row.hidden) setTimeout(() => $('typed').focus(), 30); });
 $('btnUndo').addEventListener('click', undo); $('btnRedo').addEventListener('click', redo);
-$('btnDone').addEventListener('click', doneTool); $('btnCancel').addEventListener('click', cancelTool); $('btnBack').addEventListener('click', backPoint);
+$('btnDone').addEventListener('click', doneTool); $('btnCancel').addEventListener('click', exitToSelect); $('btnBack').addEventListener('click', backPoint);
 function openSheet(id) { $(id).classList.add('open'); $('scrim').classList.add('on'); if (id === 'layersPanel') renderLayers(); }
 function closeSheets() { for (const s of document.querySelectorAll('.sheet')) s.classList.remove('open'); $('groups').classList.remove('open'); $('scrim').classList.remove('on'); }
 $('btnLayers').addEventListener('click', () => { if (!state.drawing) { toast('Open a drawing first'); return; } openSheet('layersPanel'); });
 $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
-$('miExport').addEventListener('click', () => { closeSheets(); exportDxf(); }); $('miPng').addEventListener('click', () => { closeSheets(); exportPng(); });
+$('miShare').addEventListener('click', () => { closeSheets(); openShare(); }); $('miSnaps').addEventListener('click', () => { closeSheets(); renderSnapList(); openSheet('snapPanel'); });
 $('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; $('fileName').textContent = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
 $('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
@@ -570,7 +570,7 @@ function applySkin(v, persist) {
   lastFull = null; requestFull();
 }
 $('segSkin').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) applySkin(b.dataset.v, true); });
-$('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.checked; }); $('chkPat').addEventListener('change', (ev) => { state.patOn = ev.target.checked; requestFull(); });
+$('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.checked; try { localStorage.setItem('tct-snap', ev.target.checked ? '1' : '0'); } catch (e) { } renderSnapList(); }); $('chkPat').addEventListener('change', (ev) => { state.patOn = ev.target.checked; requestFull(); });
 $('selLayer').addEventListener('change', (ev) => { state.curLayer = ev.target.value; renderLayers(); toast('New objects go on ' + state.curLayer); });
 try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.canvasLight = true; stage.classList.add('light'); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === 'light' ? 'true' : 'false'); } const u = localStorage.getItem('tct-units'); if (u) { state.unitMode = u; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x.dataset.v === u ? 'true' : 'false'); } } catch (e) { }
 window.addEventListener('beforeunload', (ev) => { if (docs.some(docDirty)) { ev.preventDefault(); ev.returnValue = ''; } });
@@ -599,7 +599,8 @@ function handleBack() {
   if (document.querySelector('.sheet.open') || $('groups').classList.contains('open')) { closeSheets(); return; }
   if (document.body.classList.contains('fs')) { setFull(false); try { if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } return; }
   if ($('loading').classList.contains('on')) return; // a file is opening
-  if (state.tool && state.tool.name !== 'select') { if (state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } state.lastPt = null; state.snapMark = null; setResult(null); startTool('select', true); return; }
+  if ($('fileDlg').classList.contains('on')) { $('fileClose').click(); return; }
+  if (state.tool && state.tool.name !== 'select') { exitToSelect(); return; }
   returnTo = null; confirmUnsaved(closeDrawing);
 }
 window.addEventListener('popstate', () => {
