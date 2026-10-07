@@ -17,7 +17,10 @@ const toScreen = (x, y, V) => [x * V.s + V.tx, -y * V.s + V.ty];
 const toWorld = (X, Y, V) => [(X - V.tx) / V.s, (V.ty - Y) / V.s];
 const V0 = () => state.view;
 function worldRect(V) { const a = toWorld(0, 0, V), b = toWorld(cssW, cssH, V); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; }
-function bgColor() { const sp = curSpace(); if (sp && sp.paper) return state.canvasLight ? '#e9e7e1' : '#2a2d33'; return state.canvasLight ? '#fafaf7' : '#14161a'; }
+// Canvas colours come from the theme (CSS tokens), read once per theme change
+const SKIN = { cvDark: '#111214', cvLight: '#ffffff', sheetDark: '#2b2c30', sheetLight: '#e4e4e4' };
+function readSkin() { const cs = getComputedStyle(document.documentElement); const g = (k, d) => (cs.getPropertyValue(k) || '').trim() || d; SKIN.cvDark = g('--cv-dark', SKIN.cvDark); SKIN.cvLight = g('--cv-light', SKIN.cvLight); SKIN.sheetDark = g('--sheet-dark', SKIN.sheetDark); SKIN.sheetLight = g('--sheet-light', SKIN.sheetLight); }
+function bgColor() { const sp = curSpace(); if (sp && sp.paper) return state.canvasLight ? SKIN.sheetLight : SKIN.sheetDark; return state.canvasLight ? SKIN.cvLight : SKIN.cvDark; }
 function onLightBg() { const sp = curSpace(); return state.canvasLight || !!(sp && sp.paper); }
 
 function requestFull() { fullQueued = true; if (!renderQueued) { renderQueued = true; requestAnimationFrame(frame); } }

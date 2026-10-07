@@ -2,6 +2,8 @@
 
 A mobile-first web app from **Tesseract Studio** for opening, measuring and lightly editing AutoCAD drawings on a phone.
 
+Suggestions or questions: [tools@tesseractstudio.co](mailto:tools@tesseractstudio.co)
+
 **Open the app:** https://surya-vallala.github.io/tesseract-cad/
 
 In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **Install app**) to get an app icon. After the first visit the app works offline.
@@ -23,6 +25,7 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - Box select: tap two opposite corners (or drag). Left to right picks objects fully inside; right to left also picks objects crossing the box
 - Draw: line, polyline, rectangle, circle, arc, spline and text, with typed input (`1200`, `@1200,0`, `@1500<90`)
 - Export DXF and PNG; keep recent files on the device
+- Themes: Studio Dark (default), Studio Light, Black & White (menu → Theme)
 
 Drawings are read **on the phone itself**. Files are never uploaded anywhere.
 

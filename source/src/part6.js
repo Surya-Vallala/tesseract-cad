@@ -364,12 +364,13 @@ function confirmUnsaved(then) {
   $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
   $('saveCancel').onclick = () => { done(); };
 }
+function showHomeTitle() { $('fileName').textContent = 'Tesseract Studio'; $('spaceName').textContent = 'CAD Tools'; }
 function closeDrawing() {
   const i = docs.indexOf(activeDoc); if (i >= 0) docs.splice(i, 1);
   activeDoc = null; const back = returnTo && docs.includes(returnTo) ? returnTo : null; returnTo = null;
   if (docs.length) { restoreDoc(back || docs[Math.max(0, i - 1)]); refreshDocUI(); return; }
   state.drawing = null; state.scenes = new Map(); blockCache = new Map(); state.undo = []; state.redo = []; state.dirty = false; state.selection = new Set(); state.fileName = ''; state.fileBytes = null;
-  $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderTabs(); renderRecent(); requestFull();
+  showHomeTitle(); $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderTabs(); renderRecent(); requestFull();
 }
 
 // ===================== Loading =====================
@@ -551,10 +552,24 @@ $('miSave').addEventListener('click', async () => { if (!state.drawing) return; 
 $('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); });
+// ----- Theme (skin): Light / Dark / Black & White. The drawing canvas follows the theme unless chosen in the menu. -----
+const SKIN_DEFAULT = 'dark'; // Studio Dark (chosen by Surya)
+function applySkin(v, persist) {
+  v = ['light', 'dark', 'mono'].includes(v) ? v : SKIN_DEFAULT;
+  document.documentElement.dataset.skin = v; readSkin();
+  for (const x of $('segSkin').children) x.setAttribute('aria-pressed', x.dataset.v === v ? 'true' : 'false');
+  let canvasPref = null; try { canvasPref = localStorage.getItem('tct-canvas'); } catch (e) { }
+  if (!canvasPref) { state.canvasLight = v !== 'dark'; stage.classList.toggle('light', state.canvasLight); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === (state.canvasLight ? 'light' : 'dark') ? 'true' : 'false'); }
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#ffffff');
+  if (persist) try { localStorage.setItem('tct-skin', v); } catch (e) { }
+  lastFull = null; requestFull();
+}
+$('segSkin').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) applySkin(b.dataset.v, true); });
 $('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.checked; }); $('chkPat').addEventListener('change', (ev) => { state.patOn = ev.target.checked; requestFull(); });
 $('selLayer').addEventListener('change', (ev) => { state.curLayer = ev.target.value; renderLayers(); toast('New objects go on ' + state.curLayer); });
 try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.canvasLight = true; stage.classList.add('light'); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === 'light' ? 'true' : 'false'); } const u = localStorage.getItem('tct-units'); if (u) { state.unitMode = u; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x.dataset.v === u ? 'true' : 'false'); } } catch (e) { }
 window.addEventListener('beforeunload', (ev) => { if (docs.some(docDirty)) { ev.preventDefault(); ev.returnValue = ''; } });
+{ let sk = null; try { sk = localStorage.getItem('tct-skin'); if (!sk && !localStorage.getItem('tct-skin-v1')) { localStorage.removeItem('tct-canvas'); localStorage.setItem('tct-skin-v1', '1'); } } catch (e) { } applySkin(sk || SKIN_DEFAULT, false); }
 setGroup('view'); renderRecent(); resizeCanvas();
 // First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)'; updateUndoBtns();
+loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); $('welcome').style.display = ''; showHomeTitle(); updateUndoBtns();

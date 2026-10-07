@@ -3,7 +3,7 @@
 // The 9 MB DWG engine (.wasm): cache first, refreshed whenever the version changes.
 const VERSION = '__VERSION__';
 const CACHE = 'tct-' + VERSION;
-const CORE = ['./', 'index.html', 'cad-worker.js', 'libredwg-web.wasm', 'manifest.webmanifest', 'icon-192.png'];
+const CORE = ['./', 'index.html', 'cad-worker.js', 'libredwg-web.wasm', 'manifest.webmanifest', 'icon-192.png', 'logo-ink-dark.png', 'logo-ink-light.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('tct-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {
