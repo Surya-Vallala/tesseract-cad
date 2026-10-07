@@ -10,7 +10,7 @@ def strokes(x0, y0, w):
     total = tw + g + cw; ox = x0 + (w - total) / 2; top = y0 - h / 2; bot = y0 + h / 2
     tvx = ox + tw                      # T: bar from ox to tvx, vertical at tvx going down
     cvx = tvx + g                      # C: vertical at cvx, bars to the right
-    return [(ox, top - t / 2, tvx + t / 2, top + t / 2), (tvx - t / 2, top - t / 2, tvx + t / 2, bot),
+    return [(ox, top - t / 2, tvx + t / 2, top + t / 2), (tvx - t / 2, top - t / 2, tvx + t / 2, bot + t / 2),  # T stem ends level with the C's bottom edge
             (cvx - t / 2, top - t / 2, cvx + cw, top + t / 2), (cvx - t / 2, top - t / 2, cvx + t / 2, bot + t / 2), (cvx - t / 2, bot - t / 2, cvx + cw, bot + t / 2)]
 def icon(size, pad_frac, path):
     S = size * 4; im = Image.new('RGB', (S, S), BG); d = ImageDraw.Draw(im)
