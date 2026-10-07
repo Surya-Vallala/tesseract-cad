@@ -11,6 +11,7 @@ const state = {
 const curSpace = () => state.drawing ? state.drawing.spaces[state.spaceIdx] : null;
 function layerOn(name) { const v = state.layerVis.get(name); return v === undefined ? true : v; }
 function layerAci(name) { const l = state.layerMap.get(name); return l ? l.aci : 7; }
+function layerCol(name) { const l = state.layerMap.get(name); return l ? (l.rgb || l.aci) : 7; }
 
 // ===================== Snap grid =====================
 class SnapGrid {
@@ -33,12 +34,17 @@ class SnapGrid {
 // ===================== Scene build =====================
 const KEY_SEP = '\u0001';
 function makeScene() { return { items: [], viewports: [], bbox: emptyBox(), snap: new SnapGrid(), textBox: emptyBox(), nFills: 0, nTexts: 0 }; }
-function sceneKey(S, layer, aci, lt, item) {
-  const k = layer + KEY_SEP + aci + KEY_SEP + (lt || '');
-  let e = item.pathMap.get(k); if (!e) { e = { layer, aci, lt: lt || '', path: new Path2D(), n: 0 }; item.pathMap.set(k, e); item.paths.push(e); } return e;
+let curAl = 1; // opacity of the entity being emitted (set in emitEntity)
+function sceneKey(S, layer, aci, lt, item, al) {
+  if (al == null) al = curAl;
+  const k = layer + KEY_SEP + aci + KEY_SEP + (lt || '') + KEY_SEP + al;
+  let e = item.pathMap.get(k); if (!e) { e = { layer, aci, lt: lt || '', al, path: new Path2D(), n: 0 }; item.pathMap.set(k, e); item.paths.push(e); } return e;
 }
 function resolveLayer(e, ctx) { return (e.L === '0' && ctx.layer) ? ctx.layer : (e.L || '0'); }
-function resolveColor(e, ctx, layer) { let c = e.c; if (c === 0 && ctx.color != null) c = ctx.color; if (c === 0 || c === 256 || c == null || c < 0 || c > 255) c = layerAci(layer); return c; }
+// Colour is an ACI number (1..255) or a true colour string '#rrggbb'.
+function resolveColor(e, ctx, layer) { if (e.rgb) return e.rgb; let c = e.c; if (c === 0 && ctx.color != null) return ctx.color; if (c === 0 || c === 256 || c == null || c < 0 || c > 255) return layerCol(layer); return c; }
+// Opacity 0..1: explicit value, ByBlock (-1) takes the insert's, ByLayer/none is opaque.
+function resolveAlpha(e, ctx, layer) { const a = e.al; if (a === -1) return ctx.al != null ? ctx.al : 1; if (a != null && a >= 0) return a; const l = state.layerMap.get(layer); return l && l.al != null ? l.al : 1; }
 function resolveLt(e, ctx, layer) { let lt = e.lt || ''; if (!lt || /^bylayer$/i.test(lt)) { const l = state.layerMap.get(layer); lt = l ? l.lt : ''; } if (/^byblock$/i.test(lt)) lt = ctx.lt || ''; if (/^continuous$/i.test(lt)) lt = ''; return lt; }
 
 function buildScene(space) {
@@ -149,7 +155,7 @@ function hatchLoopToPath(S, path, loop, M, flatOut) { // returns flat polygon
 }
 
 function emitEntity(e, M, ctx, S, item, depth) {
-  const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer);
+  const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al;
   switch (e.t) {
     case 'LINE': { const a = mApply(M, e.a), b = mApply(M, e.b); const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitPoly(S, item, [a[0], a[1], b[0], b[1]], false, key, M); S.snap.add(a[0], a[1], 1); S.snap.add(b[0], b[1], 1); S.snap.add((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 2); break; }
     case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; } break; }
@@ -158,15 +164,15 @@ function emitEntity(e, M, ctx, S, item, depth) {
     case 'ELLIPSE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitEllipse(S, item, key, e.ce, e.m, e.k, e.a0, e.a1, M); break; }
     case 'SPLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = splinePoints(e, [], M); if (flat.length >= 4) { emitPoly(S, item, flat, !!e.closed, key, M); S.snap.add(flat[0], flat[1], 1); S.snap.add(flat[flat.length - 2], flat[flat.length - 1], 1); const src = (e.fit && e.fit.length) ? e.fit : []; for (const f of src) { const q = mApply(M, f); S.snap.add(q[0], q[1], 1); } } break; }
     case 'POINT': { const p = mApply(M, e.p); const key = sceneKey(S, layer, aci, '', item); const r = 0; item.polys.push([p[0], p[1], p[0], p[1]]); bboxAdd(item.bbox, p[0], p[1]); S.snap.add(p[0], p[1], 1); key.n += 0; break; }
-    case 'FACE': case 'SOLID': { const key = sceneKey(S, layer, aci, '', item); const pts = []; for (const q of e.pts) { const w = mApply(M, q); pts.push(w[0], w[1]); } if (e.t === 'SOLID') { const path = new Path2D(); path.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]); path.closePath(); item.fills.push({ layer, aci, path, solid: true, bbox: boxOfFlat(pts), id: e.id }); item.fillPoly = pts.concat([pts[0], pts[1]]); item.polys.push(item.fillPoly); bboxPoly(item.bbox, pts); } else emitPoly(S, item, pts, true, key, M); addSnapEnds(S, pts, true); break; }
-    case 'LEADER': { const key = sceneKey(S, layer, aci, '', item); const pts = []; for (const q of e.pts) { const w = mApply(M, q); pts.push(w[0], w[1]); } emitPoly(S, item, pts, false, key, M); addSnapEnds(S, pts, false); if (e.arrow && pts.length >= 4) { const ax = pts[0], ay = pts[1], bx = pts[2], by = pts[3]; const L = Math.hypot(bx - ax, by - ay) || 1; const sz = Math.min(L * 0.5, mScaleOf(M) * 180 * (state.drawing && state.drawing.header.units === 4 ? 1 : 0.02)); const ux = (bx - ax) / L, uy = (by - ay) / L; const path = new Path2D(); path.moveTo(ax, ay); path.lineTo(ax + ux * sz - uy * sz * 0.18, ay + uy * sz + ux * sz * 0.18); path.lineTo(ax + ux * sz + uy * sz * 0.18, ay + uy * sz - ux * sz * 0.18); path.closePath(); item.fills.push({ layer, aci, path, solid: true, bbox: boxOfFlat([ax, ay, bx, by]), id: e.id }); } break; }
+    case 'FACE': case 'SOLID': { const key = sceneKey(S, layer, aci, '', item); const pts = []; for (const q of e.pts) { const w = mApply(M, q); pts.push(w[0], w[1]); } if (e.t === 'SOLID') { const path = new Path2D(); path.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]); path.closePath(); item.fills.push({ layer, aci, al, path, solid: true, bbox: boxOfFlat(pts), id: e.id }); item.fillPoly = pts.concat([pts[0], pts[1]]); item.polys.push(item.fillPoly); bboxPoly(item.bbox, pts); } else emitPoly(S, item, pts, true, key, M); addSnapEnds(S, pts, true); break; }
+    case 'LEADER': { const key = sceneKey(S, layer, aci, '', item); const pts = []; for (const q of e.pts) { const w = mApply(M, q); pts.push(w[0], w[1]); } emitPoly(S, item, pts, false, key, M); addSnapEnds(S, pts, false); if (e.arrow && pts.length >= 4) { const ax = pts[0], ay = pts[1], bx = pts[2], by = pts[3]; const L = Math.hypot(bx - ax, by - ay) || 1; const sz = Math.min(L * 0.5, mScaleOf(M) * 180 * (state.drawing && state.drawing.header.units === 4 ? 1 : 0.02)); const ux = (bx - ax) / L, uy = (by - ay) / L; const path = new Path2D(); path.moveTo(ax, ay); path.lineTo(ax + ux * sz - uy * sz * 0.18, ay + uy * sz + ux * sz * 0.18); path.lineTo(ax + ux * sz + uy * sz * 0.18, ay + uy * sz - ux * sz * 0.18); path.closePath(); item.fills.push({ layer, aci, al, path, solid: true, bbox: boxOfFlat([ax, ay, bx, by]), id: e.id }); } break; }
     case 'WIPEOUT': { const pts = []; for (const q of e.pts) { const w = mApply(M, q); pts.push(w[0], w[1]); } const path = new Path2D(); path.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]); path.closePath(); item.wipes.push({ layer, path }); item.fillPoly = pts.concat([pts[0], pts[1]]); item.polys.push(item.fillPoly); bboxPoly(item.bbox, pts); break; }
     case 'IMAGE': { const key = sceneKey(S, layer, 8, '', item); const pts = []; for (const q of e.pts) { const w = mApply(M, q); pts.push(w[0], w[1]); } emitPoly(S, item, pts, true, key, M); break; }
-    case 'TEXT': { const sc = mScaleOf(M); const anchor = (e.ha || e.va) && (e.ap[0] || e.ap[1]) ? e.ap : e.p; const p = mApply(M, anchor); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const str = textPlain(e.s); if (!str.trim()) break; const t = { layer, aci, x: p[0], y: p[1], h, rot, lines: [str], ha: e.ha || 0, va: e.va || 0, mt: false, wf: e.wf || 1, id: e.id }; item.texts.push(t); const w = textWidthUnits(str, h) * (e.wf || 1); textItemBox(item, t, w, h, S); S.snap.add(p[0], p[1], 4); break; }
-    case 'MTEXT': { const sc = mScaleOf(M); const p = mApply(M, e.p); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const w = (e.w || 0) * sc; let lines = mtextPlain(e.s); if (!lines.join('').trim()) break; lines = wrapLines(lines, h, w); const t = { layer, aci, x: p[0], y: p[1], h, rot, lines, at: e.at || 1, ls: e.ls || 1, mt: true, w, id: e.id }; item.texts.push(t); let mw = 0; for (const ln of lines) mw = Math.max(mw, textWidthUnits(ln, h)); textItemBox(item, t, Math.max(mw, w * 0.5), h + (lines.length - 1) * h * 1.667 * t.ls, S); S.snap.add(p[0], p[1], 4); break; }
+    case 'TEXT': { const sc = mScaleOf(M); const anchor = (e.ha || e.va) && (e.ap[0] || e.ap[1]) ? e.ap : e.p; const p = mApply(M, anchor); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const str = textPlain(e.s); if (!str.trim()) break; const t = { layer, aci, al, x: p[0], y: p[1], h, rot, lines: [str], ha: e.ha || 0, va: e.va || 0, mt: false, wf: e.wf || 1, id: e.id }; item.texts.push(t); const w = textWidthUnits(str, h) * (e.wf || 1); textItemBox(item, t, w, h, S); S.snap.add(p[0], p[1], 4); break; }
+    case 'MTEXT': { const sc = mScaleOf(M); const p = mApply(M, e.p); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const w = (e.w || 0) * sc; let lines = mtextPlain(e.s); if (!lines.join('').trim()) break; lines = wrapLines(lines, h, w); const t = { layer, aci, al, x: p[0], y: p[1], h, rot, lines, at: e.at || 1, ls: e.ls || 1, mt: true, w, id: e.id }; item.texts.push(t); let mw = 0; for (const ln of lines) mw = Math.max(mw, textWidthUnits(ln, h)); textItemBox(item, t, Math.max(mw, w * 0.5), h + (lines.length - 1) * h * 1.667 * t.ls, S); S.snap.add(p[0], p[1], 4); break; }
     case 'INSERT': {
       if (depth > 12) break; const blk = state.drawing.blocks[e.n]; if (!blk) break;
-      const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer) };
+      const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer), al };
       const g = getBlockGeom(e.n, ctx2, depth);
       if (!item.inst) item.inst = [];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -175,17 +181,25 @@ function emitEntity(e, M, ctx, S, item, depth) {
         if (depth > 0) flattenBlock(g, M2, S, item); // nested inside another block definition: copy geometry
         else instanceBlock(g, M2, S, item);
       }
-      if (e.att) for (const a of e.att) { if (a.inv) continue; emitEntity({ t: 'TEXT', L: a.L, c: a.c, p: a.p, ap: a.ap, h: a.h, rot: a.rot, s: a.s, ha: a.ha, va: a.va, id: e.id }, M, { layer, color: aci, lt: '' }, S, item, depth + 1); }
+      if (e.att) for (const a of e.att) { if (a.inv) continue; emitEntity({ t: 'TEXT', L: a.L, c: a.c, rgb: a.rgb, al: a.al, p: a.p, ap: a.ap, h: a.h, rot: a.rot, s: a.s, ha: a.ha, va: a.va, id: e.id }, M, { layer, color: aci, lt: '', al }, S, item, depth + 1); }
       const ip = mApply(M, e.p); S.snap.add(ip[0], ip[1], 4);
       if (!item.polys.length && !item.fillPoly && !(item.inst && item.inst.length)) { item.polys.push([ip[0], ip[1], ip[0], ip[1]]); bboxAdd(item.bbox, ip[0], ip[1]); }
       break;
     }
     case 'HATCH': {
       const path = new Path2D(); let first = null; const loops = [];
-      for (const loop of e.paths) { const flat = hatchLoopToPath(S, path, loop, M, null); if (flat.length >= 6) { loops.push(flat); if (!first) first = flat; } }
+      for (const loop of e.paths) {
+        if (loop.miss > 1) { // boundary only partly readable: use it only if what was read still closes up
+          const tmp = new Path2D(); const fl = hatchLoopToPath(S, tmp, loop, M, null); if (fl.length < 6) continue;
+          const lb = boxOfFlat(fl); const diag = Math.hypot(lb[2] - lb[0], lb[3] - lb[1]); const gap = Math.hypot(fl[0] - fl[fl.length - 2], fl[1] - fl[fl.length - 1]);
+          if (!(gap <= diag * 0.02)) { S.partialHatch = (S.partialHatch || 0) + 1; continue; }
+          path.addPath(tmp); loops.push(fl); if (!first) first = fl; continue;
+        }
+        const flat = hatchLoopToPath(S, path, loop, M, null); if (flat.length >= 6) { loops.push(flat); if (!first) first = flat; }
+      }
       if (!first) break;
       const bb = emptyBox(); for (const l of loops) bboxPoly(bb, l);
-      const f = { layer, aci, path, solid: e.solid, bbox: bb, id: e.id, loops };
+      const f = { layer, aci, al, path, solid: e.solid, bbox: bb, id: e.id, loops };
       if (!e.solid && e.pat) {
         const sc = mScaleOf(M), ang = mAngle(M), det = mDet(M);
         const lines = []; let minSp = Infinity;
@@ -226,7 +240,7 @@ function textItemBox(item, t, w, totalH, S) {
 const blockCache = new Map();
 function newItem(e) { return { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 }; }
 function getBlockGeom(name, ctx, depth) {
-  const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '');
+  const key = name + '|' + (ctx.layer || '') + '|' + (ctx.color == null ? '' : ctx.color) + '|' + (ctx.lt || '') + '|' + (ctx.al == null ? 1 : ctx.al);
   let g = blockCache.get(key); if (g) return g;
   const blk = state.drawing.blocks[name]; const S2 = makeScene(); const it = newItem({ t: 'BLOCKDEF', id: -1 });
   for (const sub of blk.ents) { try { emitEntity(sub, IDM, ctx, S2, it, depth + 1); } catch (err) { console.warn('block emit', name, sub.t, err); } }
@@ -245,7 +259,7 @@ function transformFill(f, M) {
 }
 function flattenBlock(g, M, S, item) {
   const dm = domMatrix(M);
-  for (const k of g.paths) { const key = sceneKey(S, k.layer, k.aci, k.lt, item); key.path.addPath(k.path, dm); key.n += k.n; }
+  for (const k of g.paths) { const key = sceneKey(S, k.layer, k.aci, k.lt, item, k.al); key.path.addPath(k.path, dm); key.n += k.n; }
   for (const f of g.fills) item.fills.push(transformFill(f, M));
   for (const w of g.wipes) { const path = new Path2D(); path.addPath(w.path, dm); item.wipes.push({ layer: w.layer, path }); }
   for (const t of g.texts) item.texts.push(transformText(t, M));

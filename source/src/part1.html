@@ -17,36 +17,87 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input{font:inherit;color:inherit}
+/* Layout (v2): the drawing gets the whole screen. One slim top bar (file + Model/Layout picker, Layers, menu),
+   a floating instruction strip over the drawing while a tool is active, and one bottom toolbar row with a group switcher. */
 #app{height:100%;display:flex;flex-direction:column;min-height:0}
-#top{display:flex;align-items:center;gap:10px;padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto}
-.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
-.logo{width:30px;height:30px;border-radius:7px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-weight:600;font-size:15px;flex:0 0 auto;letter-spacing:-.02em}
-.brand .name{font-weight:600;font-size:13px;letter-spacing:.01em;white-space:nowrap}
-.brand .file{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
-.brand > div{min-width:0}
-.actions{display:flex;gap:6px;flex:0 0 auto}
+#top{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 10px;padding-top:calc(4px + env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;min-height:44px}
+.logo{width:26px;height:26px;border-radius:6px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-weight:600;font-size:13px;flex:0 0 auto;letter-spacing:-.02em}
+#btnSpace{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:2px 6px;border-radius:7px}
+#btnSpace:active{background:var(--chip)}
+#btnSpace .file{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);max-width:100%}
+#btnSpace .sp{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;align-items:center;gap:4px}
+#btnSpace .sp svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+#btnSpace .tag{font-size:9.5px;letter-spacing:.07em;color:var(--muted);font-weight:500}
+.actions{display:flex;gap:2px;flex:0 0 auto}
+.ib{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--fg)}
+.ib:active{background:var(--chip)}
+.ib svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:8px;background:var(--chip);font-weight:500;font-size:13px;white-space:nowrap}
 .btn.primary{background:var(--accent);color:var(--accent-fg)}
 .btn.quiet{background:transparent;color:var(--muted)}
 .btn.danger{color:var(--danger)}
 .btn:disabled{opacity:.45;cursor:default}
 .btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-#spaces{display:flex;gap:6px;padding:6px 16px;overflow-x:auto;scrollbar-width:none;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto}
-#spaces::-webkit-scrollbar{display:none}
-#spaces button{padding:5px 11px;border-radius:999px;background:var(--chip);font-size:12.5px;font-weight:500;white-space:nowrap;color:var(--fg)}
-#spaces button[aria-selected="true"]{background:var(--chip-on);color:var(--chip-on-fg)}
-#spaces .paper-tag{font-size:10px;opacity:.7;margin-left:4px;letter-spacing:.06em}
-#stage{position:relative;flex:1 1 auto;min-height:0;background:var(--canvas);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#stage{position:relative;flex:1 1 auto;min-height:0;background:var(--canvas);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 #stage.light{background:var(--canvas-light)}
-#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-#hud{position:absolute;left:10px;top:8px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
-.hud-chip{pointer-events:auto;font-family:var(--mono);font-size:11.5px;padding:4px 8px;border-radius:6px;background:rgba(20,22,26,.72);color:#e8e4dc;backdrop-filter:blur(6px);display:inline-flex;gap:8px;align-items:center;width:max-content;max-width:min(80vw,420px)}
-#stage.light .hud-chip{background:rgba(250,250,247,.85);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
-#vbtns{position:absolute;right:10px;top:8px;display:flex;flex-direction:column;gap:6px}
-#vbtns button{width:38px;height:38px;border-radius:9px;background:rgba(20,22,26,.72);color:#e8e4dc;display:grid;place-items:center;backdrop-filter:blur(6px);font-size:13px;font-weight:600}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-touch-callout:none}
+/* floating instruction strip */
+#prompt{position:absolute;left:8px;right:8px;top:8px;max-width:620px;margin:0 auto;z-index:6;display:flex;flex-direction:column;gap:5px;padding:5px 5px 5px 10px;border-radius:11px;background:color-mix(in srgb,var(--panel) 93%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(0,0,0,.22);border:1px solid var(--line)}
+#prompt[hidden]{display:none}
+#promptBar{display:flex;align-items:center;gap:6px;min-height:32px}
+#promptText{flex:1;min-width:0;font-size:12.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#promptText .tool{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-right:6px}
+.pb{width:34px;height:32px;border-radius:8px;display:grid;place-items:center;flex:0 0 auto;color:var(--fg)}
+.pb:active{background:var(--chip)}
+.pb svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pb.ok{background:var(--accent);color:var(--accent-fg)}
+.pb[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+#result{font-family:var(--mono);font-size:11.5px;color:var(--fg);display:none;flex-wrap:wrap;gap:2px 12px;padding:5px 8px;margin-right:5px;border-radius:7px;background:var(--accent-soft)}
+#result.on{display:flex}
+#result b{font-weight:500;color:var(--muted);margin-right:4px}
+#promptRow{display:flex;gap:6px;align-items:center;margin-right:0}
+#promptRow[hidden]{display:none}
+#typed{flex:1;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);font-family:var(--mono);font-size:13px}
+#typed::placeholder{color:var(--muted);font-family:var(--font);font-size:12px}
+#promptRow .btn{padding:7px 12px}
+/* coordinates (bottom-left) and view buttons (bottom-right) */
+#hud{position:absolute;left:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;pointer-events:none;z-index:5}
+#hud[hidden]{display:none}
+.hud-chip{font-family:var(--mono);font-size:11px;padding:3px 7px;border-radius:6px;background:rgba(20,22,26,.72);color:#e8e4dc;backdrop-filter:blur(6px);width:max-content;max-width:min(70vw,420px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stage.light .hud-chip{background:rgba(250,250,247,.88);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
+#vbtns{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;z-index:5}
+#vbtns button{width:40px;height:40px;border-radius:10px;background:rgba(20,22,26,.66);color:#e8e4dc;display:grid;place-items:center;backdrop-filter:blur(6px)}
+#vbtns button[hidden]{display:none}
 #stage.light #vbtns button{background:rgba(250,250,247,.9);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
 #vbtns button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-#welcome{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(180deg,rgba(20,22,26,.55),rgba(20,22,26,.85));color:#ece8df}
+#vbtns button:disabled{opacity:.35}
+/* bottom toolbar: group switcher + that group's tools, one row */
+#tools{flex:0 0 auto;display:flex;align-items:stretch;background:var(--panel);border-top:1px solid var(--line);padding:0 0 env(safe-area-inset-bottom,0px)}
+#btnGroup{flex:0 0 auto;width:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 2px;border-right:1px solid var(--line);color:var(--accent)}
+#btnGroup svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#btnGroup span{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:2px}
+#btnGroup span i{font-style:normal;font-size:9px;opacity:.75}
+#toolRow{flex:1;min-width:0;display:flex;gap:0;overflow-x:auto;padding:3px 4px;scrollbar-width:none}
+#toolRow::-webkit-scrollbar{display:none}
+.tool{flex:0 0 auto;width:56px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px 4px;border-radius:9px;color:var(--fg)}
+.tool svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tool span{font-size:9.5px;color:var(--muted);white-space:nowrap;max-width:54px;overflow:hidden;text-overflow:ellipsis}
+.tool[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.tool[aria-pressed="true"] span{color:var(--accent)}
+.tool.danger{color:var(--danger)}
+#groups{position:absolute;left:6px;bottom:6px;z-index:21;display:none;flex-direction:column;gap:2px;padding:5px;border-radius:12px;background:var(--panel);box-shadow:var(--shadow);border:1px solid var(--line);min-width:170px}
+#groups.open{display:flex}
+#groups button{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:14px;font-weight:500;text-align:left}
+#groups button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#groups button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+#spaces{display:flex;flex-direction:column;gap:3px}
+#spaces button{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 10px;border-radius:8px;font-size:14px;text-align:left;width:100%}
+#spaces button:active{background:var(--chip)}
+#spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+#spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
+/* full screen: only the drawing, the strip and the view buttons */
+body.fs #top, body.fs #tools{display:none}
+#welcome{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(180deg,rgba(20,22,26,.55),rgba(20,22,26,.85));color:#ece8df}
 #welcome .card{width:min(100%,420px);background:var(--panel);color:var(--fg);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
 #welcome h1{margin:0;font-size:18px;font-weight:600;text-wrap:balance}
 #welcome p{margin:0;color:var(--muted);font-size:13px}
@@ -57,35 +108,13 @@ input{font:inherit;color:inherit}
 #recent .empty{color:var(--muted);font-size:12.5px;padding:2px 0}
 .caps{display:flex;flex-wrap:wrap;gap:5px}
 .caps span{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
-#loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,22,26,.6);backdrop-filter:blur(3px)}
+#loading{position:absolute;inset:0;z-index:9;display:none;align-items:center;justify-content:center;background:rgba(20,22,26,.6);backdrop-filter:blur(3px)}
 #loading.on{display:flex}
 #loading .box{background:var(--panel);color:var(--fg);border-radius:12px;padding:16px 18px;width:min(92vw,360px);box-shadow:var(--shadow)}
 #loading .stage{font-weight:500;margin-bottom:8px}
 #loading .bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden}
 #loading .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
 #loading .hint{font-size:12px;color:var(--muted);margin-top:8px}
-#prompt{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);padding:6px 16px 4px;display:flex;flex-direction:column;gap:5px}
-#promptText{font-size:13px;font-weight:500;min-height:18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-#promptText .tool{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
-#result{font-family:var(--mono);font-size:12px;color:var(--fg);display:none;flex-wrap:wrap;gap:4px 14px;padding:6px 8px;border-radius:8px;background:var(--accent-soft)}
-#result.on{display:flex}
-#result b{font-weight:500;color:var(--muted);margin-right:4px}
-#promptRow{display:flex;gap:6px;align-items:center}
-#typed{flex:1;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);font-family:var(--mono);font-size:13px}
-#typed::placeholder{color:var(--muted);font-family:var(--font)}
-#promptRow .btn{padding:7px 10px}
-#tools{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);padding:0 0 env(safe-area-inset-bottom,0px)}
-#groups{display:flex;gap:2px;padding:6px 16px 0}
-#groups button{flex:1;padding:6px 4px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent}
-#groups button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
-#toolRow{display:flex;gap:2px;overflow-x:auto;padding:6px 10px 8px;scrollbar-width:none}
-#toolRow::-webkit-scrollbar{display:none}
-.tool{flex:0 0 auto;width:62px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:9px;color:var(--fg)}
-.tool svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.tool span{font-size:10.5px;color:var(--muted);white-space:nowrap}
-.tool[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
-.tool[aria-pressed="true"] span{color:var(--accent)}
-.tool.danger{color:var(--danger)}
 .sheet{position:absolute;left:0;right:0;bottom:0;max-height:min(70%,560px);background:var(--panel);border-radius:14px 14px 0 0;box-shadow:var(--shadow);transform:translateY(105%);transition:transform .22s ease;display:flex;flex-direction:column;z-index:20;padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet.open{transform:none}
 .sheet header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:1px solid var(--line)}
@@ -107,7 +136,7 @@ input{font:inherit;color:inherit}
 .menu-item .seg button{padding:4px 9px;border-radius:5px;font-size:12px;color:var(--muted)}
 .menu-item .seg button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .menu-item input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
-#toast{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;z-index:30}
+#toast{position:absolute;left:50%;bottom:58px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;z-index:30}
 #toast.on{opacity:1}
 #textDlg{position:absolute;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.35);z-index:25;padding:12px}
 #textDlg.on{display:flex}
@@ -118,27 +147,36 @@ input{font:inherit;color:inherit}
 .scrim{position:absolute;inset:0;z-index:19;display:none}
 .scrim.on{display:block}
 @media (prefers-reduced-motion: reduce){ .sheet{transition:none} }
-@media (min-width:720px){ .tool{width:72px} .brand .name{font-size:14px} }
+@media (min-width:720px){ .tool{width:66px} .tool span{max-width:64px} }
 </style>
 <div id="app">
   <header id="top">
-    <div class="brand"><div class="logo">T</div><div><div class="name">Tesseract CAD Tools</div><div id="fileName" class="file">No drawing open</div></div></div>
+    <div class="logo" aria-hidden="true">T</div>
+    <button id="btnSpace" title="Switch between Model and layouts"><span id="fileName" class="file">No drawing open</span><span class="sp"><span id="spaceName">Tesseract CAD Tools</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>
     <div class="actions">
-      <button class="btn" id="btnOpen" title="Open a DWG or DXF"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Open</button>
-      <button class="btn" id="btnLayers" title="Layers"><svg viewBox="0 0 24 24"><path d="M12 4 3 9l9 5 9-5zM3 14l9 5 9-5"/></svg>Layers</button>
-      <button class="btn" id="btnMenu" title="More" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button>
+      <button class="ib" id="btnLayers" title="Layers" aria-label="Layers"><svg viewBox="0 0 24 24"><path d="M12 4 3 9l9 5 9-5zM3 14l9 5 9-5"/></svg></button>
+      <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
     </div>
   </header>
-  <nav id="spaces" aria-label="Model and layouts"></nav>
   <main id="stage">
     <canvas id="cv"></canvas>
-    <div id="hud"><div class="hud-chip" id="coordChip">X 0.00 · Y 0.00</div><div class="hud-chip" id="snapChip" hidden></div></div>
+    <div id="prompt" hidden>
+      <div id="promptBar">
+        <div id="promptText"><span class="tool" id="toolName">View</span><span id="promptMsg"></span></div>
+        <button class="pb" id="btnKeys" title="Type a value" aria-label="Type a value" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
+        <button class="pb" id="btnBack" title="Back: remove the last point" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg></button>
+        <button class="pb ok" id="btnDone" title="Done" aria-label="Done"><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg></button>
+        <button class="pb" id="btnCancel" title="Cancel (Esc)" aria-label="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div id="result"></div>
+      <div id="promptRow" hidden><input id="typed" placeholder="1200 · @1200,0 · @1500<90 · 100,200" inputmode="text" autocomplete="off" enterkeyhint="done"><button class="btn primary" id="btnEnter" title="Enter">Enter</button></div>
+    </div>
+    <div id="hud" hidden><div class="hud-chip" id="coordChip">X 0.00 · Y 0.00</div></div>
     <div id="vbtns">
-      <button id="btnFit" title="Zoom extents" aria-label="Zoom extents"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-      <button id="btnZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
-      <button id="btnZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
-      <button id="btnUndo" title="Undo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h9a6 6 0 0 1 0 12h-3"/></svg></button>
-      <button id="btnRedo" title="Redo" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9h-9a6 6 0 0 0 0 12h3"/></svg></button>
+      <button id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h9a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9h-9a6 6 0 0 0 0 12h3"/></svg></button>
+      <button id="btnFit" title="Zoom to the whole drawing" aria-label="Zoom extents"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button id="btnFull" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg></button>
     </div>
     <div id="welcome">
       <div class="card">
@@ -153,6 +191,16 @@ input{font:inherit;color:inherit}
     </div>
     <div id="loading"><div class="box"><div class="stage" id="loadStage">Reading file</div><div class="bar"><i id="loadBar"></i></div><div class="hint">Large drawings can take a few seconds on a phone.</div></div></div>
     <div class="scrim" id="scrim"></div>
+    <div id="groups" role="menu" aria-label="Tool groups">
+      <button data-g="view" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>View</button>
+      <button data-g="measure"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Measure</button>
+      <button data-g="edit"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg>Edit</button>
+      <button data-g="draw"><svg viewBox="0 0 24 24"><path d="M3 21 21 3M3 21h5M3 21v-5"/><circle cx="17" cy="17" r="3"/></svg>Draw</button>
+    </div>
+    <section class="sheet" id="spacesPanel" aria-label="Model and layouts">
+      <header><h2>Model and layouts</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body"><nav id="spaces" aria-label="Model and layouts"></nav></div>
+    </section>
     <section class="sheet" id="layersPanel" aria-label="Layers">
       <header><h2 id="layersTitle">Layers</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body" id="layerList"></div>
@@ -161,6 +209,7 @@ input{font:inherit;color:inherit}
     <section class="sheet" id="menuPanel" aria-label="Menu">
       <header><h2>Drawing &amp; settings</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body">
+        <button class="menu-item" id="btnOpen"><span>Open a drawing <small>DWG or DXF from this phone</small></span><span>→</span></button>
         <button class="menu-item" id="miExport"><span>Export DXF <small id="miExportHint">model space + blocks, zipped</small></span><span>→</span></button>
         <button class="menu-item" id="miPng"><span>Export view as PNG <small>what is on screen now</small></span><span>→</span></button>
         <button class="menu-item" id="miSave"><span>Save edits on this device <small>keeps your changes in Recent</small></span><span>→</span></button>
@@ -176,13 +225,8 @@ input{font:inherit;color:inherit}
     <div id="textDlg"><div class="box"><label for="txtVal">Text</label><input id="txtVal" placeholder="Type the text"><label for="txtH">Height (drawing units)</label><input id="txtH" inputmode="decimal"><div class="row"><button class="btn" id="txtCancel">Cancel</button><button class="btn primary" id="txtOk">Place</button></div></div></div>
     <div id="toast" role="status"></div>
   </main>
-  <div id="prompt">
-    <div id="promptText"><span class="tool" id="toolName">View</span><span id="promptMsg">Drag to pan, pinch to zoom. Tap an object to see its properties.</span></div>
-    <div id="result"></div>
-    <div id="promptRow"><input id="typed" placeholder="Type a value: 1200 · @1200,0 · @1500<90 · 100,200" inputmode="text" autocomplete="off"><button class="btn" id="btnEnter" title="Enter">↵</button><button class="btn" id="btnBack" title="Remove last point">Back</button><button class="btn primary" id="btnDone">Done</button><button class="btn quiet" id="btnCancel">Esc</button></div>
-  </div>
   <footer id="tools">
-    <div id="groups" role="tablist"><button role="tab" data-g="view" aria-selected="true">View</button><button role="tab" data-g="measure">Measure</button><button role="tab" data-g="edit">Edit</button><button role="tab" data-g="draw">Draw</button></div>
+    <button id="btnGroup" title="Switch tool group" aria-haspopup="menu"><svg id="grpIcon" viewBox="0 0 24 24"></svg><span><b id="grpName" style="font-weight:600">View</b><i>▴</i></span></button>
     <div id="toolRow"></div>
   </footer>
   <input type="file" id="file" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" tabindex="-1" aria-hidden="true">

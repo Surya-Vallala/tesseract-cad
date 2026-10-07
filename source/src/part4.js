@@ -32,30 +32,34 @@ function frame() {
 function renderFull() {
   const dpr = state.dpr; const V = V0();
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = bgColor(); ctx.fillRect(0, 0, cv.width, cv.height);
-  const sp = curSpace(); const S = sp ? getScene(state.spaceIdx) : null;
-  if (S) {
-    if (sp.paper) {
-      // paper sheet
-      ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr);
-      const lim = sp.limits && (sp.limits[1][0] > sp.limits[0][0]) ? sp.limits : [[S.bbox[0], S.bbox[1]], [S.bbox[2], S.bbox[3]]];
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(lim[0][0], lim[0][1], lim[1][0] - lim[0][0], lim[1][1] - lim[0][1]);
-      // viewports: model content
-      const MS = getScene(0);
-      for (const vp of S.viewports) {
-        if (!layerOn(vp.layer)) continue;
-        ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.beginPath(); const cx0 = Math.max(vp.x0, lim[0][0]), cy0 = Math.max(vp.y0, lim[0][1]), cx1 = Math.min(vp.x1, lim[1][0]), cy1 = Math.min(vp.y1, lim[1][1]); if (cx1 <= cx0 || cy1 <= cy0) { ctx.restore(); continue; } ctx.rect(cx0, cy0, cx1 - cx0, cy1 - cy0); ctx.clip();
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(vp.x0, vp.y0, vp.x1 - vp.x0, vp.y1 - vp.y0);
-        const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; const sc = vp.sc;
-        const V2 = { s: V.s * sc, tx: V.tx + V.s * (cx - vp.vc[0] * sc), ty: V.ty - V.s * (cy - vp.vc[1] * sc) };
-        drawScene(MS, V2, true, [vp.x0, vp.y0, vp.x1, vp.y1].map((v, i) => i % 2 === 0 ? (v - cx) / sc + vp.vc[0] : (v - cy) / sc + vp.vc[1]));
-        ctx.restore();
-      }
-      drawScene(S, V, true, null);
-    } else drawScene(S, V, onLightBg(), null);
-  }
+  drawContent(V, null);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   offCtx.setTransform(1, 0, 0, 1, 0, 0); offCtx.drawImage(cv, 0, 0); lastFull = { s: V.s, tx: V.tx, ty: V.ty };
   drawOverlay();
+}
+// Draws the current space with view V. wr = world rectangle to draw (null = whole screen).
+function drawContent(V, wr) {
+  const dpr = state.dpr; const sp = curSpace(); const S = sp ? getScene(state.spaceIdx) : null;
+  if (!S) return;
+  if (sp.paper) {
+    // paper sheet
+    ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr);
+    const lim = sp.limits && (sp.limits[1][0] > sp.limits[0][0]) ? sp.limits : [[S.bbox[0], S.bbox[1]], [S.bbox[2], S.bbox[3]]];
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(lim[0][0], lim[0][1], lim[1][0] - lim[0][0], lim[1][1] - lim[0][1]);
+    // viewports: model content
+    const MS = getScene(0); const W = wr || worldRect(V);
+    for (const vp of S.viewports) {
+      if (!layerOn(vp.layer)) continue;
+      const cx0 = Math.max(vp.x0, lim[0][0], W[0]), cy0 = Math.max(vp.y0, lim[0][1], W[1]), cx1 = Math.min(vp.x1, lim[1][0], W[2]), cy1 = Math.min(vp.y1, lim[1][1], W[3]); if (cx1 <= cx0 || cy1 <= cy0) continue;
+      ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.beginPath(); ctx.rect(cx0, cy0, cx1 - cx0, cy1 - cy0); ctx.clip();
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(vp.x0, vp.y0, vp.x1 - vp.x0, vp.y1 - vp.y0);
+      const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; const sc = vp.sc;
+      const V2 = { s: V.s * sc, tx: V.tx + V.s * (cx - vp.vc[0] * sc), ty: V.ty - V.s * (cy - vp.vc[1] * sc) };
+      drawScene(MS, V2, true, [cx0, cy0, cx1, cy1].map((v, i) => i % 2 === 0 ? (v - cx) / sc + vp.vc[0] : (v - cy) / sc + vp.vc[1]));
+      ctx.restore();
+    }
+    drawScene(S, V, true, wr);
+  } else drawScene(S, V, onLightBg(), wr);
 }
 function fastDraw() {
   const V = V0(); const dpr = state.dpr; const k = V.s / lastFull.s;
@@ -75,17 +79,17 @@ function drawScene(S, V, onLight, clipWorld) {
   let budget = 60000; const wipeCol = (curSpace() && curSpace().paper) ? '#ffffff' : bgColor();
   for (const it of vis) {
     if (it.fills.length) for (const f of it.fills) {
-      if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight);
-      if (f.solid || !f.pat) { ctx.globalAlpha = 1; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); continue; }
+      if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
+      if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; continue; }
       if (state.patOn && f.pat.minSp * V.s >= 2.6 && budget > 0) budget -= drawPattern(f, V, col, wr);
-      else { ctx.globalAlpha = 0.16; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; }
+      else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; }
     }
     if (it.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of it.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
     if (it.inst) for (const ins of it.inst) {
       const g = ins.g; if (!g.fills.length && !g.wipes.length) continue;
       ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f);
       const wrL = localRect(wr, ins.Minv);
-      for (const f of g.fills) { if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight); if (f.solid || !f.pat) { ctx.globalAlpha = 1; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); continue; } if (state.patOn && f.pat.minSp * V.s * ins.scale >= 2.6 && budget > 0) budget -= drawPattern(f, { s: V.s * ins.scale }, col, wrL); else { ctx.globalAlpha = 0.16; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; } }
+      for (const f of g.fills) { if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al; if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; continue; } if (state.patOn && f.pat.minSp * V.s * ins.scale >= 2.6 && budget > 0) budget -= drawPattern(f, { s: V.s * ins.scale }, col, wrL); else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; } }
       if (g.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of g.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
       ctx.restore();
     }
@@ -94,11 +98,12 @@ function drawScene(S, V, onLight, clipWorld) {
   // pass 2: strokes
   ctx.lineWidth = 1 / V.s; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
   const lts = state.drawing ? state.drawing.ltypes : {}; const ltscale = state.drawing ? state.drawing.header.ltscale : 1;
-  let lastCol = null, dashed = false;
+  let lastCol = null, dashed = false, lastAl = 1; ctx.globalAlpha = 1;
+  const setAl = (a) => { a = a == null ? 1 : a; if (a !== lastAl) { ctx.globalAlpha = a; lastAl = a; } };
   for (const it of vis) {
     for (const k of it.paths) {
       if (!k.n || !layerOn(k.layer)) continue;
-      const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; }
+      const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } setAl(k.al);
       let wantDash = null;
       if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; for (const v of pat) { const a = Math.abs(v) * ltscale; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
@@ -109,12 +114,12 @@ function drawScene(S, V, onLight, clipWorld) {
       const dpx = g.diag * ins.scale * V.s;
       ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f); ctx.lineWidth = 1 / (V.s * ins.scale); if (dashed) { ctx.setLineDash([]); dashed = false; }
       if (g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
-        const k0 = g.paths[0]; const col = aciCss(k0.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = 0.7; ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]); ctx.globalAlpha = 1;
-      } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.stroke(k.path); }
-      ctx.restore(); lastCol = null;
+        const k0 = g.paths[0]; const col = aciCss(k0.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
+      } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = k.al == null ? 1 : k.al; ctx.stroke(k.path); }
+      ctx.restore(); lastCol = null; lastAl = -1; ctx.globalAlpha = 1;
     }
   }
-  if (dashed) ctx.setLineDash([]); const _t2 = performance.now();
+  if (dashed) ctx.setLineDash([]); ctx.globalAlpha = 1; const _t2 = performance.now();
   // pass 3: texts
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   for (const it of vis) if (it.texts.length) for (const t of it.texts) { if (!layerOn(t.layer)) continue; const hp = t.h * V.s; if (hp < 2.4) continue; drawText(t, V, aciCss(t.aci, onLight)); }
@@ -124,7 +129,7 @@ function localRect(wr, Minv) { const bb = emptyBox(); for (const q of [[wr[0], w
 function drawText(t, V, col) {
   const dpr = state.dpr; const [X, Y] = toScreen(t.x, t.y, V); if (X < -4000 || X > cssW + 4000 || Y < -4000 || Y > cssH + 4000) return;
   const px = t.h * V.s / CAP;
-  ctx.save(); ctx.translate(X, Y); ctx.rotate(-t.rot); ctx.fillStyle = col; ctx.font = px + 'px ' + TEXT_FONT; ctx.textBaseline = 'alphabetic';
+  ctx.save(); ctx.translate(X, Y); ctx.rotate(-t.rot); ctx.fillStyle = col; if (t.al != null && t.al < 1) ctx.globalAlpha = t.al; ctx.font = px + 'px ' + TEXT_FONT; ctx.textBaseline = 'alphabetic';
   if (t.mt) {
     const lineH = t.h * 1.667 * (t.ls || 1) * V.s; const n = t.lines.length; const H = (t.h + (n - 1) * t.h * 1.667 * (t.ls || 1)) * V.s;
     const col3 = (t.at - 1) % 3, row = Math.floor((t.at - 1) / 3);
@@ -143,7 +148,7 @@ function drawPattern(f, V, col, wr) {
   const bb = f.bbox; const x0 = Math.max(bb[0], wr[0]), y0 = Math.max(bb[1], wr[1]), x1 = Math.min(bb[2], wr[2]), y1 = Math.min(bb[3], wr[3]);
   if (x1 <= x0 || y1 <= y0) return 0;
   let count = 0;
-  ctx.save(); ctx.clip(f.path, 'evenodd'); ctx.strokeStyle = col; ctx.lineWidth = 1 / V.s; ctx.globalAlpha = 0.9;
+  ctx.save(); ctx.clip(f.path, 'evenodd'); ctx.strokeStyle = col; ctx.lineWidth = 1 / V.s; ctx.globalAlpha = 0.9 * (f.al == null ? 1 : f.al);
   const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   for (const ln of f.pat.lines) {
     const nx = -ln.dy, ny = ln.dx; let tmin = Infinity, tmax = -Infinity, smin = Infinity, smax = -Infinity;
@@ -184,13 +189,57 @@ function drawOverlay() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (state.tool && state.tool.draw) state.tool.draw(ctx, V, acc);
   // snap marker
-  const sn = state.snapMark; if (sn) {
-    const [X, Y] = toScreen(sn.x, sn.y, V); ctx.save(); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath();
-    if (sn.kind === 1) ctx.rect(X - 6, Y - 6, 12, 12); else if (sn.kind === 2) { ctx.moveTo(X, Y - 7); ctx.lineTo(X + 7, Y + 6); ctx.lineTo(X - 7, Y + 6); ctx.closePath(); } else if (sn.kind === 3) ctx.arc(X, Y, 6, 0, TAU); else if (sn.kind === 5) { ctx.moveTo(X - 6, Y - 6); ctx.lineTo(X + 6, Y + 6); ctx.moveTo(X - 6, Y + 6); ctx.lineTo(X + 6, Y - 6); } else if (sn.kind === 6) { ctx.moveTo(X - 7, Y + 6); ctx.lineTo(X + 7, Y + 6); ctx.moveTo(X - 7, Y - 6); ctx.lineTo(X + 7, Y - 6); ctx.moveTo(X, Y - 6); ctx.lineTo(X, Y + 6); } else { ctx.moveTo(X - 5, Y); ctx.lineTo(X + 5, Y); ctx.moveTo(X, Y - 5); ctx.lineTo(X, Y + 5); }
-    ctx.stroke(); ctx.restore();
-  }
+  const sn = state.snapMark; if (sn) { const [X, Y] = toScreen(sn.x, sn.y, V); drawSnapMarker(ctx, X, Y, sn.kind, 6, acc); }
   // crosshair at last picked point
   if (state.lastPt) { const [X, Y] = toScreen(state.lastPt[0], state.lastPt[1], V); ctx.save(); ctx.strokeStyle = acc; ctx.globalAlpha = 0.8; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X - 10, Y); ctx.lineTo(X + 10, Y); ctx.moveTo(X, Y - 10); ctx.lineTo(X, Y + 10); ctx.stroke(); ctx.restore(); }
+  if (state.loupe) drawLoupe(acc);
+}
+const SNAP_NAMES = { 0: 'Free point', 1: 'Endpoint', 2: 'Midpoint', 3: 'Centre', 4: 'Insertion', 5: 'Intersection', 6: 'Nearest' };
+// AutoCAD-style markers: square endpoint, triangle midpoint, circle centre, X intersection, hourglass nearest
+function drawSnapMarker(c, X, Y, kind, r, col) {
+  if (!kind) return;
+  c.save(); c.lineJoin = 'miter';
+  const path = () => { c.beginPath();
+    if (kind === 1) c.rect(X - r, Y - r, r * 2, r * 2);
+    else if (kind === 2) { c.moveTo(X, Y - r * 1.15); c.lineTo(X + r * 1.15, Y + r); c.lineTo(X - r * 1.15, Y + r); c.closePath(); }
+    else if (kind === 3) c.arc(X, Y, r, 0, TAU);
+    else if (kind === 4) { c.rect(X - r, Y - r, r * 2, r * 2); c.moveTo(X - r, Y); c.lineTo(X + r, Y); c.moveTo(X, Y - r); c.lineTo(X, Y + r); }
+    else if (kind === 5) { c.moveTo(X - r, Y - r); c.lineTo(X + r, Y + r); c.moveTo(X - r, Y + r); c.lineTo(X + r, Y - r); }
+    else if (kind === 6) { c.moveTo(X - r, Y - r); c.lineTo(X + r, Y - r); c.lineTo(X - r, Y + r); c.lineTo(X + r, Y + r); c.closePath(); }
+  };
+  path(); c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 4; c.stroke();
+  path(); c.strokeStyle = col; c.lineWidth = 2; c.stroke();
+  c.restore();
+}
+// Magnifier shown while press-and-hold picking. state.loupe = { X, Y, sn } in screen px.
+const LOUPE_ZOOM = 4;
+function loupeRect() {
+  const L = Math.round(clamp(Math.min(cssW, cssH) * 0.36, 112, 170)); const m = 10;
+  const lp = state.loupe; const left = lp.X > cssW / 2; // put it on the side away from the finger
+  const pr = $('prompt'); const top = (pr && !pr.hidden) ? pr.offsetTop + pr.offsetHeight + 8 : m; // below the instruction strip
+  const x = left ? m : cssW - L - m, y = Math.min(top, Math.max(m, cssH - L - 34));
+  return { x, y, L };
+}
+function drawLoupe(acc) {
+  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = loupeRect(); const { x, y, L } = R;
+  const w = toWorld(lp.X, lp.Y, V); const s2 = V.s * LOUPE_ZOOM; const cx = x + L / 2, cy = y + L / 2;
+  const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 10; ctx.fillStyle = bgColor(); ctx.fillRect(x, y, L, L); ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.rect(x, y, L, L); ctx.clip();
+  const a = toWorld(x, y, V2), b = toWorld(x + L, y + L, V2);
+  drawContent(V2, [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
+  // crosshair at the finger point
+  ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
+  if (lp.sn && lp.sn.kind) { const q = toScreen(lp.sn.x, lp.sn.y, V2); drawSnapMarker(ctx, q[0], q[1], lp.sn.kind, 8, acc); }
+  ctx.restore();
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, L - 2, L - 2);
+  // label under the loupe
+  const sn = lp.sn; const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2) : '');
+  ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, Math.max(L, 60) + 80); const lx = x + (x < cssW / 2 ? 0 : L - tw), ly = y + L + 4;
+  ctx.fillStyle = 'rgba(20,20,20,.82)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
+  ctx.restore();
 }
 function highlightItem(it, V) {
   ctx.beginPath(); for (const poly of it.polys) { ctx.moveTo(poly[0], poly[1]); for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]); } ctx.stroke();

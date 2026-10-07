@@ -28,9 +28,16 @@ export function parseDxf(text, name) {
   const ptsOf = (g, code) => { const out = []; for (let k = 0; k < g.length; k += 2) if (g[k] === code) { let y = 0; for (let j = k + 2; j < g.length; j += 2) if (g[j] === code + 10) { y = parseFloat(g[j + 1]) || 0; break; } out.push([parseFloat(g[k + 1]) || 0, y]); } return out; };
   const allNum = (g, code) => { const out = []; for (let k = 0; k < g.length; k += 2) if (g[k] === code) out.push(parseFloat(g[k + 1]) || 0); return out; };
 
-  function common(rec) { const g = rec.g; return { id: idc.n++, hd: str(g, 5), L: str(g, 8, '0') || '0', c: Math.round(num(g, 62, 256)), lt: str(g, 6, ''), paper: num(g, 67, 0) === 1, owner: str(g, 330) }; }
+  function common(rec) {
+    const g = rec.g; const o = { id: idc.n++, hd: str(g, 5), L: str(g, 8, '0') || '0', c: Math.round(num(g, 62, 256)), lt: str(g, 6, ''), paper: num(g, 67, 0) === 1, owner: str(g, 330) };
+    const tv = first(g, 440); if (tv !== undefined) { const v = parseInt(tv, 10) >>> 0; const type = v >>> 24, a = v & 255; if ((type & 3) === 1) o.al = -1; else if ((type & 2) && a < 255) o.al = Math.round(a / 255 * 1000) / 1000; }
+    const tc = first(g, 420); if (tc !== undefined) { const v = parseInt(tc, 10); if (!isNaN(v)) o.rgb = '#' + (v & 0xffffff).toString(16).padStart(6, '0'); }
+    if (num(g, 60, 0) === 1) o.hidden = true;
+    return o;
+  }
 
-  function convert(rec, queue) {
+  function convert(rec, queue) { const e = convert0(rec, queue); if (e && e.hidden) { skipped.hidden = (skipped.hidden || 0) + 1; return undefined; } return e; }
+  function convert0(rec, queue) {
     const g = rec.g; const b = common(rec); const T = rec.type;
     switch (T) {
       case 'LINE': return { ...b, t: 'LINE', a: pt(g, 10), b: pt(g, 11) };
@@ -94,7 +101,9 @@ export function parseDxf(text, name) {
     if (section === 'HEADER') { parseHeader(r.g); continue; }
     if (false) { const g = r.g; for (let k = 0; k < g.length; k += 2) if (g[k] === 9) { const nm = g[k + 1].trim(); const sub = []; for (let j = k + 2; j < g.length && g[j] !== 9; j += 2) sub.push(g[j], g[j + 1]); if (nm === '$INSUNITS') header.units = num(sub, 70, 0); else if (nm === '$EXTMIN') header.extmin = pt(sub, 10); else if (nm === '$EXTMAX') header.extmax = pt(sub, 10); else if (nm === '$LTSCALE') header.ltscale = num(sub, 40, 1) || 1; else if (nm === '$CLAYER') header.clayer = str(sub, 8, '0'); else if (nm === '$LUPREC') header.luprec = num(sub, 70, 2); else if (nm === '$TEXTSIZE') header.textsize = num(sub, 40, 2.5); } continue; }
     if (section === 'TABLES') {
-      if (r.type === 'LAYER' && first(r.g, 2) !== undefined && first(r.g, 100) !== undefined) { const col = num(r.g, 62, 7); const fl = num(r.g, 70); layers.push({ name: str(r.g, 2), aci: Math.abs(Math.round(col)) || 7, off: col < 0, frozen: !!(fl & 1), locked: !!(fl & 4), lw: num(r.g, 370, -3), lt: str(r.g, 6, 'Continuous') }); }
+      if (r.type === 'LAYER' && first(r.g, 2) !== undefined && first(r.g, 100) !== undefined) { const col = num(r.g, 62, 7); const fl = num(r.g, 70); const lay = { name: str(r.g, 2), aci: Math.abs(Math.round(col)) || 7, off: col < 0, frozen: !!(fl & 1), locked: !!(fl & 4), lw: num(r.g, 370, -3), lt: str(r.g, 6, 'Continuous') };
+        for (let k = 0; k < r.g.length; k += 2) if (r.g[k] === 1001 && String(r.g[k + 1]).trim() === 'AcCmTransparency') { for (let j = k + 2; j < r.g.length && r.g[j] !== 1001; j += 2) if (r.g[j] === 1071) { const v = parseInt(r.g[j + 1], 10) >>> 0; const type = v >>> 24, a = v & 255; if ((type & 2) && a < 255) lay.al = Math.round(a / 255 * 1000) / 1000; break; } break; }
+        layers.push(lay); }
       else if (r.type === 'LTYPE' && first(r.g, 2) !== undefined) ltypes[str(r.g, 2)] = allNum(r.g, 49);
       else if (r.type === 'BLOCK_RECORD' && first(r.g, 2) !== undefined) blockRecords[str(r.g, 5)] = { name: str(r.g, 2), layout: str(r.g, 340) };
       continue;

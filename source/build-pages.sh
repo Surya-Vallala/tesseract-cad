@@ -36,5 +36,5 @@ touch site/.nojekyll
 cp /usr/share/common-licenses/GPL-3 site/LICENSE
 mkdir -p site/source/src
 cp src/* site/source/src/
-cp pages-extra.js manifest.webmanifest 404.html worker-src.js dxf-parser.js patchmem.mjs build.sh build-pages.sh sw-template.js make-icons.py aci.txt package.json package-lock.json site/source/
+cp build-worker.sh pages-extra.js manifest.webmanifest 404.html worker-src.js dxf-parser.js patchmem.mjs build.sh build-pages.sh sw-template.js make-icons.py aci.txt package.json package-lock.json site/source/
 echo "built site v$VER"; ls -la site

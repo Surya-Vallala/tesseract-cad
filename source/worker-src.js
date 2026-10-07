@@ -1,6 +1,6 @@
 // Tesseract CAD Tools — parse worker. Reads DWG/DXF with LibreDWG (WASM) and
 // returns a compact drawing model to the page.
-import { Dwg_File_Type, LibreDwg } from '@mlightcad/libredwg-web';
+import { Dwg_File_Type, Dwg_Object_Type, LibreDwg } from '@mlightcad/libredwg-web';
 import { parseDxf } from './dxf-parser.js';
 
 let libPromise = null;
@@ -19,14 +19,25 @@ function convEdge(ed) {
   switch (ed.type) {
     case 1: return { t: 1, a: P(ed.start), b: P(ed.end) };
     case 2: return { t: 2, c: P(ed.center), r: num(ed.radius), a0: num(ed.startAngle), a1: num(ed.endAngle), ccw: ed.isCCW ? 1 : 0 };
-    case 3: return { t: 3, c: P(ed.center), m: P(ed.majorAxisEndPoint || ed.majorAxis), k: num(ed.axisRatio || ed.minorAxisRatio, 1), a0: num(ed.startAngle), a1: num(ed.endAngle), ccw: ed.isCCW ? 1 : 0 };
+    case 3: return { t: 3, c: P(ed.center), m: P(ed.majorAxisEndPoint || ed.majorAxis || ed.end), k: num(ed.axisRatio || ed.minorAxisRatio || ed.lengthOfMinorAxis, 1), a0: num(ed.startAngle), a1: num(ed.endAngle), ccw: ed.isCCW ? 1 : 0 };
     case 4: return { t: 4, deg: num(ed.degree, 3), knots: (ed.knots || []).map(num), cp: (ed.controlPoints || []).map(p => [p.x, p.y, (p.w && p.w > 0) ? p.w : 1]), fit: (ed.fitPoints || []).map(P) };
   }
   return null;
 }
 
+// Transparency: DWG stores type in the high byte (0 ByLayer, 1 ByBlock, bit 2 = explicit value)
+// and opacity in the low byte (255 = opaque). Returns opacity 0..1, -1 for ByBlock, undefined for ByLayer/opaque.
+function alphaOf(type, a) {
+  type = num(type); a = num(a, 255);
+  if ((type & 3) === 1) return -1;
+  if (type & 2) { if (a >= 255) return undefined; return Math.max(0, Math.round(a / 255 * 1000) / 1000); }
+  return undefined;
+}
+const hex6 = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0');
 function convEntity(e, idc) {
   const base = { id: idc.n++, hd: e.handle, L: e.layer || '0', c: num(e.colorIndex, 256), lt: e.lineType || '' };
+  const al = alphaOf(e.transparencyType, e.transparency); if (al !== undefined) base.al = al;
+  if (typeof e.color === 'number' && e.color > 0 && e.color < 0xffffff) base.rgb = hex6(e.color); // 0 / 0xffffff come back as placeholders
   switch (e.type) {
     case 'LINE': return { ...base, t: 'LINE', a: P(e.startPoint), b: P(e.endPoint) };
     case 'LWPOLYLINE': {
@@ -55,7 +66,7 @@ function convEntity(e, idc) {
     }
     case 'INSERT': {
       const ins = { ...base, t: 'INSERT', n: e.name, p: P(e.insertionPoint), sx: num(e.xScale, 1) || 1, sy: num(e.yScale, 1) || 1, rot: num(e.rotation) };
-      if (e.attribs && e.attribs.length) ins.att = e.attribs.map(a => ({ p: P(a.startPoint), ap: P(a.endPoint), h: num(a.textHeight, 2.5), rot: num(a.rotation), s: a.text || '', ha: num(a.halign), va: num(a.valign), L: a.layer || '0', c: num(a.colorIndex, 256), inv: !!(a.flags & 1) }));
+      if (e.attribs && e.attribs.length) ins.att = e.attribs.map(a => ({ p: P(a.startPoint), ap: P(a.endPoint), h: num(a.textHeight, 2.5), rot: num(a.rotation), s: a.text || '', ha: num(a.halign), va: num(a.valign), L: a.layer || '0', c: num(a.colorIndex, 256), inv: !!(a.flags & 1) || a.isVisible === false, al: alphaOf(a.transparencyType, a.transparency), rgb: typeof a.color === 'number' && a.color > 0 && a.color < 0xffffff ? hex6(a.color) : undefined }));
       if (num(e.columnCount) > 1 || num(e.rowCount) > 1) { ins.cols = num(e.columnCount, 1); ins.rows = num(e.rowCount, 1); ins.cs = num(e.columnSpacing); ins.rs = num(e.rowSpacing); }
       return ins;
     }
@@ -70,8 +81,10 @@ function convEntity(e, idc) {
           const v = (bp.vertices || []).map(p => [p.x, p.y, num(p.bulge)]);
           if (v.length >= 2) paths.push({ v, closed: true });
         } else {
-          const edges = (bp.edges || []).map(convEdge).filter(Boolean);
-          if (edges.length) paths.push({ e: edges });
+          // libredwg can return empty slots for edges after a spline edge; keep what was read and say how many are missing
+          const rawEdges = bp.edges || []; const miss = rawEdges.filter(x => !x).length;
+          const edges = rawEdges.filter(Boolean).map(convEdge).filter(Boolean);
+          if (edges.length) paths.push(miss ? { e: edges, miss } : { e: edges });
         }
       }
       if (!paths.length) return null;
@@ -121,9 +134,32 @@ function convEntity(e, idc) {
   }
 }
 
-function slim(db, name) {
+// Layer transparency lives in each layer's xdata (app "AcCmTransparency", first 1071 value).
+// The converter does not pass it through, so read it straight from the LAYER objects.
+function layerAlphas(lib, dwg) {
+  const out = {};
+  try {
+    const n = lib.dwg_get_num_objects(dwg);
+    for (let i = 0; i < n; i++) {
+      const obj = lib.dwg_get_object(dwg, i); if (!obj) continue;
+      if (lib.dwg_object_get_fixedtype(obj) !== Dwg_Object_Type.DWG_TYPE_LAYER) continue;
+      try {
+        const name = lib.dwg_dynapi_entity_data(lib.dwg_object_to_object_tio(obj), 'name');
+        const xd = lib.dwg_object_entity_get_xdata(lib.dwg_object_to_object(obj)) || [];
+        const app = xd.find(a => a && a.appName === 'AcCmTransparency'); if (!app || !name) continue;
+        const v0 = (app.value || []).find(v => v && v.code === 1071); if (!v0) continue;
+        const v = Number(v0.value) >>> 0; const al = alphaOf(v >>> 24, v & 255);
+        if (al !== undefined && al >= 0) out[name] = al;
+      } catch (e) { /* skip this layer */ }
+    }
+  } catch (e) { /* layer transparency is optional */ }
+  return out;
+}
+
+function slim(db, name, layerAl) {
   const idc = { n: 1 };
   const layers = (db.tables?.LAYER?.entries || []).map(l => ({ name: l.name, aci: num(l.colorIndex, 7), off: !!l.off, frozen: !!l.frozen, locked: !!l.locked, lw: num(l.lineweight), lt: l.lineType || 'Continuous' }));
+  if (layerAl) for (const l of layers) if (layerAl[l.name] != null) l.al = layerAl[l.name];
   if (!layers.find(l => l.name === '0')) layers.unshift({ name: '0', aci: 7, off: false, frozen: false, locked: false, lw: -3, lt: 'Continuous' });
   const ltypes = {};
   for (const lt of db.tables?.LTYPE?.entries || []) ltypes[lt.name] = (lt.pattern || []).map(p => num(p.elementLength));
@@ -133,7 +169,7 @@ function slim(db, name) {
   const skipped = {};
   for (const b of records) {
     const ents = [];
-    for (const e of b.entities || []) { if (!e || !e.type) continue; let c = null; try { c = convEntity(e, idc); } catch (err) { skipped[e.type + '!'] = (skipped[e.type + '!'] || 0) + 1; continue; } if (c) ents.push(c); else skipped[e.type] = (skipped[e.type] || 0) + 1; }
+    for (const e of b.entities || []) { if (!e || !e.type) continue; if (e.isVisible === false) { skipped.hidden = (skipped.hidden || 0) + 1; continue; } let c = null; try { c = convEntity(e, idc); } catch (err) { skipped[e.type + '!'] = (skipped[e.type + '!'] || 0) + 1; continue; } if (c) ents.push(c); else skipped[e.type] = (skipped[e.type] || 0) + 1; }
     const rec = { name: b.name, base: P(b.basePoint), ents, handle: b.handle };
     byHandle[b.handle] = rec;
     blocks[b.name] = rec;
@@ -179,9 +215,10 @@ onmessage = async (ev) => {
       if (!dwg) throw new Error('LibreDWG could not read this file. Try saving it as AutoCAD 2018 or 2013 DWG and open again.');
       postMessage({ type: 'progress', stage: 'Converting entities', pct: 55 });
       const db = lib.convert(dwg);
+      const layerAl = layerAlphas(lib, dwg);
       try { lib.dwg_free(dwg); } catch (e) { /* ignore */ }
       postMessage({ type: 'progress', stage: 'Building drawing', pct: 80 });
-      drawing = slim(db, name);
+      drawing = slim(db, name, layerAl);
     }
     drawing.parseMs = Math.round(performance.now() - t0);
     postMessage({ type: 'done', drawing });

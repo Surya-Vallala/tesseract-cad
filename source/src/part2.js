@@ -9,12 +9,13 @@ const normAng = (a) => { a = a % TAU; if (a < 0) a += TAU; return a; };
 const deg = (r) => r * 180 / Math.PI;
 const rad = (d) => d * Math.PI / 180;
 
-function aciCss(aci, onLight) {
+function aciCss(aci, onLight, fill) {
+  if (typeof aci === 'string') return aci; // true colour
   aci = aci | 0;
   if (aci < 1 || aci > 255) aci = 7;
   if (aci === 7) return onLight ? '#1c1b18' : '#f2efe8';
   const hex = ACI_HEX.substr(aci * 6, 6);
-  if (onLight) {
+  if (onLight && !fill) { // keep very light lines and text readable on white; fills keep their real colour
     const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
     const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     if (lum > 0.82) return '#5a5650';
@@ -173,6 +174,7 @@ function mtextPlain(s) {
 function textPlain(s) { return mtextPlain(s).join(' '); }
 const measureCv = document.createElement('canvas'); const measureCtx = measureCv.getContext('2d');
 const TEXT_FONT = "'IBM Plex Sans', system-ui, sans-serif";
+const UI_FONT = "'IBM Plex Mono', ui-monospace, monospace";
 const CAP = 0.7; // cap height / em for the UI font
 function textWidthUnits(str, h) { measureCtx.font = '100px ' + TEXT_FONT; return measureCtx.measureText(str).width / 100 * (h / CAP); }
 function wrapLines(lines, h, width) {

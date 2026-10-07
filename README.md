@@ -9,8 +9,10 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 ## What it does
 
 - Opens **.dwg** (including AutoCAD 2018 format) and **.dxf** files: Model space and all Layouts
+- Shows object and layer **transparency**, true colours, and only the current **visibility state** of dynamic blocks
 - Layers: turn on and off, show all, hide all, invert
 - Measure: length, area, angle and coordinates, with snapping to endpoints, midpoints, centres, intersections and nearest points
+- **Press and hold** on the drawing to get a 4× magnifier, drag to the exact point, and let go to place it
 - Edit: move, copy, rotate, mirror, scale, align, delete, undo and redo
 - Draw: line, polyline, rectangle, circle, arc, spline and text, with typed input (`1200`, `@1200,0`, `@1500<90`)
 - Export DXF and PNG; keep recent files on the device
@@ -19,7 +21,7 @@ Drawings are read **on the phone itself**. Files are never uploaded anywhere.
 
 ## How it's built
 
-- One HTML page (`index.html`) with a Canvas 2D renderer
+- One HTML page (`index.html`) with a Canvas 2D renderer; the layout gives the drawing almost the whole screen (full-screen button hides the rest)
 - `cad-worker.js` parses files in a background thread. It uses
   [LibreDWG](https://www.gnu.org/software/libredwg/) compiled to WebAssembly
   (`libredwg-web.wasm`, from [@mlightcad/libredwg-web](https://github.com/mlightcad/libredwg-web) 0.7.15),

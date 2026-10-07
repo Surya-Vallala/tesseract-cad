@@ -12,8 +12,8 @@ function pickAt(wx, wy, tolWorld, S) {
   }
   return best;
 }
-function snapPoint(X, Y) { // screen -> world with snapping; returns {x,y,kind,item}
-  const V = state.view; const w = toWorld(X, Y, V); const tol = 16 / V.s;
+function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item}
+  const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
   if (!state.drawing || !state.snapOn) return { x: w[0], y: w[1], kind: 0 };
   const S = getScene(state.spaceIdx);
   const sn = S.snap.query(w[0], w[1], tol);
@@ -37,16 +37,40 @@ function findIntersection(wx, wy, tol, S, itemA) {
 }
 
 // ===================== Pointer handling =====================
+// One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
+// drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 7;
+function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
+function enterPrecise(X, Y) {
+  holdTimer = null; if (!state.drawing || pointers.size !== 1 || dragMoved) return;
+  try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { }
+  gesture = false; state.loupe = { X, Y, sn: snapPoint(X, Y, PRECISE_SNAP_PX) }; updatePrecise(X, Y); startEdgePan();
+}
+function updatePrecise(X, Y) {
+  const lp = state.loupe; if (!lp) return; lp.X = X; lp.Y = Y;
+  const sn = snapPoint(X, Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast();
+}
+function exitPrecise(place) {
+  const lp = state.loupe; state.loupe = null; stopEdgePan(); if (!lp) return;
+  if (place && state.drawing) { const sn = lp.sn || snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); state.snapMark = sn.kind ? sn : null; const V = state.view; const q = toScreen(sn.x, sn.y, V); const hit = pickAt(sn.x, sn.y, 6 / V.s); if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, null); }
+  requestFull();
+}
+// While holding near a screen edge, scroll the drawing so you can reach points just off screen.
+let edgeRaf = 0, lastEdgeFull = 0;
+function startEdgePan() { stopEdgePan(); const step = (t) => { edgeRaf = requestAnimationFrame(step); const lp = state.loupe; if (!lp) return; const E = 34; let dx = 0, dy = 0; if (lp.X < E) dx = (E - lp.X); else if (lp.X > cssW - E) dx = -(lp.X - (cssW - E)); if (lp.Y < E) dy = (E - lp.Y); else if (lp.Y > cssH - E) dy = -(lp.Y - (cssH - E)); if (!dx && !dy) return; const k = 0.35; state.view = { ...state.view, tx: state.view.tx + dx * k, ty: state.view.ty + dy * k }; const sn = snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; if (t - lastEdgeFull > 120) { lastEdgeFull = t; requestFull(); } else requestFast(); }; edgeRaf = requestAnimationFrame(step); }
+function stopEdgePan() { if (edgeRaf) cancelAnimationFrame(edgeRaf); edgeRaf = 0; }
+cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
 cv.addEventListener('pointerdown', (ev) => {
   cv.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, X: ev.offsetX, Y: ev.offsetY });
-  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; }
-  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
+  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
+  if (pointers.size === 2) { cancelHold(); if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
 });
 cv.addEventListener('pointermove', (ev) => {
   const p = pointers.get(ev.pointerId);
   if (!p) { if (ev.pointerType === 'mouse' && state.drawing) hoverAt(ev.offsetX, ev.offsetY); return; }
   p.X = ev.offsetX; p.Y = ev.offsetY;
+  if (state.loupe && pointers.size === 1) { updatePrecise(ev.offsetX, ev.offsetY); return; }
   if (pointers.size === 2 && pinch0) {
     const [a, b] = [...pointers.values()]; const d = Math.hypot(a.X - b.X, a.Y - b.Y); const mx = (a.X + b.X) / 2, my = (a.Y + b.Y) / 2;
     const k = clamp(d / (pinch0.d || 1), 0.05, 20); const v = pinch0.view; const s2 = clamp(v.s * k, 1e-7, 1e7); const kk = s2 / v.s;
@@ -54,7 +78,7 @@ cv.addEventListener('pointermove', (ev) => {
   }
   if (pointers.size === 1 && dragStart) {
     const dx = ev.offsetX - dragStart.X, dy = ev.offsetY - dragStart.Y;
-    if (!dragMoved && Math.hypot(dx, dy) > 7) { dragMoved = true; gesture = true; }
+    if (!dragMoved && Math.hypot(dx, dy) > 7) { dragMoved = true; gesture = true; cancelHold(); }
     if (dragMoved) {
       if (state.tool && state.tool.boxSelect && (dragStart.button === 0)) { state.boxSel = { x0: dragStart.X, y0: dragStart.Y, x1: ev.offsetX, y1: ev.offsetY }; gesture = false; requestFast(); return; }
       state.view = { s: panStartView.s, tx: panStartView.tx + dx, ty: panStartView.ty + dy }; requestFast();
@@ -62,7 +86,8 @@ cv.addEventListener('pointermove', (ev) => {
   }
 });
 function endPointer(ev) {
-  const p = pointers.get(ev.pointerId); pointers.delete(ev.pointerId);
+  const p = pointers.get(ev.pointerId); pointers.delete(ev.pointerId); cancelHold();
+  if (state.loupe) { if (pointers.size === 0) { exitPrecise(ev.type === 'pointerup'); gesture = false; dragStart = null; } return; }
   if (pinch0 && pointers.size < 2) { pinch0 = null; gesture = false; dragStart = null; requestFull(); return; }
   if (p && dragStart && pointers.size === 0) {
     const wasBox = state.boxSel;
@@ -78,7 +103,7 @@ cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') cancelTool(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
 function hoverAt(X, Y) { const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const sn = snapPoint(X, Y); state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
-function showCoord(x, y, kind) { const names = { 0: '', 1: 'End', 2: 'Mid', 3: 'Center', 4: 'Point', 5: 'Intersection', 6: 'Nearest' }; $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + names[kind] : ''); }
+function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
   if (!state.drawing) return;
@@ -98,7 +123,7 @@ function finishBoxSelect(b) {
 // ===================== Tool framework =====================
 const promptMsg = $('promptMsg'), toolName = $('toolName'), resultEl = $('result'), typed = $('typed');
 function setPrompt(msg) { promptMsg.textContent = msg; }
-function setResult(rows) { if (!rows) { resultEl.classList.remove('on'); resultEl.innerHTML = ''; return; } resultEl.innerHTML = rows.map(([k, v]) => '<span><b>' + k + '</b>' + v + '</span>').join(''); resultEl.classList.add('on'); }
+function setResult(rows) { if (!rows) { resultEl.classList.remove('on'); resultEl.innerHTML = ''; } else { resultEl.innerHTML = rows.map(([k, v]) => '<span><b>' + k + '</b>' + v + '</span>').join(''); resultEl.classList.add('on'); } if (typeof updateChrome === 'function') updateChrome(); }
 function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), ms || 1800); }
 function cancelTool() { if (state.tool && state.tool.onCancel) state.tool.onCancel(); state.lastPt = null; state.snapMark = null; startTool(state.tool ? state.tool.name : 'select', true); }
 function doneTool() { if (state.tool && state.tool.onDone) state.tool.onDone(); }
@@ -135,7 +160,28 @@ function renderToolRow() {
   const row = $('toolRow'); row.innerHTML = '';
   for (const t of TOOL_GROUPS[state.group]) { const b = document.createElement('button'); b.className = 'tool' + (t === 'delete' ? ' danger' : ''); b.dataset.tool = t; b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[t] + '</svg><span>' + LABEL[t] + '</span>'; b.setAttribute('aria-pressed', state.tool && state.tool.name === t ? 'true' : 'false'); b.addEventListener('click', () => { if (t === 'fit') { zoomExtents(); return; } startTool(t); }); row.appendChild(b); }
 }
-$('groups').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; state.group = b.dataset.g; for (const x of $('groups').children) x.setAttribute('aria-selected', x === b ? 'true' : 'false'); renderToolRow(); });
+// Group switcher (bottom-left): opens a small menu of View / Measure / Edit / Draw
+const GROUP_NAME = { view: 'View', measure: 'Measure', edit: 'Edit', draw: 'Draw' };
+function setGroup(g) {
+  state.group = g; for (const x of $('groups').children) x.setAttribute('aria-selected', x.dataset.g === g ? 'true' : 'false');
+  const src = $('groups').querySelector('[data-g="' + g + '"] svg'); $('grpIcon').innerHTML = src ? src.innerHTML : ''; $('grpName').textContent = GROUP_NAME[g] || g;
+  renderToolRow(); updateUndoBtns(); $('toolRow').scrollLeft = 0;
+}
+$('groups').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; closeGroups(); setGroup(b.dataset.g); });
+function closeGroups() { $('groups').classList.remove('open'); if (!document.querySelector('.sheet.open')) $('scrim').classList.remove('on'); }
+$('btnGroup').addEventListener('click', () => { const g = $('groups'); if (g.classList.contains('open')) closeGroups(); else { g.classList.add('open'); $('scrim').classList.add('on'); } });
+// The instruction strip shows only while a tool needs input or there is a result to read.
+const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text']);
+function updateChrome() {
+  const t = state.tool ? state.tool.name : 'select'; const hasResult = resultEl.classList.contains('on');
+  $('prompt').hidden = !state.drawing || (t === 'select' && !hasResult);
+  $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
+  const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
+  $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'coord', 'angle', 'rect', 'circle', 'arc', 'text'].includes(t);
+}
+let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
+function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
 
 function needSelection(tool, next) { // returns true if selection exists, otherwise prompts to select
   if (state.selection.size) return true;
@@ -146,6 +192,7 @@ function startTool(name, keepSel) {
   state.tool = makeTool(name); state.lastPt = null; state.snapMark = null; setResult(null); typed.value = '';
   toolName.textContent = LABEL[name] || name; state.tool.start();
   for (const b of $('toolRow').children) b.setAttribute('aria-pressed', b.dataset.tool === name ? 'true' : 'false');
+  updateChrome(); maybeHoldTip(name);
   requestFast();
 }
 function describeItem(it) {
@@ -178,8 +225,8 @@ function makeTool(name) {
       T.onTap = (sn, hit) => { state.selection.clear(); if (hit) { state.selection.add(hit.item.ent.id); setResult(describeItem(hit.item)); } else setResult(null); };
       break;
     case 'coord':
-      T.start = () => setPrompt('Tap a point to read its coordinates. Snaps to ends, midpoints and centres.');
-      T.onTap = (sn) => { addPt(sn); const kinds = { 0: 'free point', 1: 'endpoint', 2: 'midpoint', 3: 'centre', 4: 'insertion point', 5: 'intersection', 6: 'nearest' }; setResult([['X', fmtNum(sn.x, 3)], ['Y', fmtNum(sn.y, 3)], ['Snap', kinds[sn.kind]]]); T.pts = [[sn.x, sn.y]]; };
+      T.start = () => setPrompt('Tap a point to read its coordinates. Press and hold to magnify for an exact point.');
+      T.onTap = (sn) => { addPt(sn); setResult([['X', fmtNum(sn.x, 3)], ['Y', fmtNum(sn.y, 3)], ['Snap', SNAP_NAMES[sn.kind].toLowerCase()]]); T.pts = [[sn.x, sn.y]]; };
       T.draw = (c, V, acc) => drawDots(c, T.pts, V, acc);
       break;
     case 'dist':
