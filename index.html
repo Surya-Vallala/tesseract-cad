@@ -178,8 +178,10 @@ body.fs #top, body.fs #tools{display:none}
 #recent button{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;background:var(--chip);font-size:13px;text-align:left}
 #recent button span:last-child{color:var(--muted);font-family:var(--mono);font-size:11px;white-space:nowrap}
 #recent .empty{color:var(--muted);font-size:12.5px;padding:2px 0}
-.caps{display:flex;flex-wrap:wrap;gap:5px}
-.caps span{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
+/* home screen (no drawing showing): no layers button, tool bar, tabs or drawing-only menu items; the title chip is just a label */
+#app.home #btnLayers, #app.home #tools, #app.home #tabs, #app.home .doc-only{display:none}
+#app.home #btnSpace{pointer-events:none}
+#app.home #btnSpace .sp svg{display:none}
 #loading{position:absolute;inset:0;z-index:9;display:none;align-items:center;justify-content:center;background:rgba(20,22,26,.6);backdrop-filter:blur(3px)}
 #loading.on{display:flex}
 #loading .box{background:var(--panel);color:var(--fg);border-radius:12px;padding:16px 18px;width:min(92vw,360px);box-shadow:var(--shadow)}
@@ -221,7 +223,7 @@ body.fs #top, body.fs #tools{display:none}
 @media (prefers-reduced-motion: reduce){ .sheet{transition:none} }
 @media (min-width:720px){ .tool{width:66px} .tool span{max-width:64px} }
 </style>
-<div id="app">
+<div id="app" class="home">
   <header id="top">
     <div class="logo" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M2.84 8.71H12.50V19.29"/><path d="M25.16 8.71H16.41V19.29H25.16"/></svg></div>
     <button id="btnSpace" title="Switch between Model and layouts"><span id="fileName" class="file">No drawing open</span><span class="sp"><span id="spaceName">Tesseract CAD Tools</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>
@@ -258,9 +260,8 @@ body.fs #top, body.fs #tools{display:none}
         <div class="brandhead"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Studio | Infra"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Studio | Infra"><div class="prod">CAD Tools</div></div>
         <h1>Open a drawing</h1>
         <p>DWG (any version up to 2018) or DXF. Files are read on this device and never uploaded.</p>
-        <button class="btn primary big" id="btnOpen2">Choose DWG / DXF</button>
+        <button class="btn primary big" id="btnOpen2">Open DWG / DXF</button>
         <div id="recent"><div class="empty">Recently opened files will appear here.</div></div>
-        <div class="caps"><span>Model + Layouts</span><span>Layers</span><span>Measure</span><span>Move · Copy · Rotate · Mirror · Align</span><span>Line · Pline · Circle · Spline · Text</span><span>Export DXF</span></div>
         <button class="btn quiet" id="btnSample">Try the sample plan instead</button>
         <p id="engineStatus" style="font-size:11.5px">Loading the DWG engine (about 9 MB, cached after the first visit)…</p>
         <div class="credit">Developed by <b>Tesseract Studio</b><br>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></div>
@@ -302,17 +303,17 @@ body.fs #top, body.fs #tools{display:none}
       <header><h2>Drawing &amp; settings</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body">
         <button class="menu-item" id="btnOpen"><span>Open a drawing <small>DWG or DXF from this phone</small></span><span>→</span></button>
-        <button class="menu-item" id="miExport"><span>Export DXF <small id="miExportHint">model space + blocks, zipped</small></span><span>→</span></button>
-        <button class="menu-item" id="miPng"><span>Export view as PNG <small>what is on screen now</small></span><span>→</span></button>
-        <button class="menu-item" id="miSave"><span>Save edits on this device <small>keeps your changes in Recent</small></span><span>→</span></button>
+        <button class="menu-item doc-only" id="miExport"><span>Export DXF <small id="miExportHint">model space + blocks, zipped</small></span><span>→</span></button>
+        <button class="menu-item doc-only" id="miPng"><span>Export view as PNG <small>what is on screen now</small></span><span>→</span></button>
+        <button class="menu-item doc-only" id="miSave"><span>Save edits on this device <small>keeps your changes in Recent</small></span><span>→</span></button>
         <div class="menu-item"><span>Canvas</span><div class="seg" id="segCanvas"><button data-v="dark" aria-pressed="true">Dark</button><button data-v="light">Light</button></div></div>
         <div class="menu-item"><span>Units shown</span><div class="seg" id="segUnits"><button data-v="auto" aria-pressed="true">Drawing</button><button data-v="mm">mm</button><button data-v="m">m</button><button data-v="ft">ft-in</button></div></div>
         <div class="menu-item"><span>Snap to points</span><input type="checkbox" id="chkSnap" checked></div>
         <div class="menu-item"><span>Hatch patterns <small>off = faster</small></span><input type="checkbox" id="chkPat" checked></div>
-        <div class="menu-item"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>
-        <div class="menu-item" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
+        <div class="menu-item doc-only"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>
+        <div class="menu-item doc-only" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
         <div class="menu-item"><span>Theme</span><div class="seg" id="segSkin"><button data-v="light">Light</button><button data-v="dark" aria-pressed="true">Dark</button><button data-v="mono">B&amp;W</button></div></div>
-        <button class="menu-item" id="miClose"><span>Close this drawing <small>asks to save if you made changes</small></span></button>
+        <button class="menu-item doc-only" id="miClose"><span>Close this drawing <small>asks to save if you made changes</small></span></button>
         <div class="about"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Studio | Infra"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Studio | Infra"><span>Tesseract CAD Tools · developed by Tesseract Studio</span><span>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></span></div>
       </div>
     </section>
@@ -1886,8 +1887,13 @@ function closeDrawing() {
   activeDoc = null; const back = returnTo && docs.includes(returnTo) ? returnTo : null; returnTo = null;
   if (docs.length) { restoreDoc(back || docs[Math.max(0, i - 1)]); refreshDocUI(); return; }
   state.drawing = null; state.scenes = new Map(); blockCache = new Map(); state.undo = []; state.redo = []; state.dirty = false; state.selection = new Set(); state.fileName = ''; state.fileBytes = null;
-  showHomeTitle(); $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderTabs(); renderRecent(); requestFull();
+  showHomeTitle(); setHome(true); $('spaces').innerHTML = ''; setResult(null); renderTabs(); renderRecent(); requestFull();
 }
+// Home screen on/off. At home there is no drawing on screen, so the drawing-only controls are hidden (CSS on #app.home).
+const atHome = () => $('welcome').style.display !== 'none';
+function setHome(on) { $('welcome').style.display = on ? '' : 'none'; $('app').classList.toggle('home', on); syncCanvasSize(); updateUndoBtns(); queueBackSync(); }
+// the tool bar and tabs come and go with the home screen; size the canvas now so a zoom-to-fit right after is exact
+function syncCanvasSize() { const r = stage.getBoundingClientRect(); if (Math.abs(r.width - cssW) > 0.5 || Math.abs(r.height - cssH) > 0.5) resizeCanvas(); }
 
 // ===================== Loading =====================
 let worker = null, engineReady = false, currentLoad = null, useBlob = false;
@@ -1970,12 +1976,12 @@ function loadDrawing(D, name, meta) {
   state.hoverItem = null; state.snapMark = null; state.lastPt = null;
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
-  $('fileName').textContent = name; $('welcome').style.display = 'none';
+  $('fileName').textContent = name; setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs();
-  startTool('select', true); zoomExtents();
+  startTool('select', true); syncCanvasSize(); zoomExtents();
 }
 function refreshDocUI() {
-  $('fileName').textContent = docTitle(activeDoc); $('welcome').style.display = 'none';
+  $('fileName').textContent = docTitle(activeDoc); setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs(); startTool('select', true); requestFull();
 }
 function switchDoc(d) { if (!d || d === activeDoc) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } stashActive(); restoreDoc(d); closeSheets(); refreshDocUI(); }
@@ -2047,9 +2053,9 @@ function sampleDrawing() {
 // ===================== UI wiring =====================
 $('btnOpen').addEventListener('click', () => { closeSheets(); if (canOpenAnother()) $('file').click(); }); $('btnOpen2').addEventListener('click', () => { if (canOpenAnother()) $('file').click(); });
 $('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const open = findOpenDoc(f.name); if (open) { switchDoc(open); toast('Already open · switched to its tab'); return; } if (!canOpenAnother()) return; const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
-$('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { switchDoc(open); $('welcome').style.display = 'none'; updateUndoBtns(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
+$('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { if (open !== activeDoc) switchDoc(open); else refreshDocUI(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
 $('btnFit').addEventListener('click', zoomExtents);
-$('btnSpace').addEventListener('click', () => { if (!state.drawing || $('welcome').style.display !== 'none') { $('file').click(); return; } renderSpaces(); openSheet('spacesPanel'); });
+$('btnSpace').addEventListener('click', () => { if (!state.drawing || atHome()) return; renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
 function setFull(on) { document.body.classList.toggle('fs', on); $('btnFull').innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg>'; $('btnFull').title = on ? 'Exit full screen' : 'Full screen'; }
 $('btnFull').addEventListener('click', () => { const on = !document.body.classList.contains('fs'); setFull(on); try { if (on && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } });
@@ -2085,10 +2091,48 @@ $('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.check
 $('selLayer').addEventListener('change', (ev) => { state.curLayer = ev.target.value; renderLayers(); toast('New objects go on ' + state.curLayer); });
 try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.canvasLight = true; stage.classList.add('light'); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === 'light' ? 'true' : 'false'); } const u = localStorage.getItem('tct-units'); if (u) { state.unitMode = u; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x.dataset.v === u ? 'true' : 'false'); } } catch (e) { }
 window.addEventListener('beforeunload', (ev) => { if (docs.some(docDirty)) { ev.preventDefault(); ev.returnValue = ''; } });
+// ----- Phone back button -----
+// While a drawing is on screen we keep one extra history entry (the "guard"). Back pops it, and we handle it here
+// instead of letting the app close: first close whatever is open on top (dialog, sheet, full screen, a tool),
+// then close the drawing (asking Save / Discard / Cancel if it has edits) and land on the previous tab or the home
+// screen. At home there is no guard, so back leaves the app as usual.
+// To stay in the drawing we step forward onto the guard again rather than pushing a new entry: Chrome skips history
+// entries that were added without a tap, which would make the next back close the app.
+let navPending = 0, navSeq = 0, guardAhead = false, backTimer = 0;
+const onGuard = () => !!(history.state && history.state.tct === 'guard');
+function navStep(fn) { const tok = navPending = ++navSeq; fn(); setTimeout(() => { if (navPending === tok) { navPending = 0; syncBack(); } }, 1200); }
+function syncBack() {
+  if (navPending) return;
+  const want = !atHome() && !!state.drawing;
+  if (want && !onGuard()) {
+    if (guardAhead) { guardAhead = false; navStep(() => history.forward()); }
+    else try { history.pushState({ tct: 'guard' }, ''); } catch (e) { }
+  } else if (!want && onGuard()) { guardAhead = true; navStep(() => history.back()); }
+}
+function queueBackSync() { clearTimeout(backTimer); backTimer = setTimeout(syncBack, 0); }
+function handleBack() {
+  if ($('saveDlg').classList.contains('on')) { $('saveCancel').click(); return; }
+  if ($('textDlg').classList.contains('on')) { $('txtCancel').click(); return; }
+  if (document.querySelector('.sheet.open') || $('groups').classList.contains('open')) { closeSheets(); return; }
+  if (document.body.classList.contains('fs')) { setFull(false); try { if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } return; }
+  if ($('loading').classList.contains('on')) return; // a file is opening
+  if (state.tool && state.tool.name !== 'select') { if (state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } state.lastPt = null; state.snapMark = null; setResult(null); startTool('select', true); return; }
+  returnTo = null; confirmUnsaved(closeDrawing);
+}
+window.addEventListener('popstate', () => {
+  if (navPending) { navPending = 0; syncBack(); return; } // our own step onto / off the guard finished
+  if (onGuard()) { guardAhead = false; syncBack(); return; } // stepped forward onto the guard
+  guardAhead = true; // the back button popped the guard
+  if (!atHome() && state.drawing) handleBack();
+  syncBack(); // still in a drawing (or asking to save): step back onto the guard
+});
+// The guard is (re)added on a tap, so Chrome counts it as user-made.
+document.addEventListener('pointerup', syncBack, true); document.addEventListener('keydown', syncBack, true);
+if (onGuard()) try { history.replaceState(null, ''); } catch (e) { } // reloaded while on the guard
 { let sk = null; try { sk = localStorage.getItem('tct-skin'); if (!sk && !localStorage.getItem('tct-skin-v1')) { localStorage.removeItem('tct-canvas'); localStorage.setItem('tct-skin-v1', '1'); } } catch (e) { } applySkin(sk || SKIN_DEFAULT, false); }
 setGroup('view'); renderRecent(); resizeCanvas();
 // First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); $('welcome').style.display = ''; showHomeTitle(); updateUndoBtns();
+loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); setHome(true); showHomeTitle();
 </script>
 <script>
 // GitHub Pages build only: install button, version line, service worker.
@@ -2100,7 +2144,7 @@ loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan'
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610070549' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610070621' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }

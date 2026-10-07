@@ -370,8 +370,13 @@ function closeDrawing() {
   activeDoc = null; const back = returnTo && docs.includes(returnTo) ? returnTo : null; returnTo = null;
   if (docs.length) { restoreDoc(back || docs[Math.max(0, i - 1)]); refreshDocUI(); return; }
   state.drawing = null; state.scenes = new Map(); blockCache = new Map(); state.undo = []; state.redo = []; state.dirty = false; state.selection = new Set(); state.fileName = ''; state.fileBytes = null;
-  showHomeTitle(); $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderTabs(); renderRecent(); requestFull();
+  showHomeTitle(); setHome(true); $('spaces').innerHTML = ''; setResult(null); renderTabs(); renderRecent(); requestFull();
 }
+// Home screen on/off. At home there is no drawing on screen, so the drawing-only controls are hidden (CSS on #app.home).
+const atHome = () => $('welcome').style.display !== 'none';
+function setHome(on) { $('welcome').style.display = on ? '' : 'none'; $('app').classList.toggle('home', on); syncCanvasSize(); updateUndoBtns(); queueBackSync(); }
+// the tool bar and tabs come and go with the home screen; size the canvas now so a zoom-to-fit right after is exact
+function syncCanvasSize() { const r = stage.getBoundingClientRect(); if (Math.abs(r.width - cssW) > 0.5 || Math.abs(r.height - cssH) > 0.5) resizeCanvas(); }
 
 // ===================== Loading =====================
 let worker = null, engineReady = false, currentLoad = null, useBlob = false;
@@ -454,12 +459,12 @@ function loadDrawing(D, name, meta) {
   state.hoverItem = null; state.snapMark = null; state.lastPt = null;
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
-  $('fileName').textContent = name; $('welcome').style.display = 'none';
+  $('fileName').textContent = name; setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs();
-  startTool('select', true); zoomExtents();
+  startTool('select', true); syncCanvasSize(); zoomExtents();
 }
 function refreshDocUI() {
-  $('fileName').textContent = docTitle(activeDoc); $('welcome').style.display = 'none';
+  $('fileName').textContent = docTitle(activeDoc); setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs(); startTool('select', true); requestFull();
 }
 function switchDoc(d) { if (!d || d === activeDoc) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } stashActive(); restoreDoc(d); closeSheets(); refreshDocUI(); }
@@ -531,9 +536,9 @@ function sampleDrawing() {
 // ===================== UI wiring =====================
 $('btnOpen').addEventListener('click', () => { closeSheets(); if (canOpenAnother()) $('file').click(); }); $('btnOpen2').addEventListener('click', () => { if (canOpenAnother()) $('file').click(); });
 $('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const open = findOpenDoc(f.name); if (open) { switchDoc(open); toast('Already open · switched to its tab'); return; } if (!canOpenAnother()) return; const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
-$('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { switchDoc(open); $('welcome').style.display = 'none'; updateUndoBtns(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
+$('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { if (open !== activeDoc) switchDoc(open); else refreshDocUI(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
 $('btnFit').addEventListener('click', zoomExtents);
-$('btnSpace').addEventListener('click', () => { if (!state.drawing || $('welcome').style.display !== 'none') { $('file').click(); return; } renderSpaces(); openSheet('spacesPanel'); });
+$('btnSpace').addEventListener('click', () => { if (!state.drawing || atHome()) return; renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
 function setFull(on) { document.body.classList.toggle('fs', on); $('btnFull').innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg>'; $('btnFull').title = on ? 'Exit full screen' : 'Full screen'; }
 $('btnFull').addEventListener('click', () => { const on = !document.body.classList.contains('fs'); setFull(on); try { if (on && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } });
@@ -569,7 +574,45 @@ $('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.check
 $('selLayer').addEventListener('change', (ev) => { state.curLayer = ev.target.value; renderLayers(); toast('New objects go on ' + state.curLayer); });
 try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.canvasLight = true; stage.classList.add('light'); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === 'light' ? 'true' : 'false'); } const u = localStorage.getItem('tct-units'); if (u) { state.unitMode = u; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x.dataset.v === u ? 'true' : 'false'); } } catch (e) { }
 window.addEventListener('beforeunload', (ev) => { if (docs.some(docDirty)) { ev.preventDefault(); ev.returnValue = ''; } });
+// ----- Phone back button -----
+// While a drawing is on screen we keep one extra history entry (the "guard"). Back pops it, and we handle it here
+// instead of letting the app close: first close whatever is open on top (dialog, sheet, full screen, a tool),
+// then close the drawing (asking Save / Discard / Cancel if it has edits) and land on the previous tab or the home
+// screen. At home there is no guard, so back leaves the app as usual.
+// To stay in the drawing we step forward onto the guard again rather than pushing a new entry: Chrome skips history
+// entries that were added without a tap, which would make the next back close the app.
+let navPending = 0, navSeq = 0, guardAhead = false, backTimer = 0;
+const onGuard = () => !!(history.state && history.state.tct === 'guard');
+function navStep(fn) { const tok = navPending = ++navSeq; fn(); setTimeout(() => { if (navPending === tok) { navPending = 0; syncBack(); } }, 1200); }
+function syncBack() {
+  if (navPending) return;
+  const want = !atHome() && !!state.drawing;
+  if (want && !onGuard()) {
+    if (guardAhead) { guardAhead = false; navStep(() => history.forward()); }
+    else try { history.pushState({ tct: 'guard' }, ''); } catch (e) { }
+  } else if (!want && onGuard()) { guardAhead = true; navStep(() => history.back()); }
+}
+function queueBackSync() { clearTimeout(backTimer); backTimer = setTimeout(syncBack, 0); }
+function handleBack() {
+  if ($('saveDlg').classList.contains('on')) { $('saveCancel').click(); return; }
+  if ($('textDlg').classList.contains('on')) { $('txtCancel').click(); return; }
+  if (document.querySelector('.sheet.open') || $('groups').classList.contains('open')) { closeSheets(); return; }
+  if (document.body.classList.contains('fs')) { setFull(false); try { if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } return; }
+  if ($('loading').classList.contains('on')) return; // a file is opening
+  if (state.tool && state.tool.name !== 'select') { if (state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } state.lastPt = null; state.snapMark = null; setResult(null); startTool('select', true); return; }
+  returnTo = null; confirmUnsaved(closeDrawing);
+}
+window.addEventListener('popstate', () => {
+  if (navPending) { navPending = 0; syncBack(); return; } // our own step onto / off the guard finished
+  if (onGuard()) { guardAhead = false; syncBack(); return; } // stepped forward onto the guard
+  guardAhead = true; // the back button popped the guard
+  if (!atHome() && state.drawing) handleBack();
+  syncBack(); // still in a drawing (or asking to save): step back onto the guard
+});
+// The guard is (re)added on a tap, so Chrome counts it as user-made.
+document.addEventListener('pointerup', syncBack, true); document.addEventListener('keydown', syncBack, true);
+if (onGuard()) try { history.replaceState(null, ''); } catch (e) { } // reloaded while on the guard
 { let sk = null; try { sk = localStorage.getItem('tct-skin'); if (!sk && !localStorage.getItem('tct-skin-v1')) { localStorage.removeItem('tct-canvas'); localStorage.setItem('tct-skin-v1', '1'); } } catch (e) { } applySkin(sk || SKIN_DEFAULT, false); }
 setGroup('view'); renderRecent(); resizeCanvas();
 // First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); $('welcome').style.display = ''; showHomeTitle(); updateUndoBtns();
+loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); setHome(true); showHomeTitle();
