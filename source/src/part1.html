@@ -31,6 +31,8 @@ input{font:inherit;color:inherit}
 .actions{display:flex;gap:2px;flex:0 0 auto}
 .ib{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--fg)}
 .ib:active{background:var(--chip)}
+.ib[hidden]{display:none}
+.ib:disabled{opacity:.3}
 .ib svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:8px;background:var(--chip);font-weight:500;font-size:13px;white-space:nowrap}
 .btn.primary{background:var(--accent);color:var(--accent-fg)}
@@ -95,6 +97,14 @@ input{font:inherit;color:inherit}
 #spaces button:active{background:var(--chip)}
 #spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 #spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
+/* save prompt */
+.dlg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:26;padding:16px}
+.dlg.on{display:flex}
+.dlg .box{background:var(--panel);color:var(--fg);border-radius:14px;padding:18px;width:min(100%,400px);display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow)}
+.dlg h3{margin:0;font-size:17px;font-weight:600}
+.dlg p{margin:0;color:var(--muted);font-size:13.5px}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.dlg .btn{padding:9px 14px;font-size:14px}
 /* properties sheet */
 #propsPanel{max-height:min(82%,640px)}
 .prop-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
@@ -168,6 +178,8 @@ body.fs #top, body.fs #tools{display:none}
     <div class="logo" aria-hidden="true">T</div>
     <button id="btnSpace" title="Switch between Model and layouts"><span id="fileName" class="file">No drawing open</span><span class="sp"><span id="spaceName">Tesseract CAD Tools</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>
     <div class="actions">
+      <button class="ib" id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="ib" id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
       <button class="ib" id="btnLayers" title="Layers" aria-label="Layers"><svg viewBox="0 0 24 24"><path d="M12 4 3 9l9 5 9-5zM3 14l9 5 9-5"/></svg></button>
       <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
     </div>
@@ -188,8 +200,6 @@ body.fs #top, body.fs #tools{display:none}
     </div>
     <div id="hud" hidden><div class="hud-chip" id="coordChip">X 0.00 · Y 0.00</div></div>
     <div id="vbtns">
-      <button id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h9a6 6 0 0 1 0 12h-3"/></svg></button>
-      <button id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9h-9a6 6 0 0 0 0 12h3"/></svg></button>
       <button id="btnFit" title="Zoom to the whole drawing" aria-label="Zoom extents"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <button id="btnFull" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg></button>
     </div>
@@ -217,6 +227,16 @@ body.fs #top, body.fs #tools{display:none}
       <div class="body" id="propsBody"></div>
       <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="propsApply">Apply</button></div>
     </section>
+    <section class="sheet" id="orderPanel" aria-label="Draw order">
+      <header><h2>Draw order</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <button class="menu-item" data-order="front"><span>Bring to front <small>draw the selection on top of everything</small></span><span>→</span></button>
+        <button class="menu-item" data-order="back"><span>Send to back <small>draw the selection behind everything</small></span><span>→</span></button>
+        <button class="menu-item" data-order="above"><span>Bring above an object <small>then tap the object</small></span><span>→</span></button>
+        <button class="menu-item" data-order="under"><span>Send under an object <small>then tap the object</small></span><span>→</span></button>
+        <button class="menu-item" data-order="hatchesBack"><span>All hatches to back <small>every hatch in this space, no selection needed</small></span><span>→</span></button>
+      </div>
+    </section>
     <section class="sheet" id="spacesPanel" aria-label="Model and layouts">
       <header><h2>Model and layouts</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body"><nav id="spaces" aria-label="Model and layouts"></nav></div>
@@ -243,6 +263,11 @@ body.fs #top, body.fs #tools{display:none}
       </div>
     </section>
     <div id="textDlg"><div class="box"><label for="txtVal">Text</label><input id="txtVal" placeholder="Type the text"><label for="txtH">Height (drawing units)</label><input id="txtH" inputmode="decimal"><div class="row"><button class="btn" id="txtCancel">Cancel</button><button class="btn primary" id="txtOk">Place</button></div></div></div>
+    <div id="saveDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="saveTitle"><div class="box">
+      <h3 id="saveTitle">Save changes?</h3>
+      <p id="saveMsg">You have edits that are not saved.</p>
+      <div class="row"><button class="btn quiet" id="saveCancel">Cancel</button><button class="btn danger" id="saveDiscard">Discard</button><button class="btn primary" id="saveOk">Save</button></div>
+    </div></div>
     <div id="toast" role="status"></div>
   </main>
   <footer id="tools">

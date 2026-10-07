@@ -157,7 +157,36 @@ function layerAlphas(lib, dwg) {
   return out;
 }
 
-function slim(db, name, layerAl) {
+// Draw order: AutoCAD keeps it in SORTENTSTABLE objects (per block/space): entity handle -> sort handle.
+// Objects are drawn in ascending sort handle (own handle when not listed). The converter drops these
+// tables, so read them from LibreDWG directly. Object refs: absolute handle at byte 32 (u64).
+function readDrawOrder(lib, dwg) {
+  const out = {};
+  try {
+    const W = lib.wasmInstance; const T = Dwg_Object_Type.DWG_TYPE_SORTENTSTABLE;
+    const refAbs = (rp) => rp ? (W.HEAPU32[(rp + 32) >>> 2] + W.HEAPU32[(rp + 36) >>> 2] * 4294967296) : 0;
+    const ptr = (v) => Number(v && v.data !== undefined ? v.data : v) || 0;
+    const n = lib.dwg_get_num_objects(dwg);
+    for (let i = 0; i < n; i++) {
+      const obj = lib.dwg_get_object(dwg, i); if (!obj || lib.dwg_object_get_fixedtype(obj) !== T) continue;
+      try {
+        const tio = lib.dwg_object_to_object_tio(obj); const ne = Number(lib.dwg_dynapi_entity_data(tio, 'num_ents')) || 0; if (!ne || ne > 5e6) continue;
+        const ep = ptr(lib.dwg_dynapi_entity_value(tio, 'ents')), sp = ptr(lib.dwg_dynapi_entity_value(tio, 'sort_ents')), op = ptr(lib.dwg_dynapi_entity_value(tio, 'block_owner'));
+        if (!ep || !sp || !op) continue;
+        const owner = refAbs(op).toString(16).toUpperCase(); const m = out[owner] || (out[owner] = {});
+        for (let k = 0; k < ne; k++) { const e = refAbs(W.HEAPU32[(ep >>> 2) + k]), so = refAbs(W.HEAPU32[(sp >>> 2) + k]); if (e && so) m[e.toString(16).toUpperCase()] = so; }
+      } catch (e) { /* skip this table */ }
+    }
+  } catch (e) { /* draw order is optional */ }
+  return out;
+}
+function applyDrawOrder(ents, table) {
+  if (!table) return ents;
+  const key = (e) => { const h = e.hd || ''; const s = table[h]; return s != null ? s : (parseInt(h, 16) || 0); };
+  return ents.map((e, i) => [key(e), i, e]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
+}
+
+function slim(db, name, layerAl, drawOrder) {
   const idc = { n: 1 };
   const layers = (db.tables?.LAYER?.entries || []).map(l => ({ name: l.name, aci: num(l.colorIndex, 7), off: !!l.off, frozen: !!l.frozen, locked: !!l.locked, lw: num(l.lineweight), lt: l.lineType || 'Continuous' }));
   if (layerAl) for (const l of layers) if (layerAl[l.name] != null) l.al = layerAl[l.name];
@@ -171,7 +200,8 @@ function slim(db, name, layerAl) {
   for (const b of records) {
     const ents = [];
     for (const e of b.entities || []) { if (!e || !e.type) continue; if (e.isVisible === false) { skipped.hidden = (skipped.hidden || 0) + 1; continue; } let c = null; try { c = convEntity(e, idc); } catch (err) { skipped[e.type + '!'] = (skipped[e.type + '!'] || 0) + 1; continue; } if (c) ents.push(c); else skipped[e.type] = (skipped[e.type] || 0) + 1; }
-    const rec = { name: b.name, base: P(b.basePoint), ents, handle: b.handle };
+    const order = drawOrder && b.handle ? drawOrder[String(b.handle).toUpperCase()] : null;
+    const rec = { name: b.name, base: P(b.basePoint), ents: order ? applyDrawOrder(ents, order) : ents, handle: b.handle };
     byHandle[b.handle] = rec;
     blocks[b.name] = rec;
   }
@@ -216,10 +246,10 @@ onmessage = async (ev) => {
       if (!dwg) throw new Error('LibreDWG could not read this file. Try saving it as AutoCAD 2018 or 2013 DWG and open again.');
       postMessage({ type: 'progress', stage: 'Converting entities', pct: 55 });
       const db = lib.convert(dwg);
-      const layerAl = layerAlphas(lib, dwg);
+      const layerAl = layerAlphas(lib, dwg); const drawOrder = readDrawOrder(lib, dwg);
       try { lib.dwg_free(dwg); } catch (e) { /* ignore */ }
       postMessage({ type: 'progress', stage: 'Building drawing', pct: 80 });
-      drawing = slim(db, name, layerAl);
+      drawing = slim(db, name, layerAl, drawOrder);
     }
     drawing.parseMs = Math.round(performance.now() - t0);
     postMessage({ type: 'done', drawing });

@@ -15,7 +15,9 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - In layouts, snapping works on the model seen through viewports, and measurements inside a viewport are in real (model) size
 - **Press and hold** on the drawing to get a 4× magnifier, drag to the exact point, and let go to place it
 - Edit: move, copy, rotate, mirror, scale, align, delete, undo and redo
-- Properties: select objects and tap ✎ to change layer, colour, linetype, linetype scale and transparency, plus rotation, scale and position (blocks), contents, height and rotation (text), and radius (circles, arcs)
+- Properties: select objects and tap ✎ to change layer, colour (for blocks, optionally the block's contents too), linetype, linetype scale and transparency, plus rotation, scale and position (blocks), contents, height and rotation (text), and radius (circles, arcs)
+- Draw order: follows the drawing's own order (AutoCAD SORTENTSTABLE); Edit → Order brings objects to front/back, above/under another object, or sends all hatches to back
+- Undo/redo in the top bar; closing or opening another drawing with unsaved edits asks Save / Discard / Cancel (Save keeps an edited copy on the phone under Recent)
 - Box select: tap two opposite corners (or drag). Left to right picks objects fully inside; right to left also picks objects crossing the box
 - Draw: line, polyline, rectangle, circle, arc, spline and text, with typed input (`1200`, `@1200,0`, `@1500<90`)
 - Export DXF and PNG; keep recent files on the device

@@ -46,6 +46,8 @@ input{font:inherit;color:inherit}
 .actions{display:flex;gap:2px;flex:0 0 auto}
 .ib{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--fg)}
 .ib:active{background:var(--chip)}
+.ib[hidden]{display:none}
+.ib:disabled{opacity:.3}
 .ib svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:8px;background:var(--chip);font-weight:500;font-size:13px;white-space:nowrap}
 .btn.primary{background:var(--accent);color:var(--accent-fg)}
@@ -110,6 +112,14 @@ input{font:inherit;color:inherit}
 #spaces button:active{background:var(--chip)}
 #spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 #spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
+/* save prompt */
+.dlg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:26;padding:16px}
+.dlg.on{display:flex}
+.dlg .box{background:var(--panel);color:var(--fg);border-radius:14px;padding:18px;width:min(100%,400px);display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow)}
+.dlg h3{margin:0;font-size:17px;font-weight:600}
+.dlg p{margin:0;color:var(--muted);font-size:13.5px}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.dlg .btn{padding:9px 14px;font-size:14px}
 /* properties sheet */
 #propsPanel{max-height:min(82%,640px)}
 .prop-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
@@ -183,6 +193,8 @@ body.fs #top, body.fs #tools{display:none}
     <div class="logo" aria-hidden="true">T</div>
     <button id="btnSpace" title="Switch between Model and layouts"><span id="fileName" class="file">No drawing open</span><span class="sp"><span id="spaceName">Tesseract CAD Tools</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>
     <div class="actions">
+      <button class="ib" id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="ib" id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
       <button class="ib" id="btnLayers" title="Layers" aria-label="Layers"><svg viewBox="0 0 24 24"><path d="M12 4 3 9l9 5 9-5zM3 14l9 5 9-5"/></svg></button>
       <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
     </div>
@@ -203,8 +215,6 @@ body.fs #top, body.fs #tools{display:none}
     </div>
     <div id="hud" hidden><div class="hud-chip" id="coordChip">X 0.00 · Y 0.00</div></div>
     <div id="vbtns">
-      <button id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h9a6 6 0 0 1 0 12h-3"/></svg></button>
-      <button id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9h-9a6 6 0 0 0 0 12h3"/></svg></button>
       <button id="btnFit" title="Zoom to the whole drawing" aria-label="Zoom extents"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <button id="btnFull" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg></button>
     </div>
@@ -232,6 +242,16 @@ body.fs #top, body.fs #tools{display:none}
       <div class="body" id="propsBody"></div>
       <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="propsApply">Apply</button></div>
     </section>
+    <section class="sheet" id="orderPanel" aria-label="Draw order">
+      <header><h2>Draw order</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <button class="menu-item" data-order="front"><span>Bring to front <small>draw the selection on top of everything</small></span><span>→</span></button>
+        <button class="menu-item" data-order="back"><span>Send to back <small>draw the selection behind everything</small></span><span>→</span></button>
+        <button class="menu-item" data-order="above"><span>Bring above an object <small>then tap the object</small></span><span>→</span></button>
+        <button class="menu-item" data-order="under"><span>Send under an object <small>then tap the object</small></span><span>→</span></button>
+        <button class="menu-item" data-order="hatchesBack"><span>All hatches to back <small>every hatch in this space, no selection needed</small></span><span>→</span></button>
+      </div>
+    </section>
     <section class="sheet" id="spacesPanel" aria-label="Model and layouts">
       <header><h2>Model and layouts</h2><button class="btn quiet" data-close>Close</button></header>
       <div class="body"><nav id="spaces" aria-label="Model and layouts"></nav></div>
@@ -258,6 +278,11 @@ body.fs #top, body.fs #tools{display:none}
       </div>
     </section>
     <div id="textDlg"><div class="box"><label for="txtVal">Text</label><input id="txtVal" placeholder="Type the text"><label for="txtH">Height (drawing units)</label><input id="txtH" inputmode="decimal"><div class="row"><button class="btn" id="txtCancel">Cancel</button><button class="btn primary" id="txtOk">Place</button></div></div></div>
+    <div id="saveDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="saveTitle"><div class="box">
+      <h3 id="saveTitle">Save changes?</h3>
+      <p id="saveMsg">You have edits that are not saved.</p>
+      <div class="row"><button class="btn quiet" id="saveCancel">Cancel</button><button class="btn danger" id="saveDiscard">Discard</button><button class="btn primary" id="saveOk">Save</button></div>
+    </div></div>
     <div id="toast" role="status"></div>
   </main>
   <footer id="tools">
@@ -836,32 +861,25 @@ function drawScene(S, V, onLight, clipWorld) {
   const vis = [];
   for (const it of S.items) { const bb = it.bbox; if (bb[2] < wr[0] || bb[0] > wr[2] || bb[3] < wr[1] || bb[1] > wr[3]) continue; if (it.diag < minDiag && !state.selection.has(it.ent.id)) continue; vis.push(it); }
   const _t0 = performance.now(); T();
-  // pass 1: fills (hatches, solids) and wipeouts in drawing order
+  // Objects are drawn one after another in draw order (fills, then lines, per object), so a hatch or
+  // wipeout brought to the front covers what is behind it, as in AutoCAD. Text is drawn last.
   let budget = 60000; const wipeCol = (curSpace() && curSpace().paper) ? '#ffffff' : bgColor();
-  for (const it of vis) {
-    if (it.fills.length) for (const f of it.fills) {
-      if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
-      if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; continue; }
-      if (state.patOn && f.pat.minSp * V.s >= 2.6 && budget > 0) budget -= drawPattern(f, V, col, wr);
-      else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; }
-    }
-    if (it.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of it.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
-    if (it.inst) for (const ins of it.inst) {
-      const g = ins.g; if (!g.fills.length && !g.wipes.length) continue;
-      ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f);
-      const wrL = localRect(wr, ins.Minv);
-      for (const f of g.fills) { if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al; if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; continue; } if (state.patOn && f.pat.minSp * V.s * ins.scale >= 2.6 && budget > 0) budget -= drawPattern(f, { s: V.s * ins.scale }, col, wrL); else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; } }
-      if (g.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of g.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
-      ctx.restore();
-    }
-  }
-  ctx.globalAlpha = 1; const _t1 = performance.now();
-  // pass 2: strokes
   ctx.lineWidth = 1 / V.s; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
   const lts = state.drawing ? state.drawing.ltypes : {}; const ltscale = state.drawing ? state.drawing.header.ltscale : 1;
   let lastCol = null, dashed = false, lastAl = 1; ctx.globalAlpha = 1;
   const setAl = (a) => { a = a == null ? 1 : a; if (a !== lastAl) { ctx.globalAlpha = a; lastAl = a; } };
+  const fillOne = (f, Vs, wrL) => {
+    if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
+    if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
+    else if (state.patOn && f.pat.minSp * Vs >= 2.6 && budget > 0) budget -= drawPattern(f, { s: Vs }, col, wrL);
+    else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
+    ctx.globalAlpha = 1; lastAl = 1;
+  };
   for (const it of vis) {
+    // fills and wipeouts of this object
+    if (it.fills.length) { if (dashed) { ctx.setLineDash([]); dashed = false; } for (const f of it.fills) fillOne(f, V.s, wr); }
+    if (it.wipes.length) { ctx.globalAlpha = 1; lastAl = 1; ctx.fillStyle = wipeCol; for (const w of it.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
+    // its own lines
     for (const k of it.paths) {
       if (!k.n || !layerOn(k.layer)) continue;
       const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } setAl(k.al);
@@ -870,16 +888,23 @@ function drawScene(S, V, onLight, clipWorld) {
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
       ctx.stroke(k.path);
     }
+    // block instances: the block's fills, wipeouts, then its lines
     if (it.inst) for (const ins of it.inst) {
-      const g = ins.g; if (!g.paths.length) continue;
-      const dpx = g.diag * ins.scale * V.s;
-      ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f); ctx.lineWidth = 1 / (V.s * ins.scale); if (dashed) { ctx.setLineDash([]); dashed = false; }
-      if (g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
-        const k0 = g.paths[0]; const col = aciCss(k0.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
-      } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = k.al == null ? 1 : k.al; ctx.stroke(k.path); }
-      ctx.restore(); lastCol = null; lastAl = -1; ctx.globalAlpha = 1;
+      const g = ins.g; if (!g.paths.length && !g.fills.length && !g.wipes.length) continue;
+      if (dashed) { ctx.setLineDash([]); dashed = false; }
+      ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f); ctx.lineWidth = 1 / (V.s * ins.scale);
+      if (g.fills.length) { const wrL = localRect(wr, ins.Minv); for (const f of g.fills) fillOne(f, V.s * ins.scale, wrL); }
+      if (g.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of g.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
+      if (g.paths.length) {
+        const dpx = g.diag * ins.scale * V.s;
+        if (g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
+          const k0 = g.paths[0]; ctx.strokeStyle = aciCss(k0.aci, onLight); ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
+        } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; ctx.strokeStyle = aciCss(k.aci, onLight); ctx.globalAlpha = k.al == null ? 1 : k.al; ctx.stroke(k.path); }
+      }
+      ctx.restore(); lastCol = null; lastAl = 1; ctx.globalAlpha = 1;
     }
   }
+  const _t1 = performance.now();
   if (dashed) ctx.setLineDash([]); ctx.globalAlpha = 1; const _t2 = performance.now();
   // pass 3: texts
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1193,16 +1218,16 @@ function submitTyped() { const v = parseTyped(typed.value); if (!v) { toast('Use
 const TOOL_GROUPS = {
   view: ['select', 'box', 'info', 'fit'],
   measure: ['dist', 'area', 'angle', 'coord', 'info'],
-  edit: ['select', 'box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'delete'],
+  edit: ['select', 'box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
   draw: ['line', 'pline', 'rect', 'circle', 'arc', 'spline', 'text']
 };
 const ICON = {
   select: '<path d="M5 3l14 9-7 1-3 7z"/>', box: '<path d="M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2M4 10v4M20 10v4M10 4h4M10 20h4"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   dist: '<path d="M3 17 17 3M3 17v-4M3 17h4M17 3h-4M17 3v4"/>', area: '<path d="M4 6l6-2 10 4-3 12-13-3z"/>', angle: '<path d="M4 20 20 6M4 20h16M11 20a8 8 0 0 0-1.5-5"/>', coord: '<path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/>',
-  move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+  move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', order: '<rect x="3" y="3" width="11" height="11" rx="1"/><path d="M10 10h11v11H10z" fill="currentColor" fill-opacity=".25"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
   line: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>', pline: '<path d="M3 19l5-11 5 7 4-9 4 4"/>', rect: '<rect x="4" y="6" width="16" height="12"/>', circle: '<circle cx="12" cy="12" r="8"/>', arc: '<path d="M4 18a10 10 0 0 1 16 0"/>', spline: '<path d="M3 17c4-12 6 12 10 0s4-6 8-2"/>', text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>'
 };
-const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text' };
+const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text' };
 function renderToolRow() {
   const row = $('toolRow'); row.innerHTML = '';
   for (const t of TOOL_GROUPS[state.group]) { const b = document.createElement('button'); b.className = 'tool' + (t === 'delete' ? ' danger' : ''); b.dataset.tool = t; b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[t] + '</svg><span>' + LABEL[t] + '</span>'; b.setAttribute('aria-pressed', state.tool && state.tool.name === t ? 'true' : 'false'); b.addEventListener('click', () => { if (t === 'fit') { zoomExtents(); return; } startTool(t); }); row.appendChild(b); }
@@ -1231,6 +1256,7 @@ function updateChrome() {
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
 function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
 
+for (const b of document.querySelectorAll('#orderPanel [data-order]')) b.addEventListener('click', () => { const mode = b.dataset.order; if (state.tool && state.tool.name === 'order') state.tool.choose(mode); else { closeSheets(); reorderSelection(mode); } });
 function needSelection(tool, next) { // returns true if selection exists, otherwise prompts to select
   if (state.selection.size) return true;
   tool.phase = 'select'; setPrompt('Tap objects to ' + tool.verb + ' (drag for a box), then Done.'); return false;
@@ -1315,6 +1341,17 @@ function makeTool(name) {
       T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = measureSpace(T.pts.slice(0, 3)).pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
       T.onTap = (sn) => { if (T.pts.length >= 3) { T.pts = []; setResult(null); } addPt(sn); T.update(); };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 2) { drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false); } if (T.pts.length >= 3) { drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); const v = toScreen(T.pts[0][0], T.pts[0][1], V); const a1 = -Math.atan2(T.pts[1][1] - T.pts[0][1], T.pts[1][0] - T.pts[0][0]), a2 = -Math.atan2(T.pts[2][1] - T.pts[0][1], T.pts[2][0] - T.pts[0][0]); let d = a2 - a1; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; c.beginPath(); c.arc(v[0], v[1], 28, a1, a1 + d, d < 0); c.stroke(); } drawDots(c, T.pts, V, acc); };
+      break;
+    case 'order': // draw order: front / back / above or under another object
+      T.verb = 'reorder'; T.boxSelect = true;
+      T.start = () => { T.phase = 'menu'; setPrompt(state.selection.size ? 'Choose how to reorder the ' + state.selection.size + ' selected object' + (state.selection.size === 1 ? '' : 's') + '.' : 'Choose an option. Front, back, above and under work on objects you select.'); openSheet('orderPanel'); };
+      T.onTap = (sn, hit) => {
+        if (T.phase === 'select') { if (hit && !hit.model) { const id = hit.item.ent.id; state.selection.has(id) ? state.selection.delete(id) : state.selection.add(id); setResult([['Selected', state.selection.size + '']]); } return; }
+        if (T.phase === 'ref') { if (!hit || hit.model) { toast('Tap an object'); return; } reorderSelection(T.mode, hit.item.ent.id); startTool('select', true); }
+      };
+      T.choose = (mode) => { closeSheets(); if (mode !== 'hatchesBack' && !state.selection.size) { T.pending = mode; T.phase = 'select'; setPrompt('Tap the objects to reorder (drag for a box), then Done.'); return; } if (mode === 'hatchesBack') { reorderSelection(mode); startTool('select', true); return; } if (mode === 'front' || mode === 'back') { reorderSelection(mode); startTool('select', true); return; } T.mode = mode; T.phase = 'ref'; setPrompt('Tap the object to place the selection ' + (mode === 'above' ? 'above' : 'under') + '.'); };
+      T.onDone = () => { if (T.phase === 'select') { if (!state.selection.size) { toast('Select objects first'); return; } if (T.pending) { const m = T.pending; T.pending = null; T.choose(m); } else { T.phase = 'menu'; openSheet('orderPanel'); } } else startTool('select', true); };
+      T.draw = (c) => { if (state.boxSel) drawBoxSel(c); };
       break;
     case 'delete':
       T.verb = 'delete';
@@ -1459,12 +1496,15 @@ function transformEntity(e, M) {
 }
 function cloneEnt(e) { return structuredClone(e); }
 function pushUndo(action) { state.undo.push(action); if (state.undo.length > 100) state.undo.shift(); state.redo.length = 0; state.dirty = true; updateUndoBtns(); }
-function updateUndoBtns() { const show = !!(state.undo.length || state.redo.length || state.group === 'edit' || state.group === 'draw'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; }
+function updateUndoBtns() { const show = !!(state.drawing && $('welcome').style.display === 'none'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; $('btnUndo').title = state.undo.length ? 'Undo (' + state.undo.length + ')' : 'Nothing to undo'; }
 function applyAction(a, reverse) {
   const sp = state.drawing.spaces[a.space]; const ents = sp.ents;
   if (a.type === 'add') { if (reverse) { const ids = new Set(a.ents.map(e => e.id)); sp.ents = ents.filter(e => !ids.has(e.id)); } else { for (const e of a.ents) ents.push(e); } }
   else if (a.type === 'remove') { if (reverse) { const list = a.items.slice().sort((x, y) => x.index - y.index); for (const it of list) ents.splice(Math.min(it.index, ents.length), 0, it.ent); } else { const ids = new Set(a.items.map(i => i.ent.id)); sp.ents = ents.filter(e => !ids.has(e.id)); } }
   else if (a.type === 'modify') { const map = new Map(a.items.map(i => [i.id, reverse ? i.prev : i.next])); for (let i = 0; i < ents.length; i++) { const n = map.get(ents[i].id); if (n) ents[i] = cloneEnt(n); } }
+  else if (a.type === 'order') { const ids = reverse ? a.prev : a.next; const byId = new Map(ents.map(e => [e.id, e])); const out = []; for (const id of ids) { const e = byId.get(id); if (e) { out.push(e); byId.delete(id); } } for (const e of byId.values()) out.push(e); sp.ents = out; }
+  else if (a.type === 'blockdefs') { for (const d of a.defs) { const b = state.drawing.blocks[d.name]; if (b) b.ents = (reverse ? d.prev : d.next).map(cloneEnt); } blockCache.clear(); state.scenes.clear(); lastFull = null; }
+  else if (a.type === 'multi') { const list = reverse ? a.steps.slice().reverse() : a.steps; for (const st of list) applyAction(st, reverse); return; }
   invalidateScene(a.space); requestFull();
 }
 function undo() { const a = state.undo.pop(); if (!a) return; applyAction(a, true); state.redo.push(a); updateUndoBtns(); toast('Undo'); }
@@ -1521,6 +1561,17 @@ function openProps() {
   aciIn.addEventListener('input', () => { const v = parseInt(aciIn.value, 10); if (v >= 1 && v <= 255) pick(v); }); sw.append(aciIn);
   const cSub = curC === undefined ? 'varies' : curC.startsWith('rgb:') ? 'now true colour ' + curC.slice(4) : curC === '256' ? 'now ByLayer' : curC === '0' ? 'now ByBlock' : 'now colour ' + curC;
   row('Colour', sw, cSub);
+  const blockSel = sel.filter(e => e.t === 'INSERT' && !e.dim);
+  if (blockSel.length) {
+    const names = blockNamesDeep(blockSel.map(e => e.n)); let notBB = 0; for (const n of names) for (const c of (D.blocks[n] ? D.blocks[n].ents : [])) if (c.c !== 0 || c.rgb) notBB++;
+    if (notBB) {
+      const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--fg)';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'width:18px;height:18px;flex:0 0 auto;margin-top:1px;accent-color:var(--accent)';
+      cb.addEventListener('change', () => { ch.blockContents = cb.checked; }); ch.blockContents = true;
+      const txt = document.createElement('span'); txt.textContent = 'Make everything inside follow this colour. Objects inside this block have their own colour, so without this the block colour does not show. Sets the contents to ByBlock in the block definition (' + names.length + ' block' + (names.length === 1 ? '' : 's') + '); other copies then show their own block colour.';
+      lab.append(cb, txt); row('', lab);
+    }
+  }
   // Linetype
   const selT = document.createElement('select'); const curT = same(e => ltName(e.lt)); if (curT === undefined) selT.append(new Option('(varies)', '', true, true));
   const ltNames = ['ByLayer', 'ByBlock', 'Continuous'].concat(Object.keys(D.ltypes || {}).filter(n => !/^(bylayer|byblock|continuous)$/i.test(n)).sort());
@@ -1547,8 +1598,29 @@ function openProps() {
   } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
     head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
   }
-  $('propsApply').onclick = () => { for (const k of Object.keys(ch)) if (ch[k] === undefined) delete ch[k]; if (!Object.keys(ch).length) { closeSheets(); return; } applyProps(sel.map(e => e.id), ch); closeSheets(); };
+  head('Draw order');
+  const ord = document.createElement('div'); ord.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+  for (const [lbl, fn] of [['Bring to front', () => reorderSelection('front')], ['Send to back', () => reorderSelection('back')]]) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = lbl; b.addEventListener('click', () => { closeSheets(); fn(); }); ord.append(b); }
+  row('Order', ord, 'Applies right away. More options: Edit → Order');
+  $('propsApply').onclick = () => { for (const k of Object.keys(ch)) if (ch[k] === undefined) delete ch[k]; if (!Object.keys(ch).filter(k => k !== 'blockContents').length) { closeSheets(); return; } applyProps(sel.map(e => e.id), ch); closeSheets(); };
   openSheet('propsPanel');
+}
+// All block definitions reachable from these block names (nested blocks included)
+function blockNamesDeep(names) { const D = state.drawing; const seen = new Set(); const stack = names.slice(); while (stack.length) { const n = stack.pop(); if (seen.has(n) || !D.blocks[n]) continue; seen.add(n); for (const c of D.blocks[n].ents) if (c.t === 'INSERT' && !c.dim && c.n) stack.push(c.n); } return [...seen]; }
+// ----- Draw order -----
+function reorderSelection(mode, refId) {
+  const sp = curSpace(); if (!sp) return; const sel = state.selection; if (!sel.size && mode !== 'hatchesBack') { toast('Select objects first'); return; }
+  const prev = sp.ents.map(e => e.id); let moved = [], rest = [];
+  if (mode === 'hatchesBack') { for (const e of sp.ents) ((e.t === 'HATCH' || e.t === 'SOLID') ? moved : rest).push(e); }
+  else for (const e of sp.ents) (sel.has(e.id) && e.id !== refId ? moved : rest).push(e);
+  if (!moved.length) { toast(mode === 'hatchesBack' ? 'No hatches here' : 'Nothing to move'); return; }
+  let out;
+  if (mode === 'front') out = rest.concat(moved);
+  else if (mode === 'back' || mode === 'hatchesBack') out = moved.concat(rest);
+  else { const i = rest.findIndex(e => e.id === refId); if (i < 0) { toast('Pick an object that is not selected'); return; } out = mode === 'above' ? rest.slice(0, i + 1).concat(moved, rest.slice(i + 1)) : rest.slice(0, i).concat(moved, rest.slice(i)); }
+  const next = out.map(e => e.id); if (next.every((id, i) => id === prev[i])) { toast('Already in that order'); return; }
+  pushUndo({ type: 'order', space: state.spaceIdx, prev, next }); applyAction(state.undo[state.undo.length - 1], false);
+  toast({ front: 'Brought to front', back: 'Sent to back', above: 'Placed above', under: 'Placed under', hatchesBack: moved.length + ' hatches sent to back' }[mode]);
 }
 function fmtFixed(v, d) { return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
 function applyProps(ids, ch) {
@@ -1575,7 +1647,13 @@ function applyProps(ids, ch) {
     items.push({ id: e.id, prev: cloneEnt(e), next: n });
   }
   if (!items.length) return;
-  pushUndo({ type: 'modify', space: state.spaceIdx, items }); applyAction(state.undo[state.undo.length - 1], false);
+  const steps = [{ type: 'modify', space: state.spaceIdx, items }];
+  if ('c' in ch && ch.blockContents) { // block contents follow the block's colour: set them to ByBlock (definitions)
+    const names = blockNamesDeep(items.filter(i => i.next.t === 'INSERT' && !i.next.dim).map(i => i.next.n)); const defs = [];
+    for (const nm of names) { const b = state.drawing.blocks[nm]; if (!b) continue; const prev = b.ents.map(cloneEnt); const next = b.ents.map(x => { const y = cloneEnt(x); y.c = 0; delete y.rgb; if (y.att) for (const a of y.att) { a.c = 0; delete a.rgb; } return y; }); defs.push({ name: nm, prev, next }); }
+    if (defs.length) steps.push({ type: 'blockdefs', space: state.spaceIdx, defs });
+  }
+  pushUndo(steps.length === 1 ? steps[0] : { type: 'multi', space: state.spaceIdx, steps }); applyAction(state.undo[state.undo.length - 1], false);
   toast(items.length === 1 ? 'Properties updated' : items.length + ' objects updated'); showSelection(); requestFull();
 }
 $('btnProps').addEventListener('click', openProps);
@@ -1702,9 +1780,14 @@ function idb() { return new Promise((res, rej) => { try { const r = indexedDB.op
 async function idbPut(rec) { try { const db = await idb(); await new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put(rec); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); } catch (e) { console.warn('idb', e); } }
 async function idbAll() { try { const db = await idb(); return await new Promise((res, rej) => { const tx = db.transaction('files', 'readonly'); const r = tx.objectStore('files').getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); }); } catch (e) { return []; } }
 async function idbDel(name) { try { const db = await idb(); await new Promise((res) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete(name); tx.oncomplete = res; tx.onerror = res; }); } catch (e) { } }
+// Recent files: the original file is kept under its own name; edited copies are separate entries
+// ("name (edited)") so reopening the original never overwrites saved edits.
+const EDIT_SUFFIX = ' (edited)';
+const baseName = (n) => String(n || '').endsWith(EDIT_SUFFIX) ? String(n).slice(0, -EDIT_SUFFIX.length) : String(n || '');
 async function saveRecent(withEdits) {
   if (!state.drawing || state.drawing.sample) return;
-  const rec = { name: state.fileName, when: Date.now(), bytes: state.fileBytes, kind: state.kind };
+  const orig = baseName(state.fileName);
+  const rec = { name: withEdits ? orig + EDIT_SUFFIX : orig, orig, when: Date.now(), bytes: state.fileBytes, kind: state.kind };
   if (withEdits) { rec.drawing = state.drawing; rec.edited = true; }
   await idbPut(rec);
   const all = await idbAll(); all.sort((a, b) => b.when - a.when); for (const r of all.slice(6)) idbDel(r.name);
@@ -1717,14 +1800,34 @@ async function renderRecent() {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 async function openRecent(r) {
-  if (r.drawing) { state.fileBytes = r.bytes; state.fileName = r.name; state.kind = r.kind; loadDrawing(r.drawing, r.name); toast('Opened saved copy with edits'); }
-  else if (r.bytes) parseFile(r.bytes, r.name);
+  confirmUnsaved(() => {
+    if (r.drawing) { state.fileBytes = r.bytes; state.fileName = r.name; state.kind = r.kind; loadDrawing(r.drawing, r.name); toast('Opened your saved copy with edits'); }
+    else if (r.bytes) parseFile(r.bytes, r.name);
+  });
 }
+// Ask before throwing away edits: Save (keeps an edited copy on this phone), Discard, or Cancel.
+function confirmUnsaved(then) {
+  if (!state.drawing || !state.dirty || state.drawing.sample) { then(); return; }
+  const dlg = $('saveDlg'); const name = baseName(state.fileName);
+  $('saveTitle').textContent = 'Save changes to ' + name + '?';
+  $('saveMsg').textContent = 'Save keeps the edited drawing on this phone under Recent as “' + name + EDIT_SUFFIX + '”. The original file is not changed. To use the edits in AutoCAD, export a DXF from the menu.';
+  dlg.classList.add('on');
+  const done = () => { dlg.classList.remove('on'); $('saveOk').onclick = $('saveDiscard').onclick = $('saveCancel').onclick = null; };
+  $('saveOk').onclick = async () => { done(); await saveRecent(true); state.dirty = false; toast('Saved on this phone · see Recent: ' + name + EDIT_SUFFIX, 3500); then(); };
+  $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
+  $('saveCancel').onclick = () => { done(); };
+}
+function closeDrawing() { state.drawing = null; state.scenes.clear(); state.undo.length = 0; state.redo.length = 0; state.dirty = false; state.selection.clear(); $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderRecent(); requestFull(); }
 
 // ===================== Loading =====================
-let worker = null, engineReady = false, currentLoad = null;
+let worker = null, engineReady = false, currentLoad = null, useBlob = false;
+// LibreDWG can read only one drawing per engine instance (a second read fails with "null function" /
+// "Aborted()"), so every file gets a fresh engine: after each load the old one is shut down and a new
+// one warms up in the background, ready for the next file.
+function recycleWorker() { const w = worker; worker = null; engineReady = false; try { if (w) w.terminate(); } catch (e) { } setTimeout(warmUpEngine, 60); }
 function getWorker() {
   if (!worker) {
+    if (useBlob) { startBlobWorker(); return worker; }
     try { worker = new Worker('cad-worker.js', { type: 'module' }); }
     catch (e1) { worker = null; }
     if (!worker) { startBlobWorker(); return worker; }
@@ -1739,10 +1842,10 @@ function wireWorker() {
       if (m.type === 'ready') { engineReady = true; $('engineStatus').textContent = 'DWG engine ready on this device.'; return; }
       if (!currentLoad) { if (m.type === 'error') { $('engineStatus').textContent = m.message; console.warn(m.message); } return; }
       if (m.type === 'progress') showLoading(true, m.stage, m.pct);
-      else if (m.type === 'error') { showLoading(false); toast('Could not open ' + currentLoad.name + ': ' + m.message, 7000); currentLoad = null; }
-      else if (m.type === 'done') { const L = currentLoad; currentLoad = null; showLoading(true, 'Preparing view', 95); setTimeout(() => { loadDrawing(m.drawing, L.name); showLoading(false); const ms = Math.round(performance.now() - L.t0); const n = m.drawing.spaces[0].ents.length; toast('Opened in ' + (ms / 1000).toFixed(1) + ' s · ' + n.toLocaleString() + ' objects in model'); saveRecent(false); }, 20); }
+      else if (m.type === 'error') { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && state.fileBytes) { parseFile(state.fileBytes, L.name, true); return; } showLoading(false); toast('Could not open ' + L.name + ': ' + m.message, 7000); }
+      else if (m.type === 'done') { const L = currentLoad; currentLoad = null; recycleWorker(); showLoading(true, 'Preparing view', 95); setTimeout(() => { loadDrawing(m.drawing, L.name); showLoading(false); const ms = Math.round(performance.now() - L.t0); const n = m.drawing.spaces[0].ents.length; toast('Opened in ' + (ms / 1000).toFixed(1) + ' s · ' + n.toLocaleString() + ' objects in model'); saveRecent(false); }, 20); }
     };
-    worker.onerror = (e) => { const msg = (e && e.message) || 'unknown error'; console.warn('worker error', msg, e && e.filename, e && e.lineno); if (currentLoad) { showLoading(false); toast('File reader failed: ' + msg, 7000); currentLoad = null; } $('engineStatus').textContent = 'DWG engine could not start here (' + msg + '). DXF files still open.'; worker = null; tryBlobFallback(); };
+    worker.onerror = (e) => { const msg = (e && e.message) || 'unknown error'; console.warn('worker error', msg, e && e.filename, e && e.lineno); if (currentLoad && engineReady) { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && state.fileBytes) { parseFile(state.fileBytes, L.name, true); return; } } if (currentLoad) { showLoading(false); toast('File reader failed: ' + msg, 7000); currentLoad = null; } $('engineStatus').textContent = 'DWG engine could not start here (' + msg + '). DXF files still open.'; worker = null; tryBlobFallback(); };
   }
 }
 let blobTried = false;
@@ -1752,17 +1855,17 @@ async function startBlobWorker() {
     const txt = await (await fetch(base)).text();
     const src = txt.split('import.meta.url').join(JSON.stringify(base));
     worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
-    wireWorker(); worker.postMessage({ kind: 'init' });
+    useBlob = true; wireWorker(); worker.postMessage({ kind: 'init' });
   } catch (e) { worker = null; $('engineStatus').textContent = 'DWG engine could not start here (' + (e && e.message || e) + ').'; }
 }
 function tryBlobFallback() { if (blobTried) return; blobTried = true; $('engineStatus').textContent = 'Retrying DWG engine another way…'; startBlobWorker(); }
 function warmUpEngine() { try { const w = getWorker(); if (w) w.postMessage({ kind: 'init' }); } catch (e) { $('engineStatus').textContent = 'DWG engine could not start: ' + e.message; } }
 setTimeout(warmUpEngine, 600);
 function showLoading(on, stage, pct) { $('loading').classList.toggle('on', !!on); if (stage) $('loadStage').textContent = stage; if (pct != null) $('loadBar').style.width = pct + '%'; }
-function parseFile(buf, name) {
+function parseFile(buf, name, retried) {
   state.fileBytes = buf; state.fileName = name; state.kind = /\.dxf$/i.test(name) ? 'dxf' : 'dwg';
   showLoading(true, state.kind === 'dxf' ? 'Reading DXF…' : (engineReady ? 'Reading DWG…' : 'Starting DWG engine…'), 3);
-  currentLoad = { name, t0: performance.now() };
+  currentLoad = { name, t0: performance.now(), retried: !!retried };
   let tries = 0;
   const send = () => {
     let w; try { w = getWorker(); } catch (e) { showLoading(false); currentLoad = null; toast('Could not start the file reader: ' + e.message, 6000); return; }
@@ -1831,8 +1934,8 @@ function sampleDrawing() {
 
 // ===================== UI wiring =====================
 $('btnOpen').addEventListener('click', () => { closeSheets(); $('file').click(); }); $('btnOpen2').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
-$('btnSample').addEventListener('click', () => { state.fileBytes = null; state.fileName = 'Sample plan'; loadDrawing(sampleDrawing(), 'Sample plan (built in)'); });
+$('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const buf = await f.arrayBuffer(); confirmUnsaved(() => parseFile(buf, f.name)); });
+$('btnSample').addEventListener('click', () => confirmUnsaved(() => { state.fileBytes = null; state.fileName = 'Sample plan'; loadDrawing(sampleDrawing(), 'Sample plan (built in)'); }));
 $('btnFit').addEventListener('click', zoomExtents);
 $('btnSpace').addEventListener('click', () => { if (!state.drawing || $('welcome').style.display !== 'none') { $('file').click(); return; } renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
@@ -1849,8 +1952,8 @@ $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
 $('miExport').addEventListener('click', () => { closeSheets(); exportDxf(); }); $('miPng').addEventListener('click', () => { closeSheets(); exportPng(); });
-$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); closeSheets(); toast('Saved on this device'); });
-$('miClose').addEventListener('click', () => { closeSheets(); state.drawing = null; state.scenes.clear(); $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); renderRecent(); requestFull(); });
+$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = baseName(state.fileName) + EDIT_SUFFIX; $('fileName').textContent = state.fileName; closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
+$('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); });
 $('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.checked; }); $('chkPat').addEventListener('change', (ev) => { state.patOn = ev.target.checked; requestFull(); });
@@ -1859,7 +1962,7 @@ try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.c
 window.addEventListener('beforeunload', (ev) => { if (state.dirty) { ev.preventDefault(); ev.returnValue = ''; } });
 setGroup('view'); renderRecent(); resizeCanvas();
 // First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)';
+loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)'; updateUndoBtns();
 </script>
 <script>
 // GitHub Pages build only: install button, version line, service worker.
@@ -1871,7 +1974,7 @@ loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.displ
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610070300' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610070339' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }

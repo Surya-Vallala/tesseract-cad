@@ -75,32 +75,25 @@ function drawScene(S, V, onLight, clipWorld) {
   const vis = [];
   for (const it of S.items) { const bb = it.bbox; if (bb[2] < wr[0] || bb[0] > wr[2] || bb[3] < wr[1] || bb[1] > wr[3]) continue; if (it.diag < minDiag && !state.selection.has(it.ent.id)) continue; vis.push(it); }
   const _t0 = performance.now(); T();
-  // pass 1: fills (hatches, solids) and wipeouts in drawing order
+  // Objects are drawn one after another in draw order (fills, then lines, per object), so a hatch or
+  // wipeout brought to the front covers what is behind it, as in AutoCAD. Text is drawn last.
   let budget = 60000; const wipeCol = (curSpace() && curSpace().paper) ? '#ffffff' : bgColor();
-  for (const it of vis) {
-    if (it.fills.length) for (const f of it.fills) {
-      if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
-      if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; continue; }
-      if (state.patOn && f.pat.minSp * V.s >= 2.6 && budget > 0) budget -= drawPattern(f, V, col, wr);
-      else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; }
-    }
-    if (it.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of it.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
-    if (it.inst) for (const ins of it.inst) {
-      const g = ins.g; if (!g.fills.length && !g.wipes.length) continue;
-      ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f);
-      const wrL = localRect(wr, ins.Minv);
-      for (const f of g.fills) { if (!layerOn(f.layer)) continue; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al; if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; continue; } if (state.patOn && f.pat.minSp * V.s * ins.scale >= 2.6 && budget > 0) budget -= drawPattern(f, { s: V.s * ins.scale }, col, wrL); else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); ctx.globalAlpha = 1; } }
-      if (g.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of g.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
-      ctx.restore();
-    }
-  }
-  ctx.globalAlpha = 1; const _t1 = performance.now();
-  // pass 2: strokes
   ctx.lineWidth = 1 / V.s; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
   const lts = state.drawing ? state.drawing.ltypes : {}; const ltscale = state.drawing ? state.drawing.header.ltscale : 1;
   let lastCol = null, dashed = false, lastAl = 1; ctx.globalAlpha = 1;
   const setAl = (a) => { a = a == null ? 1 : a; if (a !== lastAl) { ctx.globalAlpha = a; lastAl = a; } };
+  const fillOne = (f, Vs, wrL) => {
+    if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
+    if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
+    else if (state.patOn && f.pat.minSp * Vs >= 2.6 && budget > 0) budget -= drawPattern(f, { s: Vs }, col, wrL);
+    else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
+    ctx.globalAlpha = 1; lastAl = 1;
+  };
   for (const it of vis) {
+    // fills and wipeouts of this object
+    if (it.fills.length) { if (dashed) { ctx.setLineDash([]); dashed = false; } for (const f of it.fills) fillOne(f, V.s, wr); }
+    if (it.wipes.length) { ctx.globalAlpha = 1; lastAl = 1; ctx.fillStyle = wipeCol; for (const w of it.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
+    // its own lines
     for (const k of it.paths) {
       if (!k.n || !layerOn(k.layer)) continue;
       const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } setAl(k.al);
@@ -109,16 +102,23 @@ function drawScene(S, V, onLight, clipWorld) {
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
       ctx.stroke(k.path);
     }
+    // block instances: the block's fills, wipeouts, then its lines
     if (it.inst) for (const ins of it.inst) {
-      const g = ins.g; if (!g.paths.length) continue;
-      const dpx = g.diag * ins.scale * V.s;
-      ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f); ctx.lineWidth = 1 / (V.s * ins.scale); if (dashed) { ctx.setLineDash([]); dashed = false; }
-      if (g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
-        const k0 = g.paths[0]; const col = aciCss(k0.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
-      } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } ctx.globalAlpha = k.al == null ? 1 : k.al; ctx.stroke(k.path); }
-      ctx.restore(); lastCol = null; lastAl = -1; ctx.globalAlpha = 1;
+      const g = ins.g; if (!g.paths.length && !g.fills.length && !g.wipes.length) continue;
+      if (dashed) { ctx.setLineDash([]); dashed = false; }
+      ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f); ctx.lineWidth = 1 / (V.s * ins.scale);
+      if (g.fills.length) { const wrL = localRect(wr, ins.Minv); for (const f of g.fills) fillOne(f, V.s * ins.scale, wrL); }
+      if (g.wipes.length) { ctx.globalAlpha = 1; ctx.fillStyle = wipeCol; for (const w of g.wipes) if (layerOn(w.layer)) ctx.fill(w.path); }
+      if (g.paths.length) {
+        const dpx = g.diag * ins.scale * V.s;
+        if (g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
+          const k0 = g.paths[0]; ctx.strokeStyle = aciCss(k0.aci, onLight); ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
+        } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; ctx.strokeStyle = aciCss(k.aci, onLight); ctx.globalAlpha = k.al == null ? 1 : k.al; ctx.stroke(k.path); }
+      }
+      ctx.restore(); lastCol = null; lastAl = 1; ctx.globalAlpha = 1;
     }
   }
+  const _t1 = performance.now();
   if (dashed) ctx.setLineDash([]); ctx.globalAlpha = 1; const _t2 = performance.now();
   // pass 3: texts
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

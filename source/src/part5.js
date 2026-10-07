@@ -167,16 +167,16 @@ function submitTyped() { const v = parseTyped(typed.value); if (!v) { toast('Use
 const TOOL_GROUPS = {
   view: ['select', 'box', 'info', 'fit'],
   measure: ['dist', 'area', 'angle', 'coord', 'info'],
-  edit: ['select', 'box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'delete'],
+  edit: ['select', 'box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
   draw: ['line', 'pline', 'rect', 'circle', 'arc', 'spline', 'text']
 };
 const ICON = {
   select: '<path d="M5 3l14 9-7 1-3 7z"/>', box: '<path d="M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2M4 10v4M20 10v4M10 4h4M10 20h4"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   dist: '<path d="M3 17 17 3M3 17v-4M3 17h4M17 3h-4M17 3v4"/>', area: '<path d="M4 6l6-2 10 4-3 12-13-3z"/>', angle: '<path d="M4 20 20 6M4 20h16M11 20a8 8 0 0 0-1.5-5"/>', coord: '<path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/>',
-  move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+  move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', order: '<rect x="3" y="3" width="11" height="11" rx="1"/><path d="M10 10h11v11H10z" fill="currentColor" fill-opacity=".25"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
   line: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>', pline: '<path d="M3 19l5-11 5 7 4-9 4 4"/>', rect: '<rect x="4" y="6" width="16" height="12"/>', circle: '<circle cx="12" cy="12" r="8"/>', arc: '<path d="M4 18a10 10 0 0 1 16 0"/>', spline: '<path d="M3 17c4-12 6 12 10 0s4-6 8-2"/>', text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>'
 };
-const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text' };
+const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text' };
 function renderToolRow() {
   const row = $('toolRow'); row.innerHTML = '';
   for (const t of TOOL_GROUPS[state.group]) { const b = document.createElement('button'); b.className = 'tool' + (t === 'delete' ? ' danger' : ''); b.dataset.tool = t; b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[t] + '</svg><span>' + LABEL[t] + '</span>'; b.setAttribute('aria-pressed', state.tool && state.tool.name === t ? 'true' : 'false'); b.addEventListener('click', () => { if (t === 'fit') { zoomExtents(); return; } startTool(t); }); row.appendChild(b); }
@@ -205,6 +205,7 @@ function updateChrome() {
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
 function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
 
+for (const b of document.querySelectorAll('#orderPanel [data-order]')) b.addEventListener('click', () => { const mode = b.dataset.order; if (state.tool && state.tool.name === 'order') state.tool.choose(mode); else { closeSheets(); reorderSelection(mode); } });
 function needSelection(tool, next) { // returns true if selection exists, otherwise prompts to select
   if (state.selection.size) return true;
   tool.phase = 'select'; setPrompt('Tap objects to ' + tool.verb + ' (drag for a box), then Done.'); return false;
@@ -289,6 +290,17 @@ function makeTool(name) {
       T.update = () => { const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the first arm.'); else if (n === 2) setPrompt('Tap a point on the second arm.'); else if (n >= 3) { const [v, a, b] = measureSpace(T.pts.slice(0, 3)).pts; const a1 = Math.atan2(a[1] - v[1], a[0] - v[0]), a2 = Math.atan2(b[1] - v[1], b[0] - v[0]); let d = Math.abs(deg(a2 - a1)) % 360; if (d > 180) d = 360 - d; setResult([['Angle', fmtNum(d, 2) + '°'], ['Supplement', fmtNum(180 - d, 2) + '°'], ['Arm 1', fmtNum(deg(a1), 2) + '°'], ['Arm 2', fmtNum(deg(a2), 2) + '°']]); setPrompt('Done. Tap a new vertex to measure another angle.'); } };
       T.onTap = (sn) => { if (T.pts.length >= 3) { T.pts = []; setResult(null); } addPt(sn); T.update(); };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 2; c.setLineDash([]); if (T.pts.length >= 2) { drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false); } if (T.pts.length >= 3) { drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); const v = toScreen(T.pts[0][0], T.pts[0][1], V); const a1 = -Math.atan2(T.pts[1][1] - T.pts[0][1], T.pts[1][0] - T.pts[0][0]), a2 = -Math.atan2(T.pts[2][1] - T.pts[0][1], T.pts[2][0] - T.pts[0][0]); let d = a2 - a1; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; c.beginPath(); c.arc(v[0], v[1], 28, a1, a1 + d, d < 0); c.stroke(); } drawDots(c, T.pts, V, acc); };
+      break;
+    case 'order': // draw order: front / back / above or under another object
+      T.verb = 'reorder'; T.boxSelect = true;
+      T.start = () => { T.phase = 'menu'; setPrompt(state.selection.size ? 'Choose how to reorder the ' + state.selection.size + ' selected object' + (state.selection.size === 1 ? '' : 's') + '.' : 'Choose an option. Front, back, above and under work on objects you select.'); openSheet('orderPanel'); };
+      T.onTap = (sn, hit) => {
+        if (T.phase === 'select') { if (hit && !hit.model) { const id = hit.item.ent.id; state.selection.has(id) ? state.selection.delete(id) : state.selection.add(id); setResult([['Selected', state.selection.size + '']]); } return; }
+        if (T.phase === 'ref') { if (!hit || hit.model) { toast('Tap an object'); return; } reorderSelection(T.mode, hit.item.ent.id); startTool('select', true); }
+      };
+      T.choose = (mode) => { closeSheets(); if (mode !== 'hatchesBack' && !state.selection.size) { T.pending = mode; T.phase = 'select'; setPrompt('Tap the objects to reorder (drag for a box), then Done.'); return; } if (mode === 'hatchesBack') { reorderSelection(mode); startTool('select', true); return; } if (mode === 'front' || mode === 'back') { reorderSelection(mode); startTool('select', true); return; } T.mode = mode; T.phase = 'ref'; setPrompt('Tap the object to place the selection ' + (mode === 'above' ? 'above' : 'under') + '.'); };
+      T.onDone = () => { if (T.phase === 'select') { if (!state.selection.size) { toast('Select objects first'); return; } if (T.pending) { const m = T.pending; T.pending = null; T.choose(m); } else { T.phase = 'menu'; openSheet('orderPanel'); } } else startTool('select', true); };
+      T.draw = (c) => { if (state.boxSel) drawBoxSel(c); };
       break;
     case 'delete':
       T.verb = 'delete';

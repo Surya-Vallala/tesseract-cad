@@ -27,12 +27,15 @@ function transformEntity(e, M) {
 }
 function cloneEnt(e) { return structuredClone(e); }
 function pushUndo(action) { state.undo.push(action); if (state.undo.length > 100) state.undo.shift(); state.redo.length = 0; state.dirty = true; updateUndoBtns(); }
-function updateUndoBtns() { const show = !!(state.undo.length || state.redo.length || state.group === 'edit' || state.group === 'draw'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; }
+function updateUndoBtns() { const show = !!(state.drawing && $('welcome').style.display === 'none'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; $('btnUndo').title = state.undo.length ? 'Undo (' + state.undo.length + ')' : 'Nothing to undo'; }
 function applyAction(a, reverse) {
   const sp = state.drawing.spaces[a.space]; const ents = sp.ents;
   if (a.type === 'add') { if (reverse) { const ids = new Set(a.ents.map(e => e.id)); sp.ents = ents.filter(e => !ids.has(e.id)); } else { for (const e of a.ents) ents.push(e); } }
   else if (a.type === 'remove') { if (reverse) { const list = a.items.slice().sort((x, y) => x.index - y.index); for (const it of list) ents.splice(Math.min(it.index, ents.length), 0, it.ent); } else { const ids = new Set(a.items.map(i => i.ent.id)); sp.ents = ents.filter(e => !ids.has(e.id)); } }
   else if (a.type === 'modify') { const map = new Map(a.items.map(i => [i.id, reverse ? i.prev : i.next])); for (let i = 0; i < ents.length; i++) { const n = map.get(ents[i].id); if (n) ents[i] = cloneEnt(n); } }
+  else if (a.type === 'order') { const ids = reverse ? a.prev : a.next; const byId = new Map(ents.map(e => [e.id, e])); const out = []; for (const id of ids) { const e = byId.get(id); if (e) { out.push(e); byId.delete(id); } } for (const e of byId.values()) out.push(e); sp.ents = out; }
+  else if (a.type === 'blockdefs') { for (const d of a.defs) { const b = state.drawing.blocks[d.name]; if (b) b.ents = (reverse ? d.prev : d.next).map(cloneEnt); } blockCache.clear(); state.scenes.clear(); lastFull = null; }
+  else if (a.type === 'multi') { const list = reverse ? a.steps.slice().reverse() : a.steps; for (const st of list) applyAction(st, reverse); return; }
   invalidateScene(a.space); requestFull();
 }
 function undo() { const a = state.undo.pop(); if (!a) return; applyAction(a, true); state.redo.push(a); updateUndoBtns(); toast('Undo'); }
@@ -89,6 +92,17 @@ function openProps() {
   aciIn.addEventListener('input', () => { const v = parseInt(aciIn.value, 10); if (v >= 1 && v <= 255) pick(v); }); sw.append(aciIn);
   const cSub = curC === undefined ? 'varies' : curC.startsWith('rgb:') ? 'now true colour ' + curC.slice(4) : curC === '256' ? 'now ByLayer' : curC === '0' ? 'now ByBlock' : 'now colour ' + curC;
   row('Colour', sw, cSub);
+  const blockSel = sel.filter(e => e.t === 'INSERT' && !e.dim);
+  if (blockSel.length) {
+    const names = blockNamesDeep(blockSel.map(e => e.n)); let notBB = 0; for (const n of names) for (const c of (D.blocks[n] ? D.blocks[n].ents : [])) if (c.c !== 0 || c.rgb) notBB++;
+    if (notBB) {
+      const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--fg)';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'width:18px;height:18px;flex:0 0 auto;margin-top:1px;accent-color:var(--accent)';
+      cb.addEventListener('change', () => { ch.blockContents = cb.checked; }); ch.blockContents = true;
+      const txt = document.createElement('span'); txt.textContent = 'Make everything inside follow this colour. Objects inside this block have their own colour, so without this the block colour does not show. Sets the contents to ByBlock in the block definition (' + names.length + ' block' + (names.length === 1 ? '' : 's') + '); other copies then show their own block colour.';
+      lab.append(cb, txt); row('', lab);
+    }
+  }
   // Linetype
   const selT = document.createElement('select'); const curT = same(e => ltName(e.lt)); if (curT === undefined) selT.append(new Option('(varies)', '', true, true));
   const ltNames = ['ByLayer', 'ByBlock', 'Continuous'].concat(Object.keys(D.ltypes || {}).filter(n => !/^(bylayer|byblock|continuous)$/i.test(n)).sort());
@@ -115,8 +129,29 @@ function openProps() {
   } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
     head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
   }
-  $('propsApply').onclick = () => { for (const k of Object.keys(ch)) if (ch[k] === undefined) delete ch[k]; if (!Object.keys(ch).length) { closeSheets(); return; } applyProps(sel.map(e => e.id), ch); closeSheets(); };
+  head('Draw order');
+  const ord = document.createElement('div'); ord.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+  for (const [lbl, fn] of [['Bring to front', () => reorderSelection('front')], ['Send to back', () => reorderSelection('back')]]) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = lbl; b.addEventListener('click', () => { closeSheets(); fn(); }); ord.append(b); }
+  row('Order', ord, 'Applies right away. More options: Edit → Order');
+  $('propsApply').onclick = () => { for (const k of Object.keys(ch)) if (ch[k] === undefined) delete ch[k]; if (!Object.keys(ch).filter(k => k !== 'blockContents').length) { closeSheets(); return; } applyProps(sel.map(e => e.id), ch); closeSheets(); };
   openSheet('propsPanel');
+}
+// All block definitions reachable from these block names (nested blocks included)
+function blockNamesDeep(names) { const D = state.drawing; const seen = new Set(); const stack = names.slice(); while (stack.length) { const n = stack.pop(); if (seen.has(n) || !D.blocks[n]) continue; seen.add(n); for (const c of D.blocks[n].ents) if (c.t === 'INSERT' && !c.dim && c.n) stack.push(c.n); } return [...seen]; }
+// ----- Draw order -----
+function reorderSelection(mode, refId) {
+  const sp = curSpace(); if (!sp) return; const sel = state.selection; if (!sel.size && mode !== 'hatchesBack') { toast('Select objects first'); return; }
+  const prev = sp.ents.map(e => e.id); let moved = [], rest = [];
+  if (mode === 'hatchesBack') { for (const e of sp.ents) ((e.t === 'HATCH' || e.t === 'SOLID') ? moved : rest).push(e); }
+  else for (const e of sp.ents) (sel.has(e.id) && e.id !== refId ? moved : rest).push(e);
+  if (!moved.length) { toast(mode === 'hatchesBack' ? 'No hatches here' : 'Nothing to move'); return; }
+  let out;
+  if (mode === 'front') out = rest.concat(moved);
+  else if (mode === 'back' || mode === 'hatchesBack') out = moved.concat(rest);
+  else { const i = rest.findIndex(e => e.id === refId); if (i < 0) { toast('Pick an object that is not selected'); return; } out = mode === 'above' ? rest.slice(0, i + 1).concat(moved, rest.slice(i + 1)) : rest.slice(0, i).concat(moved, rest.slice(i)); }
+  const next = out.map(e => e.id); if (next.every((id, i) => id === prev[i])) { toast('Already in that order'); return; }
+  pushUndo({ type: 'order', space: state.spaceIdx, prev, next }); applyAction(state.undo[state.undo.length - 1], false);
+  toast({ front: 'Brought to front', back: 'Sent to back', above: 'Placed above', under: 'Placed under', hatchesBack: moved.length + ' hatches sent to back' }[mode]);
 }
 function fmtFixed(v, d) { return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
 function applyProps(ids, ch) {
@@ -143,7 +178,13 @@ function applyProps(ids, ch) {
     items.push({ id: e.id, prev: cloneEnt(e), next: n });
   }
   if (!items.length) return;
-  pushUndo({ type: 'modify', space: state.spaceIdx, items }); applyAction(state.undo[state.undo.length - 1], false);
+  const steps = [{ type: 'modify', space: state.spaceIdx, items }];
+  if ('c' in ch && ch.blockContents) { // block contents follow the block's colour: set them to ByBlock (definitions)
+    const names = blockNamesDeep(items.filter(i => i.next.t === 'INSERT' && !i.next.dim).map(i => i.next.n)); const defs = [];
+    for (const nm of names) { const b = state.drawing.blocks[nm]; if (!b) continue; const prev = b.ents.map(cloneEnt); const next = b.ents.map(x => { const y = cloneEnt(x); y.c = 0; delete y.rgb; if (y.att) for (const a of y.att) { a.c = 0; delete a.rgb; } return y; }); defs.push({ name: nm, prev, next }); }
+    if (defs.length) steps.push({ type: 'blockdefs', space: state.spaceIdx, defs });
+  }
+  pushUndo(steps.length === 1 ? steps[0] : { type: 'multi', space: state.spaceIdx, steps }); applyAction(state.undo[state.undo.length - 1], false);
   toast(items.length === 1 ? 'Properties updated' : items.length + ' objects updated'); showSelection(); requestFull();
 }
 $('btnProps').addEventListener('click', openProps);
@@ -270,9 +311,14 @@ function idb() { return new Promise((res, rej) => { try { const r = indexedDB.op
 async function idbPut(rec) { try { const db = await idb(); await new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put(rec); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); } catch (e) { console.warn('idb', e); } }
 async function idbAll() { try { const db = await idb(); return await new Promise((res, rej) => { const tx = db.transaction('files', 'readonly'); const r = tx.objectStore('files').getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); }); } catch (e) { return []; } }
 async function idbDel(name) { try { const db = await idb(); await new Promise((res) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete(name); tx.oncomplete = res; tx.onerror = res; }); } catch (e) { } }
+// Recent files: the original file is kept under its own name; edited copies are separate entries
+// ("name (edited)") so reopening the original never overwrites saved edits.
+const EDIT_SUFFIX = ' (edited)';
+const baseName = (n) => String(n || '').endsWith(EDIT_SUFFIX) ? String(n).slice(0, -EDIT_SUFFIX.length) : String(n || '');
 async function saveRecent(withEdits) {
   if (!state.drawing || state.drawing.sample) return;
-  const rec = { name: state.fileName, when: Date.now(), bytes: state.fileBytes, kind: state.kind };
+  const orig = baseName(state.fileName);
+  const rec = { name: withEdits ? orig + EDIT_SUFFIX : orig, orig, when: Date.now(), bytes: state.fileBytes, kind: state.kind };
   if (withEdits) { rec.drawing = state.drawing; rec.edited = true; }
   await idbPut(rec);
   const all = await idbAll(); all.sort((a, b) => b.when - a.when); for (const r of all.slice(6)) idbDel(r.name);
@@ -285,14 +331,34 @@ async function renderRecent() {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 async function openRecent(r) {
-  if (r.drawing) { state.fileBytes = r.bytes; state.fileName = r.name; state.kind = r.kind; loadDrawing(r.drawing, r.name); toast('Opened saved copy with edits'); }
-  else if (r.bytes) parseFile(r.bytes, r.name);
+  confirmUnsaved(() => {
+    if (r.drawing) { state.fileBytes = r.bytes; state.fileName = r.name; state.kind = r.kind; loadDrawing(r.drawing, r.name); toast('Opened your saved copy with edits'); }
+    else if (r.bytes) parseFile(r.bytes, r.name);
+  });
 }
+// Ask before throwing away edits: Save (keeps an edited copy on this phone), Discard, or Cancel.
+function confirmUnsaved(then) {
+  if (!state.drawing || !state.dirty || state.drawing.sample) { then(); return; }
+  const dlg = $('saveDlg'); const name = baseName(state.fileName);
+  $('saveTitle').textContent = 'Save changes to ' + name + '?';
+  $('saveMsg').textContent = 'Save keeps the edited drawing on this phone under Recent as “' + name + EDIT_SUFFIX + '”. The original file is not changed. To use the edits in AutoCAD, export a DXF from the menu.';
+  dlg.classList.add('on');
+  const done = () => { dlg.classList.remove('on'); $('saveOk').onclick = $('saveDiscard').onclick = $('saveCancel').onclick = null; };
+  $('saveOk').onclick = async () => { done(); await saveRecent(true); state.dirty = false; toast('Saved on this phone · see Recent: ' + name + EDIT_SUFFIX, 3500); then(); };
+  $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
+  $('saveCancel').onclick = () => { done(); };
+}
+function closeDrawing() { state.drawing = null; state.scenes.clear(); state.undo.length = 0; state.redo.length = 0; state.dirty = false; state.selection.clear(); $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); updateUndoBtns(); renderRecent(); requestFull(); }
 
 // ===================== Loading =====================
-let worker = null, engineReady = false, currentLoad = null;
+let worker = null, engineReady = false, currentLoad = null, useBlob = false;
+// LibreDWG can read only one drawing per engine instance (a second read fails with "null function" /
+// "Aborted()"), so every file gets a fresh engine: after each load the old one is shut down and a new
+// one warms up in the background, ready for the next file.
+function recycleWorker() { const w = worker; worker = null; engineReady = false; try { if (w) w.terminate(); } catch (e) { } setTimeout(warmUpEngine, 60); }
 function getWorker() {
   if (!worker) {
+    if (useBlob) { startBlobWorker(); return worker; }
     try { worker = new Worker('cad-worker.js', { type: 'module' }); }
     catch (e1) { worker = null; }
     if (!worker) { startBlobWorker(); return worker; }
@@ -307,10 +373,10 @@ function wireWorker() {
       if (m.type === 'ready') { engineReady = true; $('engineStatus').textContent = 'DWG engine ready on this device.'; return; }
       if (!currentLoad) { if (m.type === 'error') { $('engineStatus').textContent = m.message; console.warn(m.message); } return; }
       if (m.type === 'progress') showLoading(true, m.stage, m.pct);
-      else if (m.type === 'error') { showLoading(false); toast('Could not open ' + currentLoad.name + ': ' + m.message, 7000); currentLoad = null; }
-      else if (m.type === 'done') { const L = currentLoad; currentLoad = null; showLoading(true, 'Preparing view', 95); setTimeout(() => { loadDrawing(m.drawing, L.name); showLoading(false); const ms = Math.round(performance.now() - L.t0); const n = m.drawing.spaces[0].ents.length; toast('Opened in ' + (ms / 1000).toFixed(1) + ' s · ' + n.toLocaleString() + ' objects in model'); saveRecent(false); }, 20); }
+      else if (m.type === 'error') { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && state.fileBytes) { parseFile(state.fileBytes, L.name, true); return; } showLoading(false); toast('Could not open ' + L.name + ': ' + m.message, 7000); }
+      else if (m.type === 'done') { const L = currentLoad; currentLoad = null; recycleWorker(); showLoading(true, 'Preparing view', 95); setTimeout(() => { loadDrawing(m.drawing, L.name); showLoading(false); const ms = Math.round(performance.now() - L.t0); const n = m.drawing.spaces[0].ents.length; toast('Opened in ' + (ms / 1000).toFixed(1) + ' s · ' + n.toLocaleString() + ' objects in model'); saveRecent(false); }, 20); }
     };
-    worker.onerror = (e) => { const msg = (e && e.message) || 'unknown error'; console.warn('worker error', msg, e && e.filename, e && e.lineno); if (currentLoad) { showLoading(false); toast('File reader failed: ' + msg, 7000); currentLoad = null; } $('engineStatus').textContent = 'DWG engine could not start here (' + msg + '). DXF files still open.'; worker = null; tryBlobFallback(); };
+    worker.onerror = (e) => { const msg = (e && e.message) || 'unknown error'; console.warn('worker error', msg, e && e.filename, e && e.lineno); if (currentLoad && engineReady) { const L = currentLoad; currentLoad = null; recycleWorker(); if (!L.retried && state.fileBytes) { parseFile(state.fileBytes, L.name, true); return; } } if (currentLoad) { showLoading(false); toast('File reader failed: ' + msg, 7000); currentLoad = null; } $('engineStatus').textContent = 'DWG engine could not start here (' + msg + '). DXF files still open.'; worker = null; tryBlobFallback(); };
   }
 }
 let blobTried = false;
@@ -320,17 +386,17 @@ async function startBlobWorker() {
     const txt = await (await fetch(base)).text();
     const src = txt.split('import.meta.url').join(JSON.stringify(base));
     worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
-    wireWorker(); worker.postMessage({ kind: 'init' });
+    useBlob = true; wireWorker(); worker.postMessage({ kind: 'init' });
   } catch (e) { worker = null; $('engineStatus').textContent = 'DWG engine could not start here (' + (e && e.message || e) + ').'; }
 }
 function tryBlobFallback() { if (blobTried) return; blobTried = true; $('engineStatus').textContent = 'Retrying DWG engine another way…'; startBlobWorker(); }
 function warmUpEngine() { try { const w = getWorker(); if (w) w.postMessage({ kind: 'init' }); } catch (e) { $('engineStatus').textContent = 'DWG engine could not start: ' + e.message; } }
 setTimeout(warmUpEngine, 600);
 function showLoading(on, stage, pct) { $('loading').classList.toggle('on', !!on); if (stage) $('loadStage').textContent = stage; if (pct != null) $('loadBar').style.width = pct + '%'; }
-function parseFile(buf, name) {
+function parseFile(buf, name, retried) {
   state.fileBytes = buf; state.fileName = name; state.kind = /\.dxf$/i.test(name) ? 'dxf' : 'dwg';
   showLoading(true, state.kind === 'dxf' ? 'Reading DXF…' : (engineReady ? 'Reading DWG…' : 'Starting DWG engine…'), 3);
-  currentLoad = { name, t0: performance.now() };
+  currentLoad = { name, t0: performance.now(), retried: !!retried };
   let tries = 0;
   const send = () => {
     let w; try { w = getWorker(); } catch (e) { showLoading(false); currentLoad = null; toast('Could not start the file reader: ' + e.message, 6000); return; }
@@ -399,8 +465,8 @@ function sampleDrawing() {
 
 // ===================== UI wiring =====================
 $('btnOpen').addEventListener('click', () => { closeSheets(); $('file').click(); }); $('btnOpen2').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
-$('btnSample').addEventListener('click', () => { state.fileBytes = null; state.fileName = 'Sample plan'; loadDrawing(sampleDrawing(), 'Sample plan (built in)'); });
+$('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const buf = await f.arrayBuffer(); confirmUnsaved(() => parseFile(buf, f.name)); });
+$('btnSample').addEventListener('click', () => confirmUnsaved(() => { state.fileBytes = null; state.fileName = 'Sample plan'; loadDrawing(sampleDrawing(), 'Sample plan (built in)'); }));
 $('btnFit').addEventListener('click', zoomExtents);
 $('btnSpace').addEventListener('click', () => { if (!state.drawing || $('welcome').style.display !== 'none') { $('file').click(); return; } renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
@@ -417,8 +483,8 @@ $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
 $('miExport').addEventListener('click', () => { closeSheets(); exportDxf(); }); $('miPng').addEventListener('click', () => { closeSheets(); exportPng(); });
-$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); closeSheets(); toast('Saved on this device'); });
-$('miClose').addEventListener('click', () => { closeSheets(); state.drawing = null; state.scenes.clear(); $('fileName').textContent = 'No drawing open'; $('spaceName').textContent = 'Tesseract CAD Tools'; $('welcome').style.display = ''; $('spaces').innerHTML = ''; setResult(null); renderRecent(); requestFull(); });
+$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = baseName(state.fileName) + EDIT_SUFFIX; $('fileName').textContent = state.fileName; closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
+$('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); });
 $('chkSnap').addEventListener('change', (ev) => { state.snapOn = ev.target.checked; }); $('chkPat').addEventListener('change', (ev) => { state.patOn = ev.target.checked; requestFull(); });
@@ -427,4 +493,4 @@ try { const c = localStorage.getItem('tct-canvas'); if (c === 'light') { state.c
 window.addEventListener('beforeunload', (ev) => { if (state.dirty) { ev.preventDefault(); ev.returnValue = ''; } });
 setGroup('view'); renderRecent(); resizeCanvas();
 // First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)';
+loadDrawing(sampleDrawing(), 'Sample plan (built in)'); $('welcome').style.display = ''; $('fileName').textContent = 'Sample plan (built in)'; updateUndoBtns();
