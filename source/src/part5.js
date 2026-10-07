@@ -133,16 +133,17 @@ function findIntersection(wx, wy, tol, S) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5; // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 88; // pointer about 1.5 cm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
   holdTimer = null; if (!state.drawing || pointers.size !== 1 || dragMoved) return;
   try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { }
-  gesture = false; state.loupe = { X, Y, sn: snapPoint(X, Y, PRECISE_SNAP_PX) }; updatePrecise(X, Y); startEdgePan();
+  gesture = false; state.loupe = { X, Y, fx: X, fy: Y, sn: null }; updatePrecise(X, Y); startEdgePan();
 }
+// X, Y are the finger; the pointer (lp.X, lp.Y) rides POINTER_LIFT px above it so it stays visible
 function updatePrecise(X, Y) {
-  const lp = state.loupe; if (!lp) return; lp.X = X; lp.Y = Y;
+  const lp = state.loupe; if (!lp) return; lp.fx = X; lp.fy = Y; lp.X = X; lp.Y = Y - Math.max(0, Math.min(POINTER_LIFT, Y - 12)); X = lp.X; Y = lp.Y; // near the top edge the pointer comes closer instead of leaving the screen
   const sn = snapPoint(X, Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast();
 }
 function exitPrecise(place) {
@@ -227,8 +228,7 @@ function exitToSelect() {
   if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { }
   if ($('textDlg').classList.contains('on')) $('txtCancel').click();
   state.selection.clear(); state.hoverItem = null; state.boxSel = null; state.lastPt = null; state.snapMark = null; setResult(null);
-  if (!TOOL_GROUPS[state.group].includes('select')) setGroup('view');
-  startTool('select', true); requestFull();
+  startTool('select', true); requestFull(); // the tab stays where it was, so the next tool is one tap away
 }
 function doneTool() { if (state.tool && state.tool.onDone) state.tool.onDone(); }
 function backPoint() { if (state.tool && state.tool.onBack) state.tool.onBack(); requestFast(); }
@@ -247,33 +247,69 @@ typed.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.prevent
 $('btnEnter').addEventListener('click', submitTyped);
 function submitTyped() { const v = parseTyped(typed.value); if (!v) { toast('Use 1200 · @1200,0 · @1500<90 · 100,200'); return; } typed.value = ''; if (state.tool && state.tool.onTyped) state.tool.onTyped(v); requestFast(); }
 
+// With no tool running, tapping the drawing selects (the Select pointer), so Select is not a button.
 const TOOL_GROUPS = {
-  view: ['select', 'box', 'info', 'fit'],
-  measure: ['dist', 'area', 'angle', 'coord', 'info'],
-  edit: ['select', 'box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
+  view: ['box', 'info', 'fit'],
+  measure: ['dist', 'area', 'angle', 'coord'],
+  edit: ['move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
   draw: ['line', 'pline', 'rect', 'circle', 'arc', 'spline', 'text']
 };
+// Actions shown instead of the tabs while something is selected
+const SEL_ACTIONS = ['move', 'copy', 'rotate', 'mirror', 'scale', 'delete', 'props', 'similar', 'order', 'align'];
 const ICON = {
   select: '<path d="M5 3l14 9-7 1-3 7z"/>', box: '<path d="M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2M4 10v4M20 10v4M10 4h4M10 20h4"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   dist: '<path d="M3 17 17 3M3 17v-4M3 17h4M17 3h-4M17 3v4"/>', area: '<path d="M4 6l6-2 10 4-3 12-13-3z"/>', angle: '<path d="M4 20 20 6M4 20h16M11 20a8 8 0 0 0-1.5-5"/>', coord: '<path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/>',
   move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', order: '<rect x="3" y="3" width="11" height="11" rx="1"/><path d="M10 10h11v11H10z" fill="currentColor" fill-opacity=".25"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+  props: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/>', similar: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke-dasharray="2.5 2"/><path d="M14 4h6v6M10 20H4v-6" opacity=".55"/>',
   line: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>', pline: '<path d="M3 19l5-11 5 7 4-9 4 4"/>', rect: '<rect x="4" y="6" width="16" height="12"/>', circle: '<circle cx="12" cy="12" r="8"/>', arc: '<path d="M4 18a10 10 0 0 1 16 0"/>', spline: '<path d="M3 17c4-12 6 12 10 0s4-6 8-2"/>', text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>'
 };
-const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area' };
-function renderToolRow() {
-  const row = $('toolRow'); row.innerHTML = '';
-  for (const t of TOOL_GROUPS[state.group]) { const b = document.createElement('button'); b.className = 'tool' + (t === 'delete' ? ' danger' : ''); b.dataset.tool = t; b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[t] + '</svg><span>' + LABEL[t] + '</span>'; b.setAttribute('aria-pressed', state.tool && state.tool.name === t ? 'true' : 'false'); b.addEventListener('click', () => { if (t === 'fit') { zoomExtents(); return; } startTool(t); }); row.appendChild(b); }
-}
-// Group switcher (bottom-left): opens a small menu of View / Measure / Edit / Draw
+const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area', props: 'Properties', similar: 'Similar' };
+// ----- Bottom bar: tabs + tools, or (something selected) a selection row + actions. Both are the same height. -----
 const GROUP_NAME = { view: 'View', measure: 'Measure', edit: 'Edit', draw: 'Draw' };
-function setGroup(g) {
-  state.group = g; for (const x of $('groups').children) x.setAttribute('aria-selected', x.dataset.g === g ? 'true' : 'false');
-  const src = $('groups').querySelector('[data-g="' + g + '"] svg'); $('grpIcon').innerHTML = src ? src.innerHTML : ''; $('grpName').textContent = GROUP_NAME[g] || g;
-  renderToolRow(); updateUndoBtns(); $('toolRow').scrollLeft = 0;
+const groupOf = (k) => Object.keys(TOOL_GROUPS).find(g => TOOL_GROUPS[g].includes(k)) || null;
+function selMode() { const t = state.tool ? state.tool.name : 'select'; return !!(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t)); }
+function selSummary() {
+  const sel = typeof selectedEnts === 'function' ? selectedEnts() : []; if (!sel.length) return '';
+  const name = (e) => e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t;
+  if (sel.length === 1) return name(sel[0]) + ' · ' + (sel[0].L || '0');
+  const c = new Map(); for (const e of sel) { const k = name(e); c.set(k, (c.get(k) || 0) + 1); }
+  return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => n + ' ' + k).join(', ') + (c.size > 3 ? '…' : '');
 }
-$('groups').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; closeGroups(); setGroup(b.dataset.g); });
+let barKey = '';
+function renderBar(force) {
+  const t = state.tool ? state.tool.name : 'select'; const sm = selMode();
+  const key = (sm ? 'S' + state.selection.size + ':' + selSummary() : 'T' + state.group) + '|' + t;
+  if (!force && key === barKey) return; barKey = key;
+  const top = $('barTop'), row = $('toolRow'); top.innerHTML = ''; top.className = sm ? 'sel' : '';
+  if (sm) {
+    const n = document.createElement('b'); n.textContent = state.selection.size + ' selected';
+    const w = document.createElement('span'); w.className = 'what'; w.textContent = selSummary();
+    const c = document.createElement('button'); c.className = 'clr'; c.textContent = 'Clear ✕'; c.setAttribute('aria-label', 'Clear the selection');
+    c.addEventListener('click', () => { state.selection.clear(); if (state.tool && state.tool.onSelChange) state.tool.onSelChange(); else setResult(null); requestFull(); renderBar(); });
+    top.append(n, w, c);
+  } else for (const g of Object.keys(TOOL_GROUPS)) {
+    const b = document.createElement('button'); b.className = 'gtab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', g === state.group ? 'true' : 'false'); b.textContent = GROUP_NAME[g];
+    b.addEventListener('click', () => setGroup(g)); top.appendChild(b);
+  }
+  row.innerHTML = '';
+  for (const k of (sm ? SEL_ACTIONS : TOOL_GROUPS[state.group])) {
+    const b = document.createElement('button'); b.className = 'tool' + (k === 'delete' ? ' danger' : ''); b.dataset.tool = k;
+    b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[k] + '</svg><span>' + LABEL[k] + '</span>'; b.setAttribute('aria-pressed', !sm && t === k ? 'true' : 'false');
+    b.addEventListener('click', () => barAction(k, sm)); row.appendChild(b);
+  }
+  if (sm || force) row.scrollLeft = 0;
+}
+function barAction(k, fromSelection) {
+  if (k === 'fit') { zoomExtents(); return; }
+  if (k === 'props') { openProps(); return; }
+  if (k === 'similar') { selectSimilar(); return; }
+  // an edit started from the selection row shows its own tab while it runs, then the bar returns to your tab
+  if (fromSelection) { const g = groupOf(k); if (g && g !== state.group) { state.returnGroup = state.group; state.group = g; } }
+  startTool(k);
+}
+function renderToolRow() { renderBar(true); }
+function setGroup(g) { state.group = g; state.returnGroup = null; renderBar(true); updateUndoBtns(); }
 function closeGroups() { $('groups').classList.remove('open'); if (!document.querySelector('.sheet.open')) $('scrim').classList.remove('on'); }
-$('btnGroup').addEventListener('click', () => { const g = $('groups'); if (g.classList.contains('open')) closeGroups(); else { g.classList.add('open'); $('scrim').classList.add('on'); } });
 // The instruction strip shows only while a tool needs input or there is a result to read.
 const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text', 'pdfwin']);
 function updateChrome() {
@@ -283,10 +319,11 @@ function updateChrome() {
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
   $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text', 'pdfwin'].includes(t);
-  $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t)); $('btnSimilar').hidden = $('btnProps').hidden;
+  $('btnProps').hidden = true; $('btnSimilar').hidden = true; // Properties and Similar live in the bottom bar's selection actions
+  renderBar();
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
-function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
+function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold, then drag. The pointer sits just above your finger; lift to place the point.', 4600), 400); }
 
 for (const b of document.querySelectorAll('#orderPanel [data-order]')) b.addEventListener('click', () => { const mode = b.dataset.order; if (state.tool && state.tool.name === 'order') state.tool.choose(mode); else { closeSheets(); reorderSelection(mode); } });
 function needSelection(tool, next) { // returns true if selection exists, otherwise prompts to select
@@ -295,9 +332,10 @@ function needSelection(tool, next) { // returns true if selection exists, otherw
 }
 function startTool(name, keepSel) {
   if (!keepSel && state.tool && state.tool.name !== name && !['select', 'box'].includes(name) && ['select', 'box', 'info', 'coord', 'dist', 'area', 'angle'].includes(state.tool.name)) { /* keep selection across tools */ }
+  if (name === 'select' && state.returnGroup) { state.group = state.returnGroup; state.returnGroup = null; }
   state.tool = makeTool(name); state.lastPt = null; state.snapMark = null; setResult(null); typed.value = '';
   toolName.textContent = LABEL[name] || name; state.tool.start();
-  for (const b of $('toolRow').children) b.setAttribute('aria-pressed', b.dataset.tool === name ? 'true' : 'false');
+  renderBar();
   updateChrome(); maybeHoldTip(name);
   requestFast();
 }

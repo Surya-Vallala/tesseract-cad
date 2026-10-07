@@ -15,7 +15,7 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - Layers: turn on and off, show all, hide all, invert
 - Measure: length, area, angle and coordinates, with snapping to endpoints, midpoints, centres, geometric centres, quadrants, intersections, perpendicular and tangent (from the last point), insertion points, nodes and nearest points. Menu → Snap points switches each one on or off
 - In layouts, snapping works on the model seen through viewports, and measurements inside a viewport are in real (model) size
-- **Press and hold** on the drawing to get a 4× magnifier, drag to the exact point, and let go to place it; while you hold, the line or shape you are drawing follows your finger and the magnifier shows its length
+- **Press and hold** on the drawing to place an exact point: a pointer appears just above your finger inside a round 2× magnifier, so the point is never hidden. Drag to it and lift to place it. While you hold, the line or shape you are drawing follows the pointer and the snap name and length show above the magnifier
 - Edit: move, copy, rotate, mirror, scale, align, delete, undo and redo
 - Properties: select objects and tap ✎ to change layer, colour (for blocks, optionally the block's contents too), linetype, linetype scale and transparency, plus rotation, scale and position (blocks), contents, height and rotation (text), and radius (circles, arcs)
 - Draw order: follows the drawing's own order (AutoCAD SORTENTSTABLE); Edit → Order brings objects to front/back, above/under another object, or sends all hatches to back
@@ -26,7 +26,8 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 - Box select: tap two opposite corners (or drag). Left to right picks objects fully inside; right to left also picks objects crossing the box
 - Draw: line, polyline, rectangle, circle, arc, spline and text, with typed input (`1200`, `@1200,0`, `@1500<90`)
 - **Share** (menu → Share drawing): PDF, the original DWG, DXF (with your edits) or a PNG of the screen. PDF options: what to print (view, extents, layout sheet or a window you tap), paper size A4–A0, orientation, scale (fit or 1:1 to 1:1000), colour / grey / black lines, lineweights, hatch transparency on/off, and quality (vector, 150 or 300 dpi). **Preview** shows the page exactly as it will print before you create it. PDFs go straight to Android's share sheet; DWG and DXF are saved to the phone first, because Android lets web apps share only PDFs and pictures
-- The × on the instruction bar (or Esc) closes the tool, clears the selection and goes back to Select
+- **Toolbar:** two slim rows, the View · Measure · Edit · Draw tabs and that tab's tools. With no tool running, tapping the drawing selects. When something is selected, the tab row becomes a selection row (Clear ✕) and the tools become Move, Copy, Rotate, Mirror, Scale, Delete, Properties, Similar, Order and Align
+- The × on the instruction bar (or Esc) ends the tool and clears the selection, and keeps you on the same tab
 - Keep recent files on the device
 - Themes: Studio Dark (default), Studio Light, Black & White (menu → Theme)
 

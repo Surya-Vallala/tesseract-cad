@@ -226,36 +226,30 @@ function drawSnapMarker(c, X, Y, kind, r, col) {
   path(); c.strokeStyle = col; c.lineWidth = 2; c.stroke();
   c.restore();
 }
-// Magnifier shown while press-and-hold picking. state.loupe = { X, Y, sn } in screen px.
-const LOUPE_ZOOM = 4;
-function loupeRect() {
-  const L = Math.round(clamp(Math.min(cssW, cssH) * 0.36, 112, 170)); const m = 10;
-  const lp = state.loupe; const left = lp.X > cssW / 2; // put it on the side away from the finger
-  const pr = $('prompt'); const top = (pr && !pr.hidden) ? pr.offsetTop + pr.offsetHeight + 8 : m; // below the instruction strip
-  const x = left ? m : cssW - L - m, y = Math.min(top, Math.max(m, cssH - L - 34));
-  return { x, y, L };
-}
+// Magnifier while press-and-hold picking: a round 2× bubble centred on the pointer, which rides just above the finger.
+// state.loupe = { X, Y (pointer), fx, fy (finger), sn } in screen px.
+const LOUPE_ZOOM = 2, LOUPE_R = 60;
 function drawLoupe(acc) {
-  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = loupeRect(); const { x, y, L } = R;
-  const w = toWorld(lp.X, lp.Y, V); const s2 = V.s * LOUPE_ZOOM; const cx = x + L / 2, cy = y + L / 2;
-  const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
+  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = LOUPE_R; const cx = lp.X, cy = lp.Y;
+  const w = toWorld(cx, cy, V); const s2 = V.s * LOUPE_ZOOM; const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 10; ctx.fillStyle = bgColor(); ctx.fillRect(x, y, L, L); ctx.shadowBlur = 0;
-  ctx.beginPath(); ctx.rect(x, y, L, L); ctx.clip();
-  const a = toWorld(x, y, V2), b = toWorld(x + L, y + L, V2);
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 2; ctx.fillStyle = bgColor(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
+  const a = toWorld(cx - R, cy - R, V2), b = toWorld(cx + R, cy + R, V2);
   drawContent(V2, [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
   if (state.tool && state.tool.draw && PICK_TOOLS.has(state.tool.name)) { ctx.save(); state.tool.draw(ctx, V2, acc); ctx.restore(); }
   drawRubber(ctx, V2, acc);
-  // crosshair at the finger point
-  ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
+  // crosshair at the pointer
+  ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
   if (lp.sn && lp.sn.kind) { const q = toScreen(lp.sn.x, lp.sn.y, V2); drawSnapMarker(ctx, q[0], q[1], lp.sn.kind, 8, acc); }
   ctx.restore();
-  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, L - 2, L - 2);
-  // label under the loupe
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+  // snap name and length (or coordinates) just above the bubble (below it near the top edge)
   const sn = lp.sn; const base = rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (base ? '  ' + fmtLen(Math.hypot(sn.x - base[0], sn.y - base[1])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
-  ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, Math.max(L, 60) + 80); const lx = x + (x < cssW / 2 ? 0 : L - tw), ly = y + L + 4;
-  ctx.fillStyle = 'rgba(20,20,20,.82)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
+  ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, cssW - 8);
+  const lx = clamp(cx - tw / 2, 4, cssW - tw - 4); let ly = cy - R - 24; if (ly < 4) ly = cy + R + 6;
+  ctx.fillStyle = 'rgba(20,20,20,.86)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
   ctx.restore();
 }
 function highlightItem(it, V) {

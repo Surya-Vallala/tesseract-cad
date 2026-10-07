@@ -21,7 +21,7 @@
   --brand-red:#ff0000;
   --bg:#f2f2f2; --fg:#121212; --muted:#6b6b6b; --panel:#ffffff; --line:#e2e2e2; --chip:#efefef; --chip-on:#121212; --chip-on-fg:#ffffff;
   --accent:#e00000; --accent-fg:#ffffff; --accent-soft:rgba(224,0,0,.08); --danger:#c40000; --ok:#1f8a4c;
-  --bar-bg:var(--panel); --bar-fg:var(--fg); --bar-muted:var(--muted); --bar-line:var(--line); --bar-chip:var(--chip);
+  --bar-bg:var(--panel); --bar-fg:var(--fg); --bar-muted:var(--muted); --bar-line:var(--line); --bar-chip:var(--chip); --selrow-bg:rgba(47,140,255,.13); --selrow-fg:#164a8f;
   --cv-dark:#111214; --cv-light:#ffffff; --sheet-dark:#2b2c30; --sheet-light:#e4e4e4;
   --font:'Jost',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
   --shadow:0 10px 30px rgba(0,0,0,.14); color-scheme:light;
@@ -29,11 +29,11 @@
 :root[data-skin="dark"]{ /* Studio Dark */
   --bg:#0c0c0d; --fg:#f1f1f1; --muted:#9a9a9a; --panel:#161618; --line:#2a2a2d; --chip:#232326; --chip-on:#f1f1f1; --chip-on-fg:#0c0c0d;
   --accent:#ff2b2b; --accent-fg:#ffffff; --accent-soft:rgba(255,43,43,.14); --danger:#ff5a4f; --ok:#5fd18a;
-  --bar-bg:var(--panel); --bar-fg:var(--fg); --bar-muted:var(--muted); --bar-line:var(--line); --bar-chip:var(--chip);
+  --bar-bg:var(--panel); --bar-fg:var(--fg); --bar-muted:var(--muted); --bar-line:var(--line); --bar-chip:var(--chip); --selrow-bg:rgba(47,140,255,.18); --selrow-fg:#d6e7ff;
   --cv-dark:#0c0c0d; --sheet-dark:#232326; --shadow:0 10px 30px rgba(0,0,0,.55); color-scheme:dark;
 }
 :root[data-skin="mono"]{ /* Black & White: black bars frame a white drawing */
-  --bar-bg:#0a0a0a; --bar-fg:#ffffff; --bar-muted:#a5a5a5; --bar-line:#0a0a0a; --bar-chip:#1e1e20;
+  --bar-bg:#0a0a0a; --bar-fg:#ffffff; --bar-muted:#a5a5a5; --bar-line:#0a0a0a; --bar-chip:#1e1e20; --selrow-bg:rgba(47,140,255,.2); --selrow-fg:#d6e7ff;
 }
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.35;overflow:hidden;-webkit-text-size-adjust:100%}
@@ -99,17 +99,24 @@ input{font:inherit;color:inherit}
 #stage.light #vbtns button{background:rgba(250,250,247,.9);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
 #vbtns button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #vbtns button:disabled{opacity:.35}
-/* bottom toolbar: group switcher + that group's tools, one row */
-#tools{flex:0 0 auto;display:flex;align-items:stretch;background:var(--bar-bg);color:var(--bar-fg);border-top:1px solid var(--bar-line);padding:0 0 env(safe-area-inset-bottom,0px)}
-#btnGroup{flex:0 0 auto;width:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 2px;border-right:1px solid var(--bar-chip);color:var(--accent)}
+/* bottom toolbar, two slim rows: group tabs (or, with something selected, a selection row) + tools (or actions) */
+#tools{flex:0 0 auto;display:flex;flex-direction:column;background:var(--bar-bg);color:var(--bar-fg);border-top:1px solid var(--bar-line);padding:0 0 env(safe-area-inset-bottom,0px)}
+#barTop{height:22px;flex:0 0 auto;display:flex;align-items:stretch;padding:0 6px}
+#barTop .gtab{flex:1;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--bar-muted)}
+#barTop .gtab[aria-selected="true"]{color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+#barTop.sel{background:var(--selrow-bg);color:var(--selrow-fg);align-items:center;gap:8px;padding:0 0 0 10px;font-size:11.5px;white-space:nowrap}
+#barTop.sel b{font-weight:600}
+#barTop.sel .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+#barTop.sel .clr{height:100%;padding:0 10px;font-weight:600;color:inherit;font-size:11.5px}
+#btnGroup{display:none}
 #btnGroup svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #btnGroup span{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:2px}
 #btnGroup span i{font-style:normal;font-size:9px;opacity:.75}
-#toolRow{flex:1;min-width:0;display:flex;gap:0;overflow-x:auto;padding:3px 4px;scrollbar-width:none}
+#toolRow{height:41px;flex:0 0 auto;min-width:0;display:flex;gap:1px;overflow-x:auto;padding:1px 4px;scrollbar-width:none}
 #toolRow::-webkit-scrollbar{display:none}
-.tool{flex:0 0 auto;width:56px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px 4px;border-radius:9px;color:var(--bar-fg)}
-.tool svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.tool span{font-size:10px;color:var(--bar-muted);white-space:nowrap;max-width:54px;overflow:hidden;text-overflow:ellipsis}
+.tool{flex:0 0 auto;width:55px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px 2px 1px;border-radius:8px;color:var(--bar-fg)}
+.tool svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tool span{font-size:9.5px;color:var(--bar-muted);white-space:nowrap;max-width:54px;overflow:hidden;text-overflow:ellipsis}
 .tool[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
 .tool[aria-pressed="true"] span{color:var(--accent)}
 .tool.danger{color:var(--danger)}
@@ -392,8 +399,9 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
     <div id="toast" role="status"></div>
   </main>
   <footer id="tools">
-    <button id="btnGroup" title="Switch tool group" aria-haspopup="menu"><svg id="grpIcon" viewBox="0 0 24 24"></svg><span><b id="grpName" style="font-weight:600">View</b><i>▴</i></span></button>
+    <div id="barTop"></div>
     <div id="toolRow"></div>
+    <button id="btnGroup" title="Switch tool group" aria-haspopup="menu"><svg id="grpIcon" viewBox="0 0 24 24"></svg><span><b id="grpName" style="font-weight:600">View</b><i>▴</i></span></button>
   </footer>
   <input type="file" id="file" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" tabindex="-1" aria-hidden="true">
 </div>
@@ -1141,36 +1149,30 @@ function drawSnapMarker(c, X, Y, kind, r, col) {
   path(); c.strokeStyle = col; c.lineWidth = 2; c.stroke();
   c.restore();
 }
-// Magnifier shown while press-and-hold picking. state.loupe = { X, Y, sn } in screen px.
-const LOUPE_ZOOM = 4;
-function loupeRect() {
-  const L = Math.round(clamp(Math.min(cssW, cssH) * 0.36, 112, 170)); const m = 10;
-  const lp = state.loupe; const left = lp.X > cssW / 2; // put it on the side away from the finger
-  const pr = $('prompt'); const top = (pr && !pr.hidden) ? pr.offsetTop + pr.offsetHeight + 8 : m; // below the instruction strip
-  const x = left ? m : cssW - L - m, y = Math.min(top, Math.max(m, cssH - L - 34));
-  return { x, y, L };
-}
+// Magnifier while press-and-hold picking: a round 2× bubble centred on the pointer, which rides just above the finger.
+// state.loupe = { X, Y (pointer), fx, fy (finger), sn } in screen px.
+const LOUPE_ZOOM = 2, LOUPE_R = 60;
 function drawLoupe(acc) {
-  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = loupeRect(); const { x, y, L } = R;
-  const w = toWorld(lp.X, lp.Y, V); const s2 = V.s * LOUPE_ZOOM; const cx = x + L / 2, cy = y + L / 2;
-  const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
+  const lp = state.loupe; const dpr = state.dpr; const V = V0(); const R = LOUPE_R; const cx = lp.X, cy = lp.Y;
+  const w = toWorld(cx, cy, V); const s2 = V.s * LOUPE_ZOOM; const V2 = { s: s2, tx: cx - w[0] * s2, ty: cy + w[1] * s2 };
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 10; ctx.fillStyle = bgColor(); ctx.fillRect(x, y, L, L); ctx.shadowBlur = 0;
-  ctx.beginPath(); ctx.rect(x, y, L, L); ctx.clip();
-  const a = toWorld(x, y, V2), b = toWorld(x + L, y + L, V2);
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 2; ctx.fillStyle = bgColor(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
+  const a = toWorld(cx - R, cy - R, V2), b = toWorld(cx + R, cy + R, V2);
   drawContent(V2, [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
   if (state.tool && state.tool.draw && PICK_TOOLS.has(state.tool.name)) { ctx.save(); state.tool.draw(ctx, V2, acc); ctx.restore(); }
   drawRubber(ctx, V2, acc);
-  // crosshair at the finger point
-  ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
+  // crosshair at the pointer
+  ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
   if (lp.sn && lp.sn.kind) { const q = toScreen(lp.sn.x, lp.sn.y, V2); drawSnapMarker(ctx, q[0], q[1], lp.sn.kind, 8, acc); }
   ctx.restore();
-  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, L - 2, L - 2);
-  // label under the loupe
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+  // snap name and length (or coordinates) just above the bubble (below it near the top edge)
   const sn = lp.sn; const base = rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (base ? '  ' + fmtLen(Math.hypot(sn.x - base[0], sn.y - base[1])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
-  ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, Math.max(L, 60) + 80); const lx = x + (x < cssW / 2 ? 0 : L - tw), ly = y + L + 4;
-  ctx.fillStyle = 'rgba(20,20,20,.82)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
+  ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, cssW - 8);
+  const lx = clamp(cx - tw / 2, 4, cssW - tw - 4); let ly = cy - R - 24; if (ly < 4) ly = cy + R + 6;
+  ctx.fillStyle = 'rgba(20,20,20,.86)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
   ctx.restore();
 }
 function highlightItem(it, V) {
@@ -1330,16 +1332,17 @@ function findIntersection(wx, wy, tol, S) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5; // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 88; // pointer about 1.5 cm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
   holdTimer = null; if (!state.drawing || pointers.size !== 1 || dragMoved) return;
   try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { }
-  gesture = false; state.loupe = { X, Y, sn: snapPoint(X, Y, PRECISE_SNAP_PX) }; updatePrecise(X, Y); startEdgePan();
+  gesture = false; state.loupe = { X, Y, fx: X, fy: Y, sn: null }; updatePrecise(X, Y); startEdgePan();
 }
+// X, Y are the finger; the pointer (lp.X, lp.Y) rides POINTER_LIFT px above it so it stays visible
 function updatePrecise(X, Y) {
-  const lp = state.loupe; if (!lp) return; lp.X = X; lp.Y = Y;
+  const lp = state.loupe; if (!lp) return; lp.fx = X; lp.fy = Y; lp.X = X; lp.Y = Y - Math.max(0, Math.min(POINTER_LIFT, Y - 12)); X = lp.X; Y = lp.Y; // near the top edge the pointer comes closer instead of leaving the screen
   const sn = snapPoint(X, Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast();
 }
 function exitPrecise(place) {
@@ -1424,8 +1427,7 @@ function exitToSelect() {
   if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { }
   if ($('textDlg').classList.contains('on')) $('txtCancel').click();
   state.selection.clear(); state.hoverItem = null; state.boxSel = null; state.lastPt = null; state.snapMark = null; setResult(null);
-  if (!TOOL_GROUPS[state.group].includes('select')) setGroup('view');
-  startTool('select', true); requestFull();
+  startTool('select', true); requestFull(); // the tab stays where it was, so the next tool is one tap away
 }
 function doneTool() { if (state.tool && state.tool.onDone) state.tool.onDone(); }
 function backPoint() { if (state.tool && state.tool.onBack) state.tool.onBack(); requestFast(); }
@@ -1444,33 +1446,69 @@ typed.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.prevent
 $('btnEnter').addEventListener('click', submitTyped);
 function submitTyped() { const v = parseTyped(typed.value); if (!v) { toast('Use 1200 · @1200,0 · @1500<90 · 100,200'); return; } typed.value = ''; if (state.tool && state.tool.onTyped) state.tool.onTyped(v); requestFast(); }
 
+// With no tool running, tapping the drawing selects (the Select pointer), so Select is not a button.
 const TOOL_GROUPS = {
-  view: ['select', 'box', 'info', 'fit'],
-  measure: ['dist', 'area', 'angle', 'coord', 'info'],
-  edit: ['select', 'box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
+  view: ['box', 'info', 'fit'],
+  measure: ['dist', 'area', 'angle', 'coord'],
+  edit: ['move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
   draw: ['line', 'pline', 'rect', 'circle', 'arc', 'spline', 'text']
 };
+// Actions shown instead of the tabs while something is selected
+const SEL_ACTIONS = ['move', 'copy', 'rotate', 'mirror', 'scale', 'delete', 'props', 'similar', 'order', 'align'];
 const ICON = {
   select: '<path d="M5 3l14 9-7 1-3 7z"/>', box: '<path d="M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2M4 10v4M20 10v4M10 4h4M10 20h4"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   dist: '<path d="M3 17 17 3M3 17v-4M3 17h4M17 3h-4M17 3v4"/>', area: '<path d="M4 6l6-2 10 4-3 12-13-3z"/>', angle: '<path d="M4 20 20 6M4 20h16M11 20a8 8 0 0 0-1.5-5"/>', coord: '<path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/>',
   move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', order: '<rect x="3" y="3" width="11" height="11" rx="1"/><path d="M10 10h11v11H10z" fill="currentColor" fill-opacity=".25"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+  props: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/>', similar: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke-dasharray="2.5 2"/><path d="M14 4h6v6M10 20H4v-6" opacity=".55"/>',
   line: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>', pline: '<path d="M3 19l5-11 5 7 4-9 4 4"/>', rect: '<rect x="4" y="6" width="16" height="12"/>', circle: '<circle cx="12" cy="12" r="8"/>', arc: '<path d="M4 18a10 10 0 0 1 16 0"/>', spline: '<path d="M3 17c4-12 6 12 10 0s4-6 8-2"/>', text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>'
 };
-const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area' };
-function renderToolRow() {
-  const row = $('toolRow'); row.innerHTML = '';
-  for (const t of TOOL_GROUPS[state.group]) { const b = document.createElement('button'); b.className = 'tool' + (t === 'delete' ? ' danger' : ''); b.dataset.tool = t; b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[t] + '</svg><span>' + LABEL[t] + '</span>'; b.setAttribute('aria-pressed', state.tool && state.tool.name === t ? 'true' : 'false'); b.addEventListener('click', () => { if (t === 'fit') { zoomExtents(); return; } startTool(t); }); row.appendChild(b); }
-}
-// Group switcher (bottom-left): opens a small menu of View / Measure / Edit / Draw
+const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area', props: 'Properties', similar: 'Similar' };
+// ----- Bottom bar: tabs + tools, or (something selected) a selection row + actions. Both are the same height. -----
 const GROUP_NAME = { view: 'View', measure: 'Measure', edit: 'Edit', draw: 'Draw' };
-function setGroup(g) {
-  state.group = g; for (const x of $('groups').children) x.setAttribute('aria-selected', x.dataset.g === g ? 'true' : 'false');
-  const src = $('groups').querySelector('[data-g="' + g + '"] svg'); $('grpIcon').innerHTML = src ? src.innerHTML : ''; $('grpName').textContent = GROUP_NAME[g] || g;
-  renderToolRow(); updateUndoBtns(); $('toolRow').scrollLeft = 0;
+const groupOf = (k) => Object.keys(TOOL_GROUPS).find(g => TOOL_GROUPS[g].includes(k)) || null;
+function selMode() { const t = state.tool ? state.tool.name : 'select'; return !!(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t)); }
+function selSummary() {
+  const sel = typeof selectedEnts === 'function' ? selectedEnts() : []; if (!sel.length) return '';
+  const name = (e) => e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t;
+  if (sel.length === 1) return name(sel[0]) + ' · ' + (sel[0].L || '0');
+  const c = new Map(); for (const e of sel) { const k = name(e); c.set(k, (c.get(k) || 0) + 1); }
+  return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => n + ' ' + k).join(', ') + (c.size > 3 ? '…' : '');
 }
-$('groups').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; closeGroups(); setGroup(b.dataset.g); });
+let barKey = '';
+function renderBar(force) {
+  const t = state.tool ? state.tool.name : 'select'; const sm = selMode();
+  const key = (sm ? 'S' + state.selection.size + ':' + selSummary() : 'T' + state.group) + '|' + t;
+  if (!force && key === barKey) return; barKey = key;
+  const top = $('barTop'), row = $('toolRow'); top.innerHTML = ''; top.className = sm ? 'sel' : '';
+  if (sm) {
+    const n = document.createElement('b'); n.textContent = state.selection.size + ' selected';
+    const w = document.createElement('span'); w.className = 'what'; w.textContent = selSummary();
+    const c = document.createElement('button'); c.className = 'clr'; c.textContent = 'Clear ✕'; c.setAttribute('aria-label', 'Clear the selection');
+    c.addEventListener('click', () => { state.selection.clear(); if (state.tool && state.tool.onSelChange) state.tool.onSelChange(); else setResult(null); requestFull(); renderBar(); });
+    top.append(n, w, c);
+  } else for (const g of Object.keys(TOOL_GROUPS)) {
+    const b = document.createElement('button'); b.className = 'gtab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', g === state.group ? 'true' : 'false'); b.textContent = GROUP_NAME[g];
+    b.addEventListener('click', () => setGroup(g)); top.appendChild(b);
+  }
+  row.innerHTML = '';
+  for (const k of (sm ? SEL_ACTIONS : TOOL_GROUPS[state.group])) {
+    const b = document.createElement('button'); b.className = 'tool' + (k === 'delete' ? ' danger' : ''); b.dataset.tool = k;
+    b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[k] + '</svg><span>' + LABEL[k] + '</span>'; b.setAttribute('aria-pressed', !sm && t === k ? 'true' : 'false');
+    b.addEventListener('click', () => barAction(k, sm)); row.appendChild(b);
+  }
+  if (sm || force) row.scrollLeft = 0;
+}
+function barAction(k, fromSelection) {
+  if (k === 'fit') { zoomExtents(); return; }
+  if (k === 'props') { openProps(); return; }
+  if (k === 'similar') { selectSimilar(); return; }
+  // an edit started from the selection row shows its own tab while it runs, then the bar returns to your tab
+  if (fromSelection) { const g = groupOf(k); if (g && g !== state.group) { state.returnGroup = state.group; state.group = g; } }
+  startTool(k);
+}
+function renderToolRow() { renderBar(true); }
+function setGroup(g) { state.group = g; state.returnGroup = null; renderBar(true); updateUndoBtns(); }
 function closeGroups() { $('groups').classList.remove('open'); if (!document.querySelector('.sheet.open')) $('scrim').classList.remove('on'); }
-$('btnGroup').addEventListener('click', () => { const g = $('groups'); if (g.classList.contains('open')) closeGroups(); else { g.classList.add('open'); $('scrim').classList.add('on'); } });
 // The instruction strip shows only while a tool needs input or there is a result to read.
 const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text', 'pdfwin']);
 function updateChrome() {
@@ -1480,10 +1518,11 @@ function updateChrome() {
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
   $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text', 'pdfwin'].includes(t);
-  $('btnProps').hidden = !(state.drawing && state.selection.size && ['select', 'box', 'info'].includes(t)); $('btnSimilar').hidden = $('btnProps').hidden;
+  $('btnProps').hidden = true; $('btnSimilar').hidden = true; // Properties and Similar live in the bottom bar's selection actions
+  renderBar();
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
-function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold on the drawing to magnify, then drag to the exact point', 4200), 400); }
+function maybeHoldTip(name) { if (holdTipShown || !PICK_TOOLS.has(name)) return; holdTipShown = true; try { localStorage.setItem('tct-holdtip', '1'); } catch (e) { } setTimeout(() => toast('Tip: press and hold, then drag. The pointer sits just above your finger; lift to place the point.', 4600), 400); }
 
 for (const b of document.querySelectorAll('#orderPanel [data-order]')) b.addEventListener('click', () => { const mode = b.dataset.order; if (state.tool && state.tool.name === 'order') state.tool.choose(mode); else { closeSheets(); reorderSelection(mode); } });
 function needSelection(tool, next) { // returns true if selection exists, otherwise prompts to select
@@ -1492,9 +1531,10 @@ function needSelection(tool, next) { // returns true if selection exists, otherw
 }
 function startTool(name, keepSel) {
   if (!keepSel && state.tool && state.tool.name !== name && !['select', 'box'].includes(name) && ['select', 'box', 'info', 'coord', 'dist', 'area', 'angle'].includes(state.tool.name)) { /* keep selection across tools */ }
+  if (name === 'select' && state.returnGroup) { state.group = state.returnGroup; state.returnGroup = null; }
   state.tool = makeTool(name); state.lastPt = null; state.snapMark = null; setResult(null); typed.value = '';
   toolName.textContent = LABEL[name] || name; state.tool.start();
-  for (const b of $('toolRow').children) b.setAttribute('aria-pressed', b.dataset.tool === name ? 'true' : 'false');
+  renderBar();
   updateChrome(); maybeHoldTip(name);
   requestFast();
 }
@@ -2745,7 +2785,7 @@ async function writePdf({ W, H, content, image, alphas, title }) {
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610070842' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610070851' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }
