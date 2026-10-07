@@ -639,7 +639,7 @@ class SnapGrid {
   }
   query(x, y, r, on) { // returns best {x,y,kind,d}; `on` (optional) lists which snap kinds are switched on
     let best = null; const i0 = ((x - r) / this.cs) | 0, i1 = ((x + r) / this.cs) | 0, j0 = ((y - r) / this.cs) | 0, j1 = ((y + r) / this.cs) | 0;
-    if ((i1 - i0) * (j1 - j0) > 400) return null;
+    if ((i1 - i0) * (j1 - j0) > 12000) return null; // (was 400: snapping stopped working when zoomed out)
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = this.cells.get(i + ',' + j); if (!a) continue; for (const idx of a) { const px = this.pts[idx], py = this.pts[idx + 1]; const d = Math.hypot(px - x, py - y); if (d <= r) { const kind = this.pts[idx + 2]; if (on && !on[kind]) continue; const score = d * (kind === 1 ? 0.8 : kind === 3 ? 0.9 : 1); if (!best || score < best.score) best = { x: px, y: py, kind, d, score }; } } }
     return best;
   }
@@ -781,7 +781,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
   const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al; curLts = (e.lts || 1) * (ctx.lts || 1); curLw = resolveLw(e, ctx, layer);
   switch (e.t) {
     case 'LINE': { const a = mApply(M, e.a), b = mApply(M, e.b); const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitPoly(S, item, [a[0], a[1], b[0], b[1]], false, key, M); S.snap.add(a[0], a[1], 1); S.snap.add(b[0], b[1], 1); S.snap.add((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 2); break; }
-    case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; const gc = polyCentroid(flat); if (gc) S.snap.add(gc[0], gc[1], 11); } break; }
+    case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; const gb = boxOfFlat(flat); const gw = gb[2] - gb[0], gh = gb[3] - gb[1]; const gc = Math.min(gw, gh) > Math.max(gw, gh) * 0.15 ? polyCentroid(flat) : null; if (gc) S.snap.add(gc[0], gc[1], 11); /* not for long thin shapes such as wall outlines */ } break; }
     case 'ARC': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitArc(S, item, key, e.ce, e.r, e.a0, e.a1, true, M, false); break; }
     case 'CIRCLE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitArc(S, item, key, e.ce, e.r, 0, TAU, true, M, true); item.closed = true; item.fillPoly = item.polys[0]; break; }
     case 'ELLIPSE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitEllipse(S, item, key, e.ce, e.m, e.k, e.a0, e.a1, M); break; }
@@ -882,7 +882,7 @@ function getBlockGeom(name, ctx, depth) {
   const blk = state.drawing.blocks[name]; const S2 = makeScene(); const it = newItem({ t: 'BLOCKDEF', id: -1 });
   for (const sub of blk.ents) { try { emitEntity(sub, IDM, ctx, S2, it, depth + 1); } catch (err) { console.warn('block emit', name, sub.t, err); } }
   let segs = 0; for (const p of it.polys) segs += p.length / 2;
-  g = { paths: it.paths, fills: it.fills, wipes: it.wipes, texts: it.texts, polys: it.polys, curves: it.curves || [], bbox: it.bbox, snap: S2.snap.pts, segs, diag: boxOk(it.bbox) ? Math.hypot(it.bbox[2] - it.bbox[0], it.bbox[3] - it.bbox[1]) : 0 };
+  g = { paths: it.paths, fills: it.fills, wipes: it.wipes, texts: it.texts, polys: it.polys, curves: it.curves || [], bbox: it.bbox, snap: S2.snap.pts, grid: null, segs, diag: boxOk(it.bbox) ? Math.hypot(it.bbox[2] - it.bbox[0], it.bbox[3] - it.bbox[1]) : 0 };
   blockCache.set(key, g); return g;
 }
 function domMatrix(M) { return new DOMMatrix([M.a, M.b, M.c, M.d, M.e, M.f]); }
@@ -1196,15 +1196,16 @@ function zoomToBox(bb) {
 }
 function zoomAt(X, Y, k) { const V = state.view; const s2 = clamp(V.s * k, 1e-7, 1e7); const kk = s2 / V.s; state.view = { s: s2, tx: X - (X - V.tx) * kk, ty: Y - (Y - V.ty) * kk }; }
 // ===================== Picking & snapping =====================
-function pickAt(wx, wy, tolWorld, S) {
+function pickAt(wx, wy, tolWorld, S, edgesOnly) { // edgesOnly: snapping wants lines, not the inside of hatches or text
   S = S || getScene(state.spaceIdx); let best = null;
   for (const it of S.items) {
     if (!layerOn(resolveLayer(it.ent, { layer: null }))) continue;
     const bb = it.bbox; if (wx < bb[0] - tolWorld || wx > bb[2] + tolWorld || wy < bb[1] - tolWorld || wy > bb[3] + tolWorld) continue;
     let d = Infinity, q = null;
     for (const poly of it.polys) { const r = distToPoly(wx, wy, poly, false); if (r.d < d) { d = r.d; q = r; } }
-    if (it.inst) for (const ins of it.inst) { const l = mApply(ins.Minv, [wx, wy]); const g = ins.g; const tl = tolWorld / ins.scale; if (l[0] < g.bbox[0] - tl || l[0] > g.bbox[2] + tl || l[1] < g.bbox[1] - tl || l[1] > g.bbox[3] + tl) continue; for (const poly of g.polys) { const r = distToPoly(l[0], l[1], poly, false); const dw = r.d * ins.scale; if (dw < d) { const w = mApply(ins.M, [r.x, r.y]); d = dw; q = { x: w[0], y: w[1] }; } } if (d > tolWorld && g.polys.length === 0 && g.fills.length) { for (const f of g.fills) if (f.loops && f.loops.some(lp => pointInPoly(l[0], l[1], lp))) { d = tolWorld * 0.95; q = { x: wx, y: wy }; break; } } }
-    if (d > tolWorld && it.fillPoly && (it.hatch || it.isText) && pointInPoly(wx, wy, it.fillPoly)) { d = tolWorld * 0.95; q = { x: wx, y: wy }; }
+    if (it.inst) for (const ins of it.inst) { const l = mApply(ins.Minv, [wx, wy]); const g = ins.g; const tl = tolWorld / ins.scale; if (l[0] < g.bbox[0] - tl || l[0] > g.bbox[2] + tl || l[1] < g.bbox[1] - tl || l[1] > g.bbox[3] + tl) continue; for (const poly of g.polys) { const r = distToPoly(l[0], l[1], poly, false); const dw = r.d * ins.scale; if (dw < d) { const w = mApply(ins.M, [r.x, r.y]); d = dw; q = { x: w[0], y: w[1] }; } } if (!edgesOnly && d > tolWorld && g.polys.length === 0 && g.fills.length) { for (const f of g.fills) if (f.loops && f.loops.some(lp => pointInPoly(l[0], l[1], lp))) { d = tolWorld * 0.95; q = { x: wx, y: wy }; break; } } }
+    if (edgesOnly && it.isText) continue;
+    if (!edgesOnly && d > tolWorld && it.fillPoly && (it.hatch || it.isText) && pointInPoly(wx, wy, it.fillPoly)) { d = tolWorld * 0.95; q = { x: wx, y: wy }; }
     if (d <= tolWorld && (!best || d < best.d)) best = { item: it, d, x: q.x, y: q.y };
   }
   return best;
@@ -1219,36 +1220,55 @@ const SNAP_HELP = { 1: 'ends of lines, arcs and polyline corners', 2: 'middle of
 const snapOn = {};
 (function loadSnapKinds() { let off = []; try { off = (localStorage.getItem('tct-snaps-off') || '').split(',').filter(Boolean).map(Number); } catch (e) { } for (const k of SNAP_ORDER) snapOn[k] = !off.includes(k); })();
 function saveSnapKinds() { try { localStorage.setItem('tct-snaps-off', SNAP_ORDER.filter(k => !snapOn[k]).join(',')); } catch (e) { } }
+const NEAR_K = 1.3; // Nearest catches a little further out than point snaps
+// Every enabled snap near the finger is a candidate (point snaps, intersections, perpendicular, tangent, also through
+// a layout viewport); the closest one wins, with a small preference for endpoints, centres and intersections.
+// Nearest is used only when nothing else is close.
 function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item,vp}
   const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
   if (!state.drawing || !state.snapOn) return { x: w[0], y: w[1], kind: 0 };
-  const S = getScene(state.spaceIdx);
-  let best = null;
-  const sn = S.snap.query(w[0], w[1], tol, snapOn);
-  if (sn) best = { x: sn.x, y: sn.y, kind: sn.kind, d: Math.hypot(sn.x - w[0], sn.y - w[1]) };
-  // In a layout, also snap to the model geometry visible through the viewport under the finger
-  const vp = vpAt(w[0], w[1]); let MS = null, m = null, mt = 0;
-  if (vp) { MS = getScene(0); m = paperToModel(vp, w); mt = tol / vp.sc; const s2 = MS.snap.query(m[0], m[1], mt, snapOn); if (s2) { const q = modelToPaper(vp, [s2.x, s2.y]); const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (!best || d < best.d) best = { x: q[0], y: q[1], kind: s2.kind, d, vp }; } }
-  if (best) return best;
-  // Perpendicular and tangent work from the previous point of the current tool
+  const S = getScene(state.spaceIdx); const cands = [];
   const base = (snapOn[9] || snapOn[10]) && state.lastPt ? state.lastPt : null;
-  const hit = pickAt(w[0], w[1], tol * 0.8, S);
-  if (hit && hit.x != null && !(vp && hit.item.ent.t === 'VIEWPORT')) {
-    if (snapOn[5]) { const hit2 = findIntersection(w[0], w[1], tol, S, hit.item); if (hit2) return { x: hit2[0], y: hit2[1], kind: 5, item: hit.item }; }
-    if (base) { const d = dynSnap(hit.item, w, base, tol); if (d) return { x: d[0], y: d[1], kind: d[2], item: hit.item }; }
-    if (snapOn[6]) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
-    return { x: w[0], y: w[1], kind: 0 };
-  }
+  // on the sheet (or in model space)
+  const sn = S.snap.query(w[0], w[1], tol, snapOn); if (sn) cands.push({ x: sn.x, y: sn.y, kind: sn.kind, d: sn.d });
+  const bs = blockSnap(S, w, tol); if (bs) cands.push(bs);
+  const vp = vpAt(w[0], w[1]);
+  const hit = pickAt(w[0], w[1], tol * NEAR_K, S, true); const onSheet = hit && hit.x != null && !(vp && hit.item.ent.t === 'VIEWPORT');
+  if (snapOn[5]) { const ix = findIntersection(w[0], w[1], tol, S); if (ix) cands.push({ x: ix.p[0], y: ix.p[1], kind: 5, d: ix.d }); }
+  if (onSheet && base) { const d = dynSnap(hit.item, w, base, tol); if (d) cands.push({ x: d[0], y: d[1], kind: d[2], d: d[3], item: hit.item }); }
+  // through a layout viewport: the model under the finger, mapped back onto the sheet
+  let MS = null, m = null, mt = 0, h2 = null;
   if (vp) {
-    const h = pickAt(m[0], m[1], mt * 0.8, MS);
-    if (h && h.x != null) {
-      if (snapOn[5]) { const i2 = findIntersection(m[0], m[1], mt, MS, h.item); if (i2) { const q = modelToPaper(vp, i2); return { x: q[0], y: q[1], kind: 5, item: h.item, vp }; } }
-      if (base && vpAt(base[0], base[1]) === vp) { const d = dynSnap(h.item, m, paperToModel(vp, base), mt); if (d) { const q = modelToPaper(vp, d); return { x: q[0], y: q[1], kind: d[2], item: h.item, vp }; } }
-      if (snapOn[6]) { const q = modelToPaper(vp, [h.x, h.y]); return { x: q[0], y: q[1], kind: 6, item: h.item, vp }; }
+    MS = getScene(0); m = paperToModel(vp, w); mt = tol / vp.sc; const toP = (x, y) => modelToPaper(vp, [x, y]);
+    const push = (x, y, kind, item) => { const q = toP(x, y); cands.push({ x: q[0], y: q[1], kind, d: Math.hypot(q[0] - w[0], q[1] - w[1]), vp, item }); };
+    const s2 = MS.snap.query(m[0], m[1], mt, snapOn); if (s2) push(s2.x, s2.y, s2.kind);
+    const b2 = blockSnap(MS, m, mt); if (b2) push(b2.x, b2.y, b2.kind);
+    if (snapOn[5]) { const i2 = findIntersection(m[0], m[1], mt, MS); if (i2) push(i2.p[0], i2.p[1], 5); }
+    h2 = pickAt(m[0], m[1], mt * NEAR_K, MS, true);
+    if (h2 && h2.x != null && base && vpAt(base[0], base[1]) === vp) { const d = dynSnap(h2.item, m, paperToModel(vp, base), mt); if (d) push(d[0], d[1], d[2], h2.item); }
+  }
+  if (cands.length) { let best = null, bsc = Infinity; for (const c of cands) { const k = c.kind === 1 ? 0.8 : c.kind === 5 ? 0.85 : c.kind === 3 ? 0.9 : 1; if (c.d * k < bsc) { bsc = c.d * k; best = c; } } return best; }
+  if (snapOn[6]) {
+    if (onSheet) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
+    if (h2 && h2.x != null) { const q = modelToPaper(vp, [h2.x, h2.y]); return { x: q[0], y: q[1], kind: 6, item: h2.item, vp }; }
+    if (hit && hit.x != null) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
+  }
+  return { x: w[0], y: w[1], kind: 0 };
+}
+// Snap points of large blocks (trees, detailed furniture) are looked up in the block itself when the finger is over it
+function blockSnap(S, w, tol) {
+  let best = null;
+  for (const it of S.items) {
+    if (!it.inst) continue; const bb = it.bbox; if (w[0] < bb[0] - tol || w[0] > bb[2] + tol || w[1] < bb[1] - tol || w[1] > bb[3] + tol) continue;
+    if (!layerOn(resolveLayer(it.ent, { layer: null }))) continue;
+    for (const ins of it.inst) {
+      const g = ins.g; if (g.snap.length <= 900) continue; // small blocks are already in the drawing's snap grid
+      if (!g.grid) { g.grid = new SnapGrid(); for (let i = 0; i < g.snap.length; i += 3) g.grid.add(g.snap[i], g.snap[i + 1], g.snap[i + 2]); g.grid.build(); }
+      const l = mApply(ins.Minv, w); const r = g.grid.query(l[0], l[1], tol / (ins.scale || 1), snapOn); if (!r) continue;
+      const q = mApply(ins.M, [r.x, r.y]); const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d <= tol && (!best || d < best.d)) best = { x: q[0], y: q[1], kind: r.kind, d, item: it };
     }
   }
-  if (hit && hit.x != null && snapOn[6]) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
-  return { x: w[0], y: w[1], kind: 0 };
+  return best;
 }
 // Perpendicular / tangent from `base` to the object under the finger `f`. The snapped point may sit a little away
 // from the finger (a little beyond the snap distance); move further away and Nearest takes over.
@@ -1289,13 +1309,21 @@ function measureSpace(pts) {
   return { pts: pts.map(p => paperToModel(v0, p)), vp: v0 };
 }
 function scaleNote(ms) { if (ms.vp) { const k = 1 / ms.vp.sc; return ['Measured', 'in model through viewport (1:' + (k >= 10 ? fmtNum(k, 0) : fmtNum(k, 2)) + ')']; } if (ms.sheet) return ['Measured', 'on the sheet (paper size)']; return null; }
-function findIntersection(wx, wy, tol, S, itemA) {
-  const near = []; for (const it of S.items) { if (it === itemA || it.isText) continue; const bb = it.bbox; if (wx < bb[0] - tol || wx > bb[2] + tol || wy < bb[1] - tol || wy > bb[3] + tol) continue; near.push(it); if (near.length > 6) break; }
+function findIntersection(wx, wy, tol, S) {
+  const segs = [];
+  for (const it of S.items) {
+    if (it.isText || it.ent.t === 'VIEWPORT') continue; const bb = it.bbox; if (wx < bb[0] - tol || wx > bb[2] + tol || wy < bb[1] - tol || wy > bb[3] + tol) continue;
+    if (!layerOn(resolveLayer(it.ent, { layer: null }))) continue;
+    for (const sg of itemSegsNear(it, wx, wy, tol)) segs.push(sg); if (segs.length > 320) break;
+  }
+  const eps = tol * 0.01; const atEnd = (p, s) => Math.hypot(p[0] - s[0][0], p[1] - s[0][1]) < eps || Math.hypot(p[0] - s[1][0], p[1] - s[1][1]) < eps;
   let best = null;
-  const segsNear = (it) => itemSegsNear(it, wx, wy, tol);
-  const A = segsNear(itemA);
-  for (const it of near) { for (const sb of segsNear(it)) for (const sa of A) { const p = segIntersect(sa[0], sa[1], sb[0], sb[1]); if (p) { const d = Math.hypot(p[0] - wx, p[1] - wy); if (d <= tol && (!best || d < best.d)) best = { p, d }; } } }
-  return best ? best.p : null;
+  for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length; j++) {
+    const a = segs[i], b = segs[j]; const p = segIntersect(a[0], a[1], b[0], b[1]); if (!p) continue;
+    if (atEnd(p, a) && atEnd(p, b)) continue; // two pieces simply joined end to end: that corner is an Endpoint
+    const d = Math.hypot(p[0] - wx, p[1] - wy); if (d <= tol && (!best || d < best.d)) best = { p, d };
+  }
+  return best;
 }
 
 // ===================== Pointer handling =====================
@@ -2717,7 +2745,7 @@ async function writePdf({ W, H, content, image, alphas, title }) {
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610070820' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610070842' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }

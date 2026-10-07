@@ -25,7 +25,7 @@ class SnapGrid {
   }
   query(x, y, r, on) { // returns best {x,y,kind,d}; `on` (optional) lists which snap kinds are switched on
     let best = null; const i0 = ((x - r) / this.cs) | 0, i1 = ((x + r) / this.cs) | 0, j0 = ((y - r) / this.cs) | 0, j1 = ((y + r) / this.cs) | 0;
-    if ((i1 - i0) * (j1 - j0) > 400) return null;
+    if ((i1 - i0) * (j1 - j0) > 12000) return null; // (was 400: snapping stopped working when zoomed out)
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = this.cells.get(i + ',' + j); if (!a) continue; for (const idx of a) { const px = this.pts[idx], py = this.pts[idx + 1]; const d = Math.hypot(px - x, py - y); if (d <= r) { const kind = this.pts[idx + 2]; if (on && !on[kind]) continue; const score = d * (kind === 1 ? 0.8 : kind === 3 ? 0.9 : 1); if (!best || score < best.score) best = { x: px, y: py, kind, d, score }; } } }
     return best;
   }
@@ -167,7 +167,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
   const layer = resolveLayer(e, ctx); const aci = resolveColor(e, ctx, layer); const al = resolveAlpha(e, ctx, layer); curAl = al; curLts = (e.lts || 1) * (ctx.lts || 1); curLw = resolveLw(e, ctx, layer);
   switch (e.t) {
     case 'LINE': { const a = mApply(M, e.a), b = mApply(M, e.b); const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitPoly(S, item, [a[0], a[1], b[0], b[1]], false, key, M); S.snap.add(a[0], a[1], 1); S.snap.add(b[0], b[1], 1); S.snap.add((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 2); break; }
-    case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; const gc = polyCentroid(flat); if (gc) S.snap.add(gc[0], gc[1], 11); } break; }
+    case 'PLINE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); const flat = emitPline(S, item, key, e.v, e.closed, M); if (e.closed && flat) { item.closed = true; item.fillPoly = flat; const gb = boxOfFlat(flat); const gw = gb[2] - gb[0], gh = gb[3] - gb[1]; const gc = Math.min(gw, gh) > Math.max(gw, gh) * 0.15 ? polyCentroid(flat) : null; if (gc) S.snap.add(gc[0], gc[1], 11); /* not for long thin shapes such as wall outlines */ } break; }
     case 'ARC': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitArc(S, item, key, e.ce, e.r, e.a0, e.a1, true, M, false); break; }
     case 'CIRCLE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitArc(S, item, key, e.ce, e.r, 0, TAU, true, M, true); item.closed = true; item.fillPoly = item.polys[0]; break; }
     case 'ELLIPSE': { const key = sceneKey(S, layer, aci, resolveLt(e, ctx, layer), item); emitEllipse(S, item, key, e.ce, e.m, e.k, e.a0, e.a1, M); break; }
@@ -268,7 +268,7 @@ function getBlockGeom(name, ctx, depth) {
   const blk = state.drawing.blocks[name]; const S2 = makeScene(); const it = newItem({ t: 'BLOCKDEF', id: -1 });
   for (const sub of blk.ents) { try { emitEntity(sub, IDM, ctx, S2, it, depth + 1); } catch (err) { console.warn('block emit', name, sub.t, err); } }
   let segs = 0; for (const p of it.polys) segs += p.length / 2;
-  g = { paths: it.paths, fills: it.fills, wipes: it.wipes, texts: it.texts, polys: it.polys, curves: it.curves || [], bbox: it.bbox, snap: S2.snap.pts, segs, diag: boxOk(it.bbox) ? Math.hypot(it.bbox[2] - it.bbox[0], it.bbox[3] - it.bbox[1]) : 0 };
+  g = { paths: it.paths, fills: it.fills, wipes: it.wipes, texts: it.texts, polys: it.polys, curves: it.curves || [], bbox: it.bbox, snap: S2.snap.pts, grid: null, segs, diag: boxOk(it.bbox) ? Math.hypot(it.bbox[2] - it.bbox[0], it.bbox[3] - it.bbox[1]) : 0 };
   blockCache.set(key, g); return g;
 }
 function domMatrix(M) { return new DOMMatrix([M.a, M.b, M.c, M.d, M.e, M.f]); }
