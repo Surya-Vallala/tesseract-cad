@@ -78,9 +78,9 @@ $('shPdf').addEventListener('click', () => { closeSheets(); openPdfPanel(); });
 const PAPER_MM = { A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841], Letter: [279.4, 215.9], Tabloid: [431.8, 279.4] }; // landscape
 const UNIT_MM = { 1: 25.4, 2: 304.8, 4: 1, 5: 10, 6: 1000, 8: 0.0000254, 9: 0.0254, 10: 914.4, 14: 100 };
 const PDF_MAX_PX = 24e6; // image PDFs: largest picture a phone can draw comfortably
-const pdfOpts = { area: null, paper: 'A3', orient: 'auto', scale: 'fit', color: 'color', lw: true, qual: 'vector', win: null, winKey: '' };
-try { const o = JSON.parse(localStorage.getItem('tct-pdf') || '{}'); for (const k of ['paper', 'orient', 'color', 'lw', 'qual']) if (o[k] != null) pdfOpts[k] = o[k]; } catch (e) { }
-function savePdfOpts() { try { localStorage.setItem('tct-pdf', JSON.stringify({ paper: pdfOpts.paper, orient: pdfOpts.orient, color: pdfOpts.color, lw: pdfOpts.lw, qual: pdfOpts.qual })); } catch (e) { } }
+const pdfOpts = { area: null, paper: 'A3', orient: 'auto', scale: 'fit', color: 'color', lw: true, alpha: true, qual: 'vector', win: null, winKey: '' };
+try { const o = JSON.parse(localStorage.getItem('tct-pdf') || '{}'); for (const k of ['paper', 'orient', 'color', 'lw', 'alpha', 'qual']) if (o[k] != null) pdfOpts[k] = o[k]; } catch (e) { }
+function savePdfOpts() { try { localStorage.setItem('tct-pdf', JSON.stringify({ paper: pdfOpts.paper, orient: pdfOpts.orient, color: pdfOpts.color, lw: pdfOpts.lw, alpha: pdfOpts.alpha, qual: pdfOpts.qual })); } catch (e) { } }
 const pdfKey = () => (activeDoc ? activeDoc.id : 0) + ':' + state.spaceIdx;
 function hasSheet() { const sp = curSpace(); return !!(sp && sp.paper && sp.limits && sp.limits[1][0] > sp.limits[0][0] && sp.limits[1][1] > sp.limits[0][1]); }
 function spaceExtents() {
@@ -119,7 +119,7 @@ function openPdfPanel() {
   if (!pdfOpts.area || (pdfOpts.area === 'sheet' && !hasSheet()) || (pdfOpts.area === 'window' && pdfOpts.winKey !== pdfKey())) pdfOpts.area = hasSheet() ? 'sheet' : 'view';
   $('pdfArea').querySelector('[data-v="sheet"]').hidden = !hasSheet();
   setSeg('pdfArea', pdfOpts.area); setSeg('pdfOrient', pdfOpts.orient); setSeg('pdfColor', pdfOpts.color); setSeg('pdfQual', pdfOpts.qual);
-  $('pdfPaper').value = pdfOpts.paper; $('pdfScale').value = pdfOpts.scale; $('pdfLw').checked = !!pdfOpts.lw;
+  $('pdfPaper').value = pdfOpts.paper; $('pdfScale').value = pdfOpts.scale; $('pdfLw').checked = !!pdfOpts.lw; $('pdfAlpha').checked = pdfOpts.alpha !== false;
   if (pdfOpts.area === 'sheet') useSheetPaper();
   updatePdfInfo(); openSheet('pdfPanel');
 }
@@ -144,8 +144,42 @@ for (const id of ['pdfArea', 'pdfOrient', 'pdfColor', 'pdfQual']) $(id).addEvent
 $('pdfPaper').addEventListener('change', (ev) => { pdfOpts.paper = ev.target.value; savePdfOpts(); updatePdfInfo(); });
 $('pdfScale').addEventListener('change', (ev) => { pdfOpts.scale = ev.target.value; updatePdfInfo(); });
 $('pdfLw').addEventListener('change', (ev) => { pdfOpts.lw = ev.target.checked; savePdfOpts(); });
+$('pdfAlpha').addEventListener('change', (ev) => { pdfOpts.alpha = ev.target.checked; savePdfOpts(); });
 function pdfWindowPicked(r) { pdfOpts.win = r; pdfOpts.winKey = pdfKey(); pdfOpts.area = 'window'; startTool('select', true); openPdfPanel(); }
 $('pdfGo').addEventListener('click', createPdf);
+
+// ----- Print preview: the page exactly as it will print (same renderer, drawn as a picture at screen resolution) -----
+let prevZoom = false;
+function planDetail(plan) { return pdfOpts.paper + ' ' + (plan.land ? 'landscape' : 'portrait') + ' · ' + ratioText(plan.ratio) + ' · ' + ({ color: 'colour', gray: 'grey', bw: 'black lines' }[pdfOpts.color] || '') + (pdfOpts.alpha === false ? ' · solid hatches' : ''); }
+async function openPreview() {
+  if (pdfOpts.area === 'window' && pdfOpts.winKey !== pdfKey()) { toast('Pick the window first'); return; }
+  closeSheets(); prevZoom = false; $('pdfPrev').classList.add('on'); $('prevInfo').textContent = 'Drawing the page…';
+  await new Promise(r => setTimeout(r, 30));
+  try { renderPreview(); } catch (e) { console.warn('preview', e); toast('Could not draw the preview: ' + (e && e.message || e), 6000); }
+}
+function renderPreview() {
+  const plan = pdfPlan(); const body = $('prevBody'); const bw = Math.max(100, body.clientWidth - 28), bh = Math.max(100, body.clientHeight - 28);
+  const fit = Math.min(bw / plan.pw, bh / plan.ph); // css px per paper mm when the page fits
+  let upm = fit * state.dpr * 2.5; const maxPx = 9e6; if (plan.pw * plan.ph * upm * upm > maxPx) upm = Math.sqrt(maxPx / (plan.pw * plan.ph)); // canvas px per mm, sharp enough to zoom in
+  const O = outView(plan, upm); const W = Math.round(O.W), H = Math.round(O.H);
+  const pc = $('prevCv'); pc.width = W; pc.height = H; const c2 = pc.getContext('2d', { alpha: false });
+  c2.setTransform(1, 0, 0, 1, 0, 0); c2.fillStyle = '#ffffff'; c2.fillRect(0, 0, W, H);
+  withExport(c2, W, H, upm, false, () => { c2.save(); c2.beginPath(); c2.rect(O.clip[0], O.clip[1], O.clip[2], O.clip[3]); c2.clip(); drawContent(O.V, O.wr); c2.restore(); });
+  // faint margin line so the printable area is visible
+  if (plan.M > 0) { c2.setTransform(1, 0, 0, 1, 0, 0); c2.strokeStyle = 'rgba(47,140,255,.35)'; c2.setLineDash([6, 5]); c2.lineWidth = 1; const m = plan.M * upm; c2.strokeRect(m, m, W - 2 * m, H - 2 * m); c2.setLineDash([]); }
+  pc.dataset.fitw = String(plan.pw * fit); pc.dataset.fith = String(plan.ph * fit); setPreviewZoom(false);
+  $('prevInfo').textContent = planDetail(plan) + (plan.fits ? '' : ' · edges cut');
+}
+function setPreviewZoom(on, fx, fy) {
+  const pc = $('prevCv'); const body = $('prevBody'); prevZoom = on; const k = on ? 3 : 1;
+  pc.style.width = (parseFloat(pc.dataset.fitw) * k) + 'px'; pc.style.height = (parseFloat(pc.dataset.fith) * k) + 'px';
+  if (on) { body.scrollLeft = Math.max(0, fx * pc.offsetWidth + 14 - body.clientWidth / 2); body.scrollTop = Math.max(0, fy * pc.offsetHeight + 14 - body.clientHeight / 2); }
+}
+$('prevCv').addEventListener('click', (ev) => { const r = $('prevCv').getBoundingClientRect(); setPreviewZoom(!prevZoom, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height); });
+function closePreview(back) { $('pdfPrev').classList.remove('on'); const pc = $('prevCv'); pc.width = pc.height = 1; if (back) openPdfPanel(); }
+$('prevBack').addEventListener('click', () => closePreview(true));
+$('prevGo').addEventListener('click', () => { closePreview(false); createPdf(); });
+$('pdfPrevBtn').addEventListener('click', openPreview);
 
 // ===================== PDF creation =====================
 // The PDF is drawn by the same renderer as the screen: its canvas context is swapped for PdfCtx, a small
@@ -186,7 +220,7 @@ function withExport(c, W, H, upm, recordPaths, fn) {
   const saved = { ctx, dpr: state.dpr, cssW, cssH, sel: state.selection, hover: state.hoverItem, light: state.canvasLight, R: { ...RENDER }, scenes: state.scenes, bc: blockCache, P2D: window.Path2D };
   try {
     ctx = c; state.dpr = 1; cssW = W; cssH = H; state.selection = new Set(); state.hoverItem = null; state.canvasLight = true;
-    RENDER.pdf = true; RENDER.lw = pdfLwFn(upm); RENDER.color = pdfColorFn();
+    RENDER.pdf = true; RENDER.lw = pdfLwFn(upm); RENDER.color = pdfColorFn(); RENDER.solidFills = pdfOpts.alpha === false;
     if (recordPaths) { window.Path2D = RecPath; state.scenes = new Map(); blockCache = new Map(); }
     fn();
   } finally {

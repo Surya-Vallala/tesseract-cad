@@ -11,7 +11,7 @@ const rad = (d) => d * Math.PI / 180;
 
 // Output switches used when drawing for PDF / image export instead of the screen:
 // pdf: draw everything (no small-object culling), lw(lw100) -> line width in output units, color(css, fill) -> printed colour
-const RENDER = { pdf: false, lw: null, color: null };
+const RENDER = { pdf: false, lw: null, color: null, solidFills: false }; // solidFills: print hatches without transparency
 function aciCss(aci, onLight, fill) { const c = aciCss0(aci, onLight, fill); return RENDER.color ? RENDER.color(c, fill) : c; }
 function aciCss0(aci, onLight, fill) {
   if (typeof aci === 'string') return aci; // true colour

@@ -54,9 +54,9 @@ function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y
   return { x: w[0], y: w[1], kind: 0 };
 }
 // Perpendicular / tangent from `base` to the object under the finger `f`. The snapped point may sit a little away
-// from the finger (up to 4× the snap distance), so you can slide along a wall until it locks on.
+// from the finger (a little beyond the snap distance); move further away and Nearest takes over.
 function dynSnap(item, f, base, tol) {
-  const pull = tol * 4; let best = null;
+  const pull = tol * 1.25; let best = null; // only a little beyond the normal snap distance, so Nearest takes over soon after
   const consider = (x, y, kind) => { const d = Math.hypot(x - f[0], y - f[1]); if (d <= pull && Math.hypot(x - base[0], y - base[1]) > tol * 0.05 && (!best || d < best[3])) best = [x, y, kind, d]; };
   for (const cv of itemCurvesNear(item, f, tol)) {
     const dx = base[0] - cv.c[0], dy = base[1] - cv.c[1]; const dd = Math.hypot(dx, dy); if (dd < 1e-12) continue; const th = Math.atan2(dy, dx);
@@ -105,7 +105,7 @@ function findIntersection(wx, wy, tol, S, itemA) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 7;
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5; // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
@@ -168,7 +168,7 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, e
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
-function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
+function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
@@ -466,6 +466,26 @@ function makeTool(name) {
       break;
   }
   return T;
+}
+// ----- Rubber band: while you hold a finger on the drawing (magnifier) or hover a mouse, the next segment or shape
+// follows the live snapped point from the tool's last point.
+function liveSnap() { if (state.loupe && state.loupe.sn) return state.loupe.sn; return state.hoverSn || null; }
+function rubberBase() { const T = state.tool; if (!T || !PICK_TOOLS.has(T.name) || T.phase === 'select' || !state.lastPt) return null; if (T.name === 'rect' || T.name === 'circle' || T.name === 'pdfwin' || T.name === 'text' || T.name === 'coord') return T.pts && T.pts.length === 1 ? T.pts[0] : null; return state.lastPt; }
+function drawRubber(c, V, acc) {
+  const T = state.tool; const lp = liveSnap(); if (!T || !lp || !PICK_TOOLS.has(T.name) || T.phase === 'select') return;
+  const pts = T.pts || []; const L = toScreen(lp.x, lp.y, V); const S = (p) => toScreen(p[0], p[1], V);
+  c.save(); c.strokeStyle = acc; c.lineWidth = 1.6; c.setLineDash([]); c.lineCap = 'round';
+  const seg = (a, dash) => { const A = S(a); c.setLineDash(dash ? [6, 5] : []); c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(L[0], L[1]); c.stroke(); };
+  switch (T.name) {
+    case 'rect': if (pts.length === 1) { const A = S(pts[0]); c.strokeRect(Math.min(A[0], L[0]), Math.min(A[1], L[1]), Math.abs(L[0] - A[0]), Math.abs(L[1] - A[1])); } break;
+    case 'circle': if (pts.length === 1) { const A = S(pts[0]); c.beginPath(); c.arc(A[0], A[1], Math.hypot(L[0] - A[0], L[1] - A[1]), 0, TAU); c.stroke(); seg(pts[0], true); } break;
+    case 'arc': if (pts.length === 1) seg(pts[0]); else if (pts.length === 2) { const a = arc3pt(pts[0], pts[1], [lp.x, lp.y]); if (a) { const C = S(a.c); c.beginPath(); c.arc(C[0], C[1], a.r * V.s, -a.a0, -a.a1, true); c.stroke(); } else seg(pts[1]); } break;
+    case 'spline': if (pts.length) { const flat = catmullPoints(pts.concat([[lp.x, lp.y]]), false, [], null); c.beginPath(); for (let i = 0; i < flat.length; i += 2) { const p = toScreen(flat[i], flat[i + 1], V); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); } c.stroke(); } break;
+    case 'area': if (pts.length) { seg(pts[pts.length - 1]); if (pts.length >= 2) seg(pts[0], true); } break;
+    case 'text': case 'coord': case 'pdfwin': break;
+    default: { const b = rubberBase(); if (b) seg(b); }
+  }
+  c.restore();
 }
 function drawBoxSel(c, bx) { const b = bx || state.boxSel; if (!b) return; const acc = b.x1 < b.x0 ? CROSS_GREEN : SEL_BLUE; c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
 function arc3pt(a, b, c) {

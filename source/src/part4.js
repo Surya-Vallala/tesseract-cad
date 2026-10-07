@@ -87,7 +87,7 @@ function drawScene(S, V, onLight, clipWorld) {
   let lastCol = null, dashed = false, lastAl = 1; ctx.globalAlpha = 1;
   const setAl = (a) => { a = a == null ? 1 : a; if (a !== lastAl) { ctx.globalAlpha = a; lastAl = a; } };
   const fillOne = (f, Vs, wrL) => {
-    if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
+    if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = RENDER.solidFills || f.al == null ? 1 : f.al;
     if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
     else if (state.patOn && f.pat.minSp * Vs >= (RENDER.pdf ? 0.9 : 2.6) && budget > 0) budget -= drawPattern(f, { s: Vs }, RENDER.color ? aciCss(f.aci, onLight, false) : col, wrL); // printed in black/grey, pattern lines count as lines
     else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
@@ -197,6 +197,7 @@ function drawOverlay() {
   if (state.hoverItem && !state.selection.has(state.hoverItem.ent.id)) { ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.strokeStyle = SEL_BLUE; ctx.globalAlpha = 0.45; ctx.lineWidth = 3 / V.s; highlightItem(state.hoverItem, V); ctx.restore(); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (state.tool && state.tool.draw) state.tool.draw(ctx, V, acc);
+  drawRubber(ctx, V, acc); // line / shape following the finger from the last point
   // snap marker
   const sn = state.snapMark; if (sn) { const [X, Y] = toScreen(sn.x, sn.y, V); drawSnapMarker(ctx, X, Y, sn.kind, 6, acc); }
   // crosshair at last picked point
@@ -244,13 +245,15 @@ function drawLoupe(acc) {
   const a = toWorld(x, y, V2), b = toWorld(x + L, y + L, V2);
   drawContent(V2, [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
+  if (state.tool && state.tool.draw && PICK_TOOLS.has(state.tool.name)) { ctx.save(); state.tool.draw(ctx, V2, acc); ctx.restore(); }
+  drawRubber(ctx, V2, acc);
   // crosshair at the finger point
   ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
   if (lp.sn && lp.sn.kind) { const q = toScreen(lp.sn.x, lp.sn.y, V2); drawSnapMarker(ctx, q[0], q[1], lp.sn.kind, 8, acc); }
   ctx.restore();
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, L - 2, L - 2);
   // label under the loupe
-  const sn = lp.sn; const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2) : '');
+  const sn = lp.sn; const base = rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (base ? '  ' + fmtLen(Math.hypot(sn.x - base[0], sn.y - base[1])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
   ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, Math.max(L, 60) + 80); const lx = x + (x < cssW / 2 ? 0 : L - tw), ly = y + L + 4;
   ctx.fillStyle = 'rgba(20,20,20,.82)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
   ctx.restore();

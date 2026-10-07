@@ -38,6 +38,7 @@ input{font:inherit;color:inherit}
 #btnSpace .sp{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;align-items:center;gap:4px}
 #btnSpace .sp svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
 #btnSpace .tag{font-size:9.5px;letter-spacing:.07em;color:var(--bar-muted);font-weight:500}
+#spaceName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} /* long layout names shorten with … so the arrow always shows */
 .actions{display:flex;gap:2px;flex:0 0 auto}
 .ib{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--bar-fg)}
 .ib:active{background:var(--bar-chip)}
@@ -163,6 +164,14 @@ body.fs #top, body.fs #tools{display:none}
 #recent button{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;background:var(--chip);font-size:13px;text-align:left}
 #recent button span:last-child{color:var(--muted);font-family:var(--mono);font-size:11px;white-space:nowrap}
 #recent .empty{color:var(--muted);font-size:12.5px;padding:2px 0}
+#pdfPrev{position:absolute;inset:0;z-index:24;display:none;flex-direction:column;background:#3a3a3e;color:#eee}
+#pdfPrev.on{display:flex}
+#pdfPrev .prev-top,#pdfPrev .prev-bot{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);color:var(--fg)}
+#pdfPrev .prev-top span{font-size:12.5px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+#pdfPrev .prev-bot{justify-content:space-between;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+#pdfPrev .prev-bot .hint{font-size:12px;color:var(--muted)}
+#pdfPrev .prev-body{flex:1;min-height:0;overflow:auto;display:flex;padding:14px}
+#pdfPrev canvas{margin:auto;flex:0 0 auto;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.45);touch-action:pan-x pan-y}
 select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:13px}
 .pdf-info{margin:0;padding:8px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.45}
 .menu-item .seg button{white-space:nowrap}
@@ -342,11 +351,17 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <div class="menu-item"><span>Scale <small id="pdfScaleHint"></small></span><select id="pdfScale" class="pick"><option value="fit" selected>Fit to paper</option><option value="1">1:1</option><option value="2">1:2</option><option value="5">1:5</option><option value="10">1:10</option><option value="20">1:20</option><option value="25">1:25</option><option value="50">1:50</option><option value="75">1:75</option><option value="100">1:100</option><option value="200">1:200</option><option value="250">1:250</option><option value="500">1:500</option><option value="1000">1:1000</option></select></div>
         <div class="menu-item"><span>Colour</span><div class="seg" id="pdfColor"><button data-v="color" aria-pressed="true">Colour</button><button data-v="gray">Grey</button><button data-v="bw">Black</button></div></div>
         <label class="menu-item"><span>Print lineweights <small>off = all lines thin</small></span><input type="checkbox" id="pdfLw" checked></label>
+        <label class="menu-item"><span>Hatch transparency <small>off = hatches print solid</small></span><input type="checkbox" id="pdfAlpha" checked></label>
         <div class="menu-item"><span>Quality</span><div class="seg" id="pdfQual"><button data-v="vector" aria-pressed="true">Vector</button><button data-v="150">150 dpi</button><button data-v="300">300 dpi</button></div></div>
       </div>
       <p class="pdf-info" id="pdfInfo"></p>
-      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="pdfGo">Create PDF</button></div>
+      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn" id="pdfPrevBtn">Preview</button><button class="btn primary" id="pdfGo">Create PDF</button></div>
     </section>
+    <div id="pdfPrev" role="dialog" aria-modal="true" aria-label="Print preview">
+      <div class="prev-top"><button class="btn quiet" id="prevBack">‹ Options</button><span id="prevInfo"></span></div>
+      <div class="prev-body" id="prevBody"><canvas id="prevCv"></canvas></div>
+      <div class="prev-bot"><span class="hint">Tap the page to zoom in or out</span><button class="btn primary" id="prevGo">Create PDF</button></div>
+    </div>
     <div id="fileDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="fileTitle"><div class="box">
       <h3 id="fileTitle">File ready</h3>
       <p id="fileMsg"></p>

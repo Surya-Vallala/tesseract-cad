@@ -595,6 +595,7 @@ function syncBack() {
 function queueBackSync() { clearTimeout(backTimer); backTimer = setTimeout(syncBack, 0); }
 function handleBack() {
   if ($('saveDlg').classList.contains('on')) { $('saveCancel').click(); return; }
+  if ($('pdfPrev').classList.contains('on')) { $('prevBack').click(); return; }
   if ($('textDlg').classList.contains('on')) { $('txtCancel').click(); return; }
   if (document.querySelector('.sheet.open') || $('groups').classList.contains('open')) { closeSheets(); return; }
   if (document.body.classList.contains('fs')) { setFull(false); try { if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } return; }

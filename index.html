@@ -53,6 +53,7 @@ input{font:inherit;color:inherit}
 #btnSpace .sp{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;align-items:center;gap:4px}
 #btnSpace .sp svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
 #btnSpace .tag{font-size:9.5px;letter-spacing:.07em;color:var(--bar-muted);font-weight:500}
+#spaceName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} /* long layout names shorten with … so the arrow always shows */
 .actions{display:flex;gap:2px;flex:0 0 auto}
 .ib{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--bar-fg)}
 .ib:active{background:var(--bar-chip)}
@@ -178,6 +179,14 @@ body.fs #top, body.fs #tools{display:none}
 #recent button{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;background:var(--chip);font-size:13px;text-align:left}
 #recent button span:last-child{color:var(--muted);font-family:var(--mono);font-size:11px;white-space:nowrap}
 #recent .empty{color:var(--muted);font-size:12.5px;padding:2px 0}
+#pdfPrev{position:absolute;inset:0;z-index:24;display:none;flex-direction:column;background:#3a3a3e;color:#eee}
+#pdfPrev.on{display:flex}
+#pdfPrev .prev-top,#pdfPrev .prev-bot{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);color:var(--fg)}
+#pdfPrev .prev-top span{font-size:12.5px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+#pdfPrev .prev-bot{justify-content:space-between;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+#pdfPrev .prev-bot .hint{font-size:12px;color:var(--muted)}
+#pdfPrev .prev-body{flex:1;min-height:0;overflow:auto;display:flex;padding:14px}
+#pdfPrev canvas{margin:auto;flex:0 0 auto;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.45);touch-action:pan-x pan-y}
 select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:13px}
 .pdf-info{margin:0;padding:8px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.45}
 .menu-item .seg button{white-space:nowrap}
@@ -357,11 +366,17 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <div class="menu-item"><span>Scale <small id="pdfScaleHint"></small></span><select id="pdfScale" class="pick"><option value="fit" selected>Fit to paper</option><option value="1">1:1</option><option value="2">1:2</option><option value="5">1:5</option><option value="10">1:10</option><option value="20">1:20</option><option value="25">1:25</option><option value="50">1:50</option><option value="75">1:75</option><option value="100">1:100</option><option value="200">1:200</option><option value="250">1:250</option><option value="500">1:500</option><option value="1000">1:1000</option></select></div>
         <div class="menu-item"><span>Colour</span><div class="seg" id="pdfColor"><button data-v="color" aria-pressed="true">Colour</button><button data-v="gray">Grey</button><button data-v="bw">Black</button></div></div>
         <label class="menu-item"><span>Print lineweights <small>off = all lines thin</small></span><input type="checkbox" id="pdfLw" checked></label>
+        <label class="menu-item"><span>Hatch transparency <small>off = hatches print solid</small></span><input type="checkbox" id="pdfAlpha" checked></label>
         <div class="menu-item"><span>Quality</span><div class="seg" id="pdfQual"><button data-v="vector" aria-pressed="true">Vector</button><button data-v="150">150 dpi</button><button data-v="300">300 dpi</button></div></div>
       </div>
       <p class="pdf-info" id="pdfInfo"></p>
-      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="pdfGo">Create PDF</button></div>
+      <div class="tools" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn" id="pdfPrevBtn">Preview</button><button class="btn primary" id="pdfGo">Create PDF</button></div>
     </section>
+    <div id="pdfPrev" role="dialog" aria-modal="true" aria-label="Print preview">
+      <div class="prev-top"><button class="btn quiet" id="prevBack">‹ Options</button><span id="prevInfo"></span></div>
+      <div class="prev-body" id="prevBody"><canvas id="prevCv"></canvas></div>
+      <div class="prev-bot"><span class="hint">Tap the page to zoom in or out</span><button class="btn primary" id="prevGo">Create PDF</button></div>
+    </div>
     <div id="fileDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="fileTitle"><div class="box">
       <h3 id="fileTitle">File ready</h3>
       <p id="fileMsg"></p>
@@ -396,7 +411,7 @@ const rad = (d) => d * Math.PI / 180;
 
 // Output switches used when drawing for PDF / image export instead of the screen:
 // pdf: draw everything (no small-object culling), lw(lw100) -> line width in output units, color(css, fill) -> printed colour
-const RENDER = { pdf: false, lw: null, color: null };
+const RENDER = { pdf: false, lw: null, color: null, solidFills: false }; // solidFills: print hatches without transparency
 function aciCss(aci, onLight, fill) { const c = aciCss0(aci, onLight, fill); return RENDER.color ? RENDER.color(c, fill) : c; }
 function aciCss0(aci, onLight, fill) {
   if (typeof aci === 'string') return aci; // true colour
@@ -987,7 +1002,7 @@ function drawScene(S, V, onLight, clipWorld) {
   let lastCol = null, dashed = false, lastAl = 1; ctx.globalAlpha = 1;
   const setAl = (a) => { a = a == null ? 1 : a; if (a !== lastAl) { ctx.globalAlpha = a; lastAl = a; } };
   const fillOne = (f, Vs, wrL) => {
-    if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = f.al == null ? 1 : f.al;
+    if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = RENDER.solidFills || f.al == null ? 1 : f.al;
     if (f.solid || !f.pat) { ctx.globalAlpha = fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
     else if (state.patOn && f.pat.minSp * Vs >= (RENDER.pdf ? 0.9 : 2.6) && budget > 0) budget -= drawPattern(f, { s: Vs }, RENDER.color ? aciCss(f.aci, onLight, false) : col, wrL); // printed in black/grey, pattern lines count as lines
     else { ctx.globalAlpha = 0.16 * fa; ctx.fillStyle = col; ctx.fill(f.path, 'evenodd'); }
@@ -1097,6 +1112,7 @@ function drawOverlay() {
   if (state.hoverItem && !state.selection.has(state.hoverItem.ent.id)) { ctx.save(); ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr); ctx.strokeStyle = SEL_BLUE; ctx.globalAlpha = 0.45; ctx.lineWidth = 3 / V.s; highlightItem(state.hoverItem, V); ctx.restore(); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (state.tool && state.tool.draw) state.tool.draw(ctx, V, acc);
+  drawRubber(ctx, V, acc); // line / shape following the finger from the last point
   // snap marker
   const sn = state.snapMark; if (sn) { const [X, Y] = toScreen(sn.x, sn.y, V); drawSnapMarker(ctx, X, Y, sn.kind, 6, acc); }
   // crosshair at last picked point
@@ -1144,13 +1160,15 @@ function drawLoupe(acc) {
   const a = toWorld(x, y, V2), b = toWorld(x + L, y + L, V2);
   drawContent(V2, [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
+  if (state.tool && state.tool.draw && PICK_TOOLS.has(state.tool.name)) { ctx.save(); state.tool.draw(ctx, V2, acc); ctx.restore(); }
+  drawRubber(ctx, V2, acc);
   // crosshair at the finger point
   ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 4, cy); ctx.moveTo(cx + 4, cy); ctx.lineTo(cx + 14, cy); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 4); ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 14); ctx.stroke();
   if (lp.sn && lp.sn.kind) { const q = toScreen(lp.sn.x, lp.sn.y, V2); drawSnapMarker(ctx, q[0], q[1], lp.sn.kind, 8, acc); }
   ctx.restore();
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, L - 2, L - 2);
   // label under the loupe
-  const sn = lp.sn; const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2) : '');
+  const sn = lp.sn; const base = rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (base ? '  ' + fmtLen(Math.hypot(sn.x - base[0], sn.y - base[1])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
   ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, Math.max(L, 60) + 80); const lx = x + (x < cssW / 2 ? 0 : L - tw), ly = y + L + 4;
   ctx.fillStyle = 'rgba(20,20,20,.82)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
   ctx.restore();
@@ -1233,9 +1251,9 @@ function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y
   return { x: w[0], y: w[1], kind: 0 };
 }
 // Perpendicular / tangent from `base` to the object under the finger `f`. The snapped point may sit a little away
-// from the finger (up to 4× the snap distance), so you can slide along a wall until it locks on.
+// from the finger (a little beyond the snap distance); move further away and Nearest takes over.
 function dynSnap(item, f, base, tol) {
-  const pull = tol * 4; let best = null;
+  const pull = tol * 1.25; let best = null; // only a little beyond the normal snap distance, so Nearest takes over soon after
   const consider = (x, y, kind) => { const d = Math.hypot(x - f[0], y - f[1]); if (d <= pull && Math.hypot(x - base[0], y - base[1]) > tol * 0.05 && (!best || d < best[3])) best = [x, y, kind, d]; };
   for (const cv of itemCurvesNear(item, f, tol)) {
     const dx = base[0] - cv.c[0], dy = base[1] - cv.c[1]; const dd = Math.hypot(dx, dy); if (dd < 1e-12) continue; const th = Math.atan2(dy, dx);
@@ -1284,7 +1302,7 @@ function findIntersection(wx, wy, tol, S, itemA) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 7;
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5; // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
@@ -1347,7 +1365,7 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, e
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
-function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
+function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
@@ -1645,6 +1663,26 @@ function makeTool(name) {
       break;
   }
   return T;
+}
+// ----- Rubber band: while you hold a finger on the drawing (magnifier) or hover a mouse, the next segment or shape
+// follows the live snapped point from the tool's last point.
+function liveSnap() { if (state.loupe && state.loupe.sn) return state.loupe.sn; return state.hoverSn || null; }
+function rubberBase() { const T = state.tool; if (!T || !PICK_TOOLS.has(T.name) || T.phase === 'select' || !state.lastPt) return null; if (T.name === 'rect' || T.name === 'circle' || T.name === 'pdfwin' || T.name === 'text' || T.name === 'coord') return T.pts && T.pts.length === 1 ? T.pts[0] : null; return state.lastPt; }
+function drawRubber(c, V, acc) {
+  const T = state.tool; const lp = liveSnap(); if (!T || !lp || !PICK_TOOLS.has(T.name) || T.phase === 'select') return;
+  const pts = T.pts || []; const L = toScreen(lp.x, lp.y, V); const S = (p) => toScreen(p[0], p[1], V);
+  c.save(); c.strokeStyle = acc; c.lineWidth = 1.6; c.setLineDash([]); c.lineCap = 'round';
+  const seg = (a, dash) => { const A = S(a); c.setLineDash(dash ? [6, 5] : []); c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(L[0], L[1]); c.stroke(); };
+  switch (T.name) {
+    case 'rect': if (pts.length === 1) { const A = S(pts[0]); c.strokeRect(Math.min(A[0], L[0]), Math.min(A[1], L[1]), Math.abs(L[0] - A[0]), Math.abs(L[1] - A[1])); } break;
+    case 'circle': if (pts.length === 1) { const A = S(pts[0]); c.beginPath(); c.arc(A[0], A[1], Math.hypot(L[0] - A[0], L[1] - A[1]), 0, TAU); c.stroke(); seg(pts[0], true); } break;
+    case 'arc': if (pts.length === 1) seg(pts[0]); else if (pts.length === 2) { const a = arc3pt(pts[0], pts[1], [lp.x, lp.y]); if (a) { const C = S(a.c); c.beginPath(); c.arc(C[0], C[1], a.r * V.s, -a.a0, -a.a1, true); c.stroke(); } else seg(pts[1]); } break;
+    case 'spline': if (pts.length) { const flat = catmullPoints(pts.concat([[lp.x, lp.y]]), false, [], null); c.beginPath(); for (let i = 0; i < flat.length; i += 2) { const p = toScreen(flat[i], flat[i + 1], V); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); } c.stroke(); } break;
+    case 'area': if (pts.length) { seg(pts[pts.length - 1]); if (pts.length >= 2) seg(pts[0], true); } break;
+    case 'text': case 'coord': case 'pdfwin': break;
+    default: { const b = rubberBase(); if (b) seg(b); }
+  }
+  c.restore();
 }
 function drawBoxSel(c, bx) { const b = bx || state.boxSel; if (!b) return; const acc = b.x1 < b.x0 ? CROSS_GREEN : SEL_BLUE; c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.globalAlpha = 0.12; c.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.globalAlpha = 1; c.setLineDash(b.x1 < b.x0 ? [6, 4] : []); c.lineWidth = 1.5; c.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); c.restore(); }
 function arc3pt(a, b, c) {
@@ -2253,6 +2291,7 @@ function syncBack() {
 function queueBackSync() { clearTimeout(backTimer); backTimer = setTimeout(syncBack, 0); }
 function handleBack() {
   if ($('saveDlg').classList.contains('on')) { $('saveCancel').click(); return; }
+  if ($('pdfPrev').classList.contains('on')) { $('prevBack').click(); return; }
   if ($('textDlg').classList.contains('on')) { $('txtCancel').click(); return; }
   if (document.querySelector('.sheet.open') || $('groups').classList.contains('open')) { closeSheets(); return; }
   if (document.body.classList.contains('fs')) { setFull(false); try { if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } return; }
@@ -2355,9 +2394,9 @@ $('shPdf').addEventListener('click', () => { closeSheets(); openPdfPanel(); });
 const PAPER_MM = { A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841], Letter: [279.4, 215.9], Tabloid: [431.8, 279.4] }; // landscape
 const UNIT_MM = { 1: 25.4, 2: 304.8, 4: 1, 5: 10, 6: 1000, 8: 0.0000254, 9: 0.0254, 10: 914.4, 14: 100 };
 const PDF_MAX_PX = 24e6; // image PDFs: largest picture a phone can draw comfortably
-const pdfOpts = { area: null, paper: 'A3', orient: 'auto', scale: 'fit', color: 'color', lw: true, qual: 'vector', win: null, winKey: '' };
-try { const o = JSON.parse(localStorage.getItem('tct-pdf') || '{}'); for (const k of ['paper', 'orient', 'color', 'lw', 'qual']) if (o[k] != null) pdfOpts[k] = o[k]; } catch (e) { }
-function savePdfOpts() { try { localStorage.setItem('tct-pdf', JSON.stringify({ paper: pdfOpts.paper, orient: pdfOpts.orient, color: pdfOpts.color, lw: pdfOpts.lw, qual: pdfOpts.qual })); } catch (e) { } }
+const pdfOpts = { area: null, paper: 'A3', orient: 'auto', scale: 'fit', color: 'color', lw: true, alpha: true, qual: 'vector', win: null, winKey: '' };
+try { const o = JSON.parse(localStorage.getItem('tct-pdf') || '{}'); for (const k of ['paper', 'orient', 'color', 'lw', 'alpha', 'qual']) if (o[k] != null) pdfOpts[k] = o[k]; } catch (e) { }
+function savePdfOpts() { try { localStorage.setItem('tct-pdf', JSON.stringify({ paper: pdfOpts.paper, orient: pdfOpts.orient, color: pdfOpts.color, lw: pdfOpts.lw, alpha: pdfOpts.alpha, qual: pdfOpts.qual })); } catch (e) { } }
 const pdfKey = () => (activeDoc ? activeDoc.id : 0) + ':' + state.spaceIdx;
 function hasSheet() { const sp = curSpace(); return !!(sp && sp.paper && sp.limits && sp.limits[1][0] > sp.limits[0][0] && sp.limits[1][1] > sp.limits[0][1]); }
 function spaceExtents() {
@@ -2396,7 +2435,7 @@ function openPdfPanel() {
   if (!pdfOpts.area || (pdfOpts.area === 'sheet' && !hasSheet()) || (pdfOpts.area === 'window' && pdfOpts.winKey !== pdfKey())) pdfOpts.area = hasSheet() ? 'sheet' : 'view';
   $('pdfArea').querySelector('[data-v="sheet"]').hidden = !hasSheet();
   setSeg('pdfArea', pdfOpts.area); setSeg('pdfOrient', pdfOpts.orient); setSeg('pdfColor', pdfOpts.color); setSeg('pdfQual', pdfOpts.qual);
-  $('pdfPaper').value = pdfOpts.paper; $('pdfScale').value = pdfOpts.scale; $('pdfLw').checked = !!pdfOpts.lw;
+  $('pdfPaper').value = pdfOpts.paper; $('pdfScale').value = pdfOpts.scale; $('pdfLw').checked = !!pdfOpts.lw; $('pdfAlpha').checked = pdfOpts.alpha !== false;
   if (pdfOpts.area === 'sheet') useSheetPaper();
   updatePdfInfo(); openSheet('pdfPanel');
 }
@@ -2421,8 +2460,42 @@ for (const id of ['pdfArea', 'pdfOrient', 'pdfColor', 'pdfQual']) $(id).addEvent
 $('pdfPaper').addEventListener('change', (ev) => { pdfOpts.paper = ev.target.value; savePdfOpts(); updatePdfInfo(); });
 $('pdfScale').addEventListener('change', (ev) => { pdfOpts.scale = ev.target.value; updatePdfInfo(); });
 $('pdfLw').addEventListener('change', (ev) => { pdfOpts.lw = ev.target.checked; savePdfOpts(); });
+$('pdfAlpha').addEventListener('change', (ev) => { pdfOpts.alpha = ev.target.checked; savePdfOpts(); });
 function pdfWindowPicked(r) { pdfOpts.win = r; pdfOpts.winKey = pdfKey(); pdfOpts.area = 'window'; startTool('select', true); openPdfPanel(); }
 $('pdfGo').addEventListener('click', createPdf);
+
+// ----- Print preview: the page exactly as it will print (same renderer, drawn as a picture at screen resolution) -----
+let prevZoom = false;
+function planDetail(plan) { return pdfOpts.paper + ' ' + (plan.land ? 'landscape' : 'portrait') + ' · ' + ratioText(plan.ratio) + ' · ' + ({ color: 'colour', gray: 'grey', bw: 'black lines' }[pdfOpts.color] || '') + (pdfOpts.alpha === false ? ' · solid hatches' : ''); }
+async function openPreview() {
+  if (pdfOpts.area === 'window' && pdfOpts.winKey !== pdfKey()) { toast('Pick the window first'); return; }
+  closeSheets(); prevZoom = false; $('pdfPrev').classList.add('on'); $('prevInfo').textContent = 'Drawing the page…';
+  await new Promise(r => setTimeout(r, 30));
+  try { renderPreview(); } catch (e) { console.warn('preview', e); toast('Could not draw the preview: ' + (e && e.message || e), 6000); }
+}
+function renderPreview() {
+  const plan = pdfPlan(); const body = $('prevBody'); const bw = Math.max(100, body.clientWidth - 28), bh = Math.max(100, body.clientHeight - 28);
+  const fit = Math.min(bw / plan.pw, bh / plan.ph); // css px per paper mm when the page fits
+  let upm = fit * state.dpr * 2.5; const maxPx = 9e6; if (plan.pw * plan.ph * upm * upm > maxPx) upm = Math.sqrt(maxPx / (plan.pw * plan.ph)); // canvas px per mm, sharp enough to zoom in
+  const O = outView(plan, upm); const W = Math.round(O.W), H = Math.round(O.H);
+  const pc = $('prevCv'); pc.width = W; pc.height = H; const c2 = pc.getContext('2d', { alpha: false });
+  c2.setTransform(1, 0, 0, 1, 0, 0); c2.fillStyle = '#ffffff'; c2.fillRect(0, 0, W, H);
+  withExport(c2, W, H, upm, false, () => { c2.save(); c2.beginPath(); c2.rect(O.clip[0], O.clip[1], O.clip[2], O.clip[3]); c2.clip(); drawContent(O.V, O.wr); c2.restore(); });
+  // faint margin line so the printable area is visible
+  if (plan.M > 0) { c2.setTransform(1, 0, 0, 1, 0, 0); c2.strokeStyle = 'rgba(47,140,255,.35)'; c2.setLineDash([6, 5]); c2.lineWidth = 1; const m = plan.M * upm; c2.strokeRect(m, m, W - 2 * m, H - 2 * m); c2.setLineDash([]); }
+  pc.dataset.fitw = String(plan.pw * fit); pc.dataset.fith = String(plan.ph * fit); setPreviewZoom(false);
+  $('prevInfo').textContent = planDetail(plan) + (plan.fits ? '' : ' · edges cut');
+}
+function setPreviewZoom(on, fx, fy) {
+  const pc = $('prevCv'); const body = $('prevBody'); prevZoom = on; const k = on ? 3 : 1;
+  pc.style.width = (parseFloat(pc.dataset.fitw) * k) + 'px'; pc.style.height = (parseFloat(pc.dataset.fith) * k) + 'px';
+  if (on) { body.scrollLeft = Math.max(0, fx * pc.offsetWidth + 14 - body.clientWidth / 2); body.scrollTop = Math.max(0, fy * pc.offsetHeight + 14 - body.clientHeight / 2); }
+}
+$('prevCv').addEventListener('click', (ev) => { const r = $('prevCv').getBoundingClientRect(); setPreviewZoom(!prevZoom, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height); });
+function closePreview(back) { $('pdfPrev').classList.remove('on'); const pc = $('prevCv'); pc.width = pc.height = 1; if (back) openPdfPanel(); }
+$('prevBack').addEventListener('click', () => closePreview(true));
+$('prevGo').addEventListener('click', () => { closePreview(false); createPdf(); });
+$('pdfPrevBtn').addEventListener('click', openPreview);
 
 // ===================== PDF creation =====================
 // The PDF is drawn by the same renderer as the screen: its canvas context is swapped for PdfCtx, a small
@@ -2463,7 +2536,7 @@ function withExport(c, W, H, upm, recordPaths, fn) {
   const saved = { ctx, dpr: state.dpr, cssW, cssH, sel: state.selection, hover: state.hoverItem, light: state.canvasLight, R: { ...RENDER }, scenes: state.scenes, bc: blockCache, P2D: window.Path2D };
   try {
     ctx = c; state.dpr = 1; cssW = W; cssH = H; state.selection = new Set(); state.hoverItem = null; state.canvasLight = true;
-    RENDER.pdf = true; RENDER.lw = pdfLwFn(upm); RENDER.color = pdfColorFn();
+    RENDER.pdf = true; RENDER.lw = pdfLwFn(upm); RENDER.color = pdfColorFn(); RENDER.solidFills = pdfOpts.alpha === false;
     if (recordPaths) { window.Path2D = RecPath; state.scenes = new Map(); blockCache = new Map(); }
     fn();
   } finally {
@@ -2644,7 +2717,7 @@ async function writePdf({ W, H, content, image, alphas, title }) {
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610070741' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610070820' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }
