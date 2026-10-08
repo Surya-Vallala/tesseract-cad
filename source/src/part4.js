@@ -76,7 +76,7 @@ function drawScene(S, V, onLight, clipWorld) {
   const wr = clipWorld || worldRect(V);
   const minDiag = (RENDER.pdf ? 0.05 : 1.1) / V.s; // objects smaller than ~1px are skipped (on paper: almost nothing is)
   const vis = [];
-  for (const it of S.items) { const bb = it.bbox; if (bb[2] < wr[0] || bb[0] > wr[2] || bb[3] < wr[1] || bb[1] > wr[3]) continue; if (it.diag < minDiag && !state.selection.has(it.ent.id)) continue; vis.push(it); }
+  for (const it of S.items) { const bb = it.bbox; if (bb[2] < wr[0] || bb[0] > wr[2] || bb[3] < wr[1] || bb[1] > wr[3]) continue; if (it.diag < minDiag && !it.points && !state.selection.has(it.ent.id)) continue; vis.push(it); }
   const _t0 = performance.now(); T();
   // Objects are drawn one after another in draw order (fills, then lines, per object), so a hatch or
   // wipeout brought to the front covers what is behind it, as in AutoCAD. Text is drawn last.
@@ -127,6 +127,8 @@ function drawScene(S, V, onLight, clipWorld) {
   if (dashed) ctx.setLineDash([]); ctx.globalAlpha = 1; const _t2 = performance.now();
   // pass 3: texts
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // point objects: a small × at screen size, so divisions and survey points can be seen
+  { let started = false; for (const it of vis) if (it.points) for (const p of it.points) { if (!layerOn(p.layer)) continue; const q = toScreen(p.x, p.y, V); if (!started) { ctx.lineWidth = 1.2; started = true; } ctx.globalAlpha = p.al == null ? 1 : p.al; ctx.strokeStyle = aciCss(p.aci, onLight); ctx.beginPath(); ctx.moveTo(q[0] - 3.5, q[1] - 3.5); ctx.lineTo(q[0] + 3.5, q[1] + 3.5); ctx.moveTo(q[0] + 3.5, q[1] - 3.5); ctx.lineTo(q[0] - 3.5, q[1] + 3.5); ctx.stroke(); } ctx.globalAlpha = 1; }
   for (const it of vis) if (it.texts.length) for (const t of it.texts) { if (!layerOn(t.layer)) continue; const hp = t.h * V.s; if (hp < (RENDER.pdf ? 0.5 : 2.4)) continue; drawText(t, V, aciCss(t.aci, onLight)); }
   if (window.__prof) window.__prof.push({ vis: vis.length, fills: _t1 - _t0, strokes: _t2 - _t1, texts: performance.now() - _t2 });
 }

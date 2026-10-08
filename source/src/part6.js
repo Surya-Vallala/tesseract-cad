@@ -374,7 +374,7 @@ function closeDrawing() {
 }
 // Home screen on/off. At home there is no drawing on screen, so the drawing-only controls are hidden (CSS on #app.home).
 const atHome = () => $('welcome').style.display !== 'none';
-function setHome(on) { $('welcome').style.display = on ? '' : 'none'; $('app').classList.toggle('home', on); syncCanvasSize(); updateUndoBtns(); queueBackSync(); }
+function setHome(on) { if (on) closePop(); $('welcome').style.display = on ? '' : 'none'; $('app').classList.toggle('home', on); syncCanvasSize(); updateUndoBtns(); queueBackSync(); }
 // the tool bar and tabs come and go with the home screen; size the canvas now so a zoom-to-fit right after is exact
 function syncCanvasSize() { const r = stage.getBoundingClientRect(); if (Math.abs(r.width - cssW) > 0.5 || Math.abs(r.height - cssH) > 0.5) resizeCanvas(); }
 
@@ -437,7 +437,7 @@ function parseFile(buf, name, retried) {
 // Each open drawing keeps its own view, layers, selection, undo history and caches. The active one is
 // swapped into `state`; switching tabs stores it back and restores the other.
 const MAX_DOCS = 5;
-const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind'];
+const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind', 'results', 'mscale', 'layerHist', 'lastDim'];
 const docs = []; let activeDoc = null, docSeq = 0;
 function stashActive() { if (!activeDoc) return; for (const k of DOC_KEYS) activeDoc[k] = state[k]; activeDoc.view = { ...state.view }; activeDoc.blockCache = blockCache; }
 function restoreDoc(d) { for (const k of DOC_KEYS) state[k] = d[k]; state.view = { ...d.view }; blockCache = d.blockCache || new Map(); activeDoc = d; lastFull = null; state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.loupe = null; }
@@ -456,7 +456,7 @@ function loadDrawing(D, name, meta) {
   activeDoc = d; d.title = name;
   state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
   state.fileBytes = meta.bytes || null; state.fileName = meta.fileName || name; state.kind = meta.kind || (/\.dxf$/i.test(name) ? 'dxf' : 'dwg');
-  state.hoverItem = null; state.snapMark = null; state.lastPt = null;
+  state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null;
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
   $('fileName').textContent = name; setHome(false);
@@ -498,12 +498,12 @@ function renderLayers() {
   for (const l of layers) {
     const row = document.createElement('label'); row.className = 'layer' + (layerOn(l.name) ? '' : ' off') + (l.name === state.curLayer ? ' cur' : '');
     row.innerHTML = '<input type="checkbox" ' + (layerOn(l.name) ? 'checked' : '') + '><span class="sw" style="background:' + aciCss(l.aci, false) + '"></span><span class="nm">' + escapeHtml(l.name) + '</span><span class="ct">' + (counts.get(l.name) || '') + '</span>';
-    row.querySelector('input').addEventListener('change', (ev) => { state.layerVis.set(l.name, ev.target.checked); row.classList.toggle('off', !ev.target.checked); requestFull(); });
+    row.querySelector('input').addEventListener('change', (ev) => { pushLayerHist(); state.layerVis.set(l.name, ev.target.checked); row.classList.toggle('off', !ev.target.checked); requestFull(); });
     list.appendChild(row);
   }
   const sel = $('selLayer'); sel.innerHTML = ''; for (const l of layers) { const o = document.createElement('option'); o.value = l.name; o.textContent = l.name; if (l.name === state.curLayer) o.selected = true; sel.appendChild(o); }
 }
-function setAllLayers(fn) { for (const l of state.drawing.layers) state.layerVis.set(l.name, fn(layerOn(l.name))); renderLayers(); requestFull(); }
+function setAllLayers(fn) { pushLayerHist(); for (const l of state.drawing.layers) state.layerVis.set(l.name, fn(layerOn(l.name))); renderLayers(); requestFull(); }
 
 // ===================== Sample drawing =====================
 function sampleDrawing() {
@@ -547,7 +547,7 @@ $('btnKeys').addEventListener('click', () => { const row = $('promptRow'); row.h
 $('btnUndo').addEventListener('click', undo); $('btnRedo').addEventListener('click', redo);
 $('btnDone').addEventListener('click', doneTool); $('btnCancel').addEventListener('click', exitToSelect); $('btnBack').addEventListener('click', backPoint);
 function openSheet(id) { $(id).classList.add('open'); $('scrim').classList.add('on'); if (id === 'layersPanel') renderLayers(); }
-function closeSheets() { for (const s of document.querySelectorAll('.sheet')) s.classList.remove('open'); $('groups').classList.remove('open'); $('scrim').classList.remove('on'); }
+function closeSheets() { for (const s of document.querySelectorAll('.sheet')) s.classList.remove('open'); closePop(); $('scrim').classList.remove('on'); }
 $('btnLayers').addEventListener('click', () => { if (!state.drawing) { toast('Open a drawing first'); return; } openSheet('layersPanel'); });
 $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
@@ -597,7 +597,8 @@ function handleBack() {
   if ($('saveDlg').classList.contains('on')) { $('saveCancel').click(); return; }
   if ($('pdfPrev').classList.contains('on')) { $('prevBack').click(); return; }
   if ($('textDlg').classList.contains('on')) { $('txtCancel').click(); return; }
-  if (document.querySelector('.sheet.open') || $('groups').classList.contains('open')) { closeSheets(); return; }
+  if ($('layerDlg').classList.contains('on')) { $('nlCancel').click(); return; }
+  if (document.querySelector('.sheet.open') || popOpen()) { closeSheets(); return; }
   if (document.body.classList.contains('fs')) { setFull(false); try { if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } return; }
   if ($('loading').classList.contains('on')) return; // a file is opening
   if ($('fileDlg').classList.contains('on')) { $('fileClose').click(); return; }
@@ -615,6 +616,4 @@ window.addEventListener('popstate', () => {
 document.addEventListener('pointerup', syncBack, true); document.addEventListener('keydown', syncBack, true);
 if (onGuard()) try { history.replaceState(null, ''); } catch (e) { } // reloaded while on the guard
 { let sk = null; try { sk = localStorage.getItem('tct-skin'); if (!sk && !localStorage.getItem('tct-skin-v1')) { localStorage.removeItem('tct-canvas'); localStorage.setItem('tct-skin-v1', '1'); } } catch (e) { } applySkin(sk || SKIN_DEFAULT, false); }
-setGroup('view'); renderRecent(); resizeCanvas();
-// First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); setHome(true); showHomeTitle();
+// (start-up runs at the end of part8, after every part is loaded)

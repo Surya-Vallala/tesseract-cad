@@ -202,20 +202,24 @@ const UNIT_TO_M = { 0: 0.001, 1: 0.0254, 2: 0.3048, 3: 1609.344, 4: 0.001, 5: 0.
 const UNIT_NAME = { 0: 'units', 1: 'in', 2: 'ft', 3: 'mi', 4: 'mm', 5: 'cm', 6: 'm', 7: 'km', 8: 'µin', 9: 'mil', 10: 'yd', 14: 'dm' };
 // Plain numbers: a decimal point and no thousands separators, whatever the phone's language (2,134 read like 2.134)
 function fmtNum(v, dp) { if (!isFinite(v)) return '—'; const a = Math.abs(v); const d = dp != null ? dp : (a >= 1000 ? 0 : a >= 10 ? 1 : 2); const s = v.toFixed(d); return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s; }
-function fmtFtIn(m) { const totalIn = m / 0.0254; const sign = totalIn < 0 ? '-' : ''; const eighths = Math.round(Math.abs(totalIn) * 8); /* round first, so 11.99" becomes the next foot, not 12" */ const ft = Math.floor(eighths / 96); let frac = eighths - ft * 96; let whole = Math.floor(frac / 8); frac = frac % 8; let f = whole + ''; if (frac) { let n = frac, d = 8; while (n % 2 === 0) { n /= 2; d /= 2; } f += ' ' + n + '/' + d; } return sign + ft + "' " + f + '"'; }
+// Decimal places chosen in Measure → Decimals (null = the defaults below). Saved on the phone.
+let PREC = null; try { const v = localStorage.getItem('tct-prec'); if (v !== null && v !== '') PREC = Math.max(0, Math.min(4, parseInt(v, 10) || 0)); } catch (e) { }
+const prec = (d) => PREC == null ? d : PREC;
+const fmtAng = (d) => fmtNum(d, prec(2)) + '°';
+function fmtFtIn(m) { const den = PREC == null ? 8 : [1, 4, 8, 16, 32][PREC]; const totalIn = m / 0.0254; const sign = totalIn < 0 ? '-' : ''; const parts = Math.round(Math.abs(totalIn) * den); /* round first, so 11.99" becomes the next foot, not 12" */ const ft = Math.floor(parts / (12 * den)); let frac = parts - ft * 12 * den; let whole = Math.floor(frac / den); frac = frac % den; let f = whole + ''; if (frac) { let n = frac, d = den; while (n % 2 === 0) { n /= 2; d /= 2; } f += ' ' + n + '/' + d; } return sign + ft + "' " + f + '"'; }
 // Which unit lengths are shown in. Auto: metres for metric drawings, feet-inches for imperial ones.
 const IMPERIAL = new Set([1, 2, 3, 8, 9, 10]);
 function lenMode() { const mode = state.unitMode; if (mode && mode !== 'auto') return mode; const code = state.drawing ? state.drawing.header.units : 4; return IMPERIAL.has(code) ? 'ft' : code === 0 ? 'raw' : 'm'; }
 function fmtLen(v) { // v in drawing units
   const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m = v * toM;
   const mode = lenMode();
-  if (mode === 'mm') return fmtNum(m * 1000, 0) + ' mm';
-  if (mode === 'm') return fmtNum(m, 2) + ' m';
+  if (mode === 'mm') return fmtNum(m * 1000, Math.max(0, prec(2) - 3)) + ' mm';
+  if (mode === 'm') return fmtNum(m, prec(2)) + ' m';
   if (mode === 'ft') return fmtFtIn(m);
-  return fmtNum(v) + ' ' + (UNIT_NAME[code] || 'units');
+  return fmtNum(v, PREC == null ? undefined : PREC) + ' ' + (UNIT_NAME[code] || 'units');
 }
-function fmtLenAll(v) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m = v * toM; const mode = lenMode(); const parts = [fmtLen(v)]; if (mode !== 'mm' && !IMPERIAL.has(code)) parts.push(fmtNum(m * 1000, 0) + ' mm'); if (mode === 'mm') parts.push(fmtNum(m, 3) + ' m'); if (mode !== 'ft') parts.push(fmtFtIn(m)); return parts.join('  ·  '); }
+function fmtLenAll(v) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m = v * toM; const mode = lenMode(); const parts = [fmtLen(v)]; if (mode !== 'mm' && !IMPERIAL.has(code)) parts.push(fmtNum(m * 1000, Math.max(0, prec(2) - 3)) + ' mm'); if (mode === 'mm') parts.push(fmtNum(m, Math.max(3, prec(2))) + ' m'); if (mode !== 'ft') parts.push(fmtFtIn(m)); return parts.join('  ·  '); }
 // Text written into a placed dimension: the number without the unit for metres and millimetres (as on drawings)
 function fmtDimText(v) { const t = fmtLen(v); return t.replace(/ (m|mm)$/, ''); }
-function fmtAreaShort(a) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m2 = a * toM * toM; return lenMode() === 'ft' ? fmtNum(m2 / 0.09290304, 1) + ' sq ft' : fmtNum(m2, 2) + ' m²'; } // for labels on the drawing
-function fmtArea(a) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m2 = a * toM * toM; const sqft = m2 / 0.09290304; return fmtNum(m2, 2) + ' m²  ·  ' + fmtNum(sqft, 1) + ' sq ft  ·  ' + fmtNum(sqft / 9, 2) + ' sq yd'; }
+function fmtAreaShort(a) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m2 = a * toM * toM; return lenMode() === 'ft' ? fmtNum(m2 / 0.09290304, prec(1)) + ' sq ft' : fmtNum(m2, prec(2)) + ' m²'; } // for labels on the drawing
+function fmtArea(a) { const code = state.drawing ? state.drawing.header.units : 4; const toM = UNIT_TO_M[code] || 0.001; const m2 = a * toM * toM; const sqft = m2 / 0.09290304; return fmtNum(m2, prec(2)) + ' m²  ·  ' + fmtNum(sqft, prec(1)) + ' sq ft  ·  ' + fmtNum(sqft / 9, prec(2)) + ' sq yd'; }
