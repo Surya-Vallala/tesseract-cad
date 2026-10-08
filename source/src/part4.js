@@ -275,7 +275,7 @@ function drawLoupe(acc) {
   ctx.restore();
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, L - 2, L - 2);
   // snap name and the changing value under the box
-  const sn = lp.sn; const base = state.handleDrag ? null : rubberBase(); const label = (sn ? SNAP_NAMES[sn.kind] : '') + (sn ? (state.handleDrag ? '  ' + handleDragLabel() : base ? '  ' + fmtLen(mLen(base, [sn.x, sn.y])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
+  const sn = lp.sn; const base = state.handleDrag ? null : rubberBase(); const label = (sn ? snapLabel(sn) : '') + (sn ? (state.handleDrag ? '  ' + handleDragLabel() : base ? '  ' + fmtLen(mLen(base, [sn.x, sn.y])) : '  ' + fmtNum(sn.x, 2) + ', ' + fmtNum(sn.y, 2)) : '');
   ctx.font = '600 11px ' + UI_FONT; const tw = Math.min(ctx.measureText(label).width + 14, cssW - 20); const lx = x + (x < cssW / 2 ? 0 : L - tw), ly = y + L + 4;
   ctx.fillStyle = 'rgba(20,20,20,.86)'; ctx.fillRect(lx, ly, tw, 18); ctx.fillStyle = sn && sn.kind ? acc : '#e8e4da'; ctx.textBaseline = 'middle'; ctx.fillText(label, lx + 7, ly + 9.5, tw - 12);
   ctx.restore();

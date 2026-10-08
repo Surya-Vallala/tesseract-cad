@@ -763,6 +763,8 @@ const polar = { on: true, inc: 90, extra: [] };
 try { const o = JSON.parse(localStorage.getItem('tct-polar') || 'null'); if (o) { polar.on = o.on !== false; if (o.inc > 0 && o.inc <= 180) polar.inc = o.inc; if (Array.isArray(o.extra)) polar.extra = o.extra.filter(a => isFinite(a)).slice(0, 12); } } catch (e) { }
 function savePolar() { try { localStorage.setItem('tct-polar', JSON.stringify(polar)); } catch (e) { } renderPolarSummary(); }
 const angTxt = (a) => (Math.abs(a - Math.round(a)) < 1e-9 ? String(Math.round(a)) : String(+a.toFixed(3))) + '°';
+/* Snap name for the magnifier and the coordinate chip; polar and tracking snaps also give the angle they lock to */
+function snapLabel(sn) { if (!sn) return ''; const nm = SNAP_NAMES[sn.kind] || ''; if (sn.kind === 15 && sn.lines && sn.lines.length > 1) return nm + ' ' + sn.lines.slice(0, 2).map(l => angTxt(l.ang)).join(' × '); return nm + ((sn.kind === 12 || sn.kind === 13 || sn.kind === 14 || sn.kind === 16) && sn.ang != null ? ' ' + angTxt(sn.ang) : ''); }
 function polarAngles() {
   const out = new Set(); const n = Math.round(360 / polar.inc); if (Math.abs(n * polar.inc - 360) < 1e-6) { for (let i = 0; i < n; i++) out.add(+(i * polar.inc).toFixed(6)); } else for (let a = 0; a < 360 - 1e-9; a += polar.inc) out.add(+a.toFixed(6));
   for (const a of polar.extra) { const b = ((a % 360) + 360) % 360; out.add(+b.toFixed(6)); out.add(+((b + 180) % 360).toFixed(6)); }
