@@ -1053,7 +1053,29 @@ function clipPaste(at) {
   startTool('select', true); showSelection(); requestFull();
 }
 
+// ===================== Files shared into the app (Android share sheet → Tesseract CAD) =====================
+// The service worker parks the shared file(s) in the 'share-inbox' cache and opens ./?app=1&share=N; we open the first drawing.
+function sniffCad(buf) { const b = new Uint8Array(buf, 0, Math.min(buf.byteLength, 2048)); const head = String.fromCharCode.apply(null, b.subarray(0, 4)); if (head === 'AC10') return 'dwg'; const txt = String.fromCharCode.apply(null, b); if (/AutoCAD Binary DXF/.test(txt) || /^\s*0\s*[\r\n]+\s*SECTION/.test(txt) || /^\s*999[\r\n]/.test(txt)) return 'dxf'; return null; }
+async function takeSharedFiles() {
+  let q; try { q = new URLSearchParams(location.search); } catch (e) { return; } if (!q.has('share')) return;
+  const n = q.get('share'); try { q.delete('share'); history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '')); } catch (e) { }
+  if (n === 'err') { toast('The shared file could not be read. Try Open DWG / DXF instead.', 5000); return; }
+  if (!('caches' in window)) return;
+  let c, keys; try { c = await caches.open('share-inbox'); keys = await c.keys(); } catch (e) { return; }
+  keys.sort((a, b) => a.url.localeCompare(b.url, undefined, { numeric: true }));
+  const got = []; for (const k of keys) { try { const r = await c.match(k); if (r) got.push({ name: decodeURIComponent(r.headers.get('X-Name') || ''), buf: await r.arrayBuffer() }); } catch (e) { } try { await c.delete(k); } catch (e) { } }
+  if (!got.length) return;
+  let pick = null, skipped = 0;
+  for (const g of got) { const kind = /\.dxf$/i.test(g.name) ? 'dxf' : /\.dwg$/i.test(g.name) ? 'dwg' : sniffCad(g.buf); if (!kind) { skipped++; continue; } if (!pick) { pick = g; if (!/\.(dwg|dxf)$/i.test(g.name)) g.name = (g.name || 'Shared drawing').replace(/\.[^.]*$/, '') + '.' + kind; } else skipped++; }
+  if (!pick) { toast('That file is not a DWG or DXF drawing' + (got[0].name ? ' (' + got[0].name + ')' : '') + '.', 5000); return; }
+  if (pick.buf.byteLength > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; }
+  if (skipped) toast('Opening ' + pick.name + ' · one drawing at a time, the other ' + (skipped === 1 ? 'file was' : skipped + ' files were') + ' skipped', 4500);
+  const open = findOpenDoc(pick.name); if (open) { switchDoc(open); return; } if (!canOpenAnother()) return;
+  parseFile(pick.buf, pick.name);
+}
+
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();
 // Start on the Home tab with nothing open; drawings open in their own tabs.
 showHomeTitle(); setHome(true); renderTabs(); updateChrome();
+takeSharedFiles();
