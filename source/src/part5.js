@@ -31,7 +31,8 @@ function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y
   const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
   if (!state.drawing) return { x: w[0], y: w[1], kind: 0 };
   const pb = polarBase(); const ptol = Math.max(9, (tolPx || 16) * 0.8) / V.s; // polar tracking from the last point
-  if (!state.snapOn) return (pb && polarPoint(w, pb, ptol, null)) || { x: w[0], y: w[1], kind: 0 };
+  const tp = trackPts();
+  if (!state.snapOn) return ((pb || tp) && alignSnap(w, pb, tp, ptol, null)) || { x: w[0], y: w[1], kind: 0 };
   const S = getScene(state.spaceIdx); const cands = [];
   const base = (snapOn[9] || snapOn[10]) && state.lastPt ? state.lastPt : null;
   // on the sheet (or in model space)
@@ -53,7 +54,7 @@ function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y
     if (h2 && h2.x != null && base && vpAt(base[0], base[1]) === vp) { const d = dynSnap(h2.item, m, paperToModel(vp, base), mt); if (d) push(d[0], d[1], d[2], h2.item); }
   }
   if (cands.length) { let best = null, bsc = Infinity; for (const c of cands) { const k = c.kind === 1 ? 0.8 : c.kind === 5 ? 0.85 : c.kind === 3 ? 0.9 : 1; if (c.d * k < bsc) { bsc = c.d * k; best = c; } } return best; }
-  if (pb) { const ps = polarPoint(w, pb, ptol, S); if (ps) return ps; } // point snaps win; polar wins over Nearest
+  if (pb || tp) { const ps = alignSnap(w, pb, tp, ptol, S); if (ps) return ps; } // point snaps win; polar and object snap tracking win over Nearest
   if (snapOn[6]) {
     if (onSheet) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
     if (h2 && h2.x != null) { const q = modelToPaper(vp, [h2.x, h2.y]); return { x: q[0], y: q[1], kind: 6, item: h2.item, vp }; }
@@ -152,10 +153,10 @@ function enterPrecise(X, Y) {
 // X, Y are the finger; the pointer (lp.X, lp.Y) rides POINTER_LIFT px above it so it stays visible
 function updatePrecise(X, Y) {
   const lp = state.loupe; if (!lp) return; lp.fx = X; lp.fy = Y; lp.X = X; lp.Y = Y - Math.max(0, Math.min(POINTER_LIFT, Y - 12)); X = lp.X; Y = lp.Y; // near the top edge the pointer comes closer instead of leaving the screen
-  const sn = snapPoint(X, Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast();
+  const sn = snapPoint(X, Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); otrackFeed(sn); requestFast();
 }
 function exitPrecise(place) {
-  const lp = state.loupe; state.loupe = null; stopEdgePan(); if (!lp) return;
+  const lp = state.loupe; state.loupe = null; stopEdgePan(); otrackFeed(null); if (!lp) return;
   if (place && state.drawing) { const sn = lp.sn || snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); state.snapMark = sn.kind ? sn : null; const V = state.view; const q = toScreen(sn.x, sn.y, V); const hit = pickAt(sn.x, sn.y, 6 / V.s); if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, null); }
   requestFull();
 }
@@ -210,7 +211,7 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, e
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
-function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind); requestFast(); }
+function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind); if (picking) otrackFeed(sn); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
 
 function onTap(X, Y, ev) {
@@ -302,7 +303,7 @@ function needSelection(tool, next) { // returns true if selection exists, otherw
 }
 function startTool(name, keepSel) {
   if (!keepSel && state.tool && state.tool.name !== name && !['select', 'box'].includes(name) && ['select', 'box', 'info', 'coord', 'dist', 'area', 'angle'].includes(state.tool.name)) { /* keep selection across tools */ }
-  state.tool = makeTool(name); state.lastPt = null; state.snapMark = null; setResult(null); typed.value = ''; resetTyped();
+  state.tool = makeTool(name); state.lastPt = null; state.snapMark = null; state.otrack = []; otrackFeed(null); setResult(null); typed.value = ''; resetTyped();
   toolName.textContent = LABEL[name] || name; state.tool.start();
   renderBar();
   updateChrome(); maybeHoldTip(name);
@@ -599,7 +600,7 @@ function updateHandleDrag(X, Y) {
   const hd = state.handleDrag, lp = state.loupe, T = state.tool; if (!hd || !lp || !T || !T.pts[hd.i]) return;
   if (!hd.moved && Math.hypot(X - hd.x0, Y - hd.y0) < 6) return; hd.moved = true; // a plain tap on a handle changes nothing
   lp.fx = X; lp.fy = Y; lp.X = X; lp.Y = Y - Math.max(0, Math.min(POINTER_LIFT, Y - 12)); // pointer above the finger
-  const sn = snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
+  const sn = snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind); otrackFeed(sn);
   T.pts[hd.i] = [sn.x, sn.y]; if (hd.i === T.pts.length - 1) state.lastPt = T.pts[hd.i];
   if (T.onHandleMoved) T.onHandleMoved(hd.i, sn); else if (T.update) T.update();
   requestFast();
@@ -614,7 +615,7 @@ function handleDragLabel() {
   if (T.name === 'coord') { const q = measureSpace([P[0]], true).pts[0]; return fmtNum(q[0], 2) + ', ' + fmtNum(q[1], 2); }
   return '';
 }
-function endHandleDrag() { state.handleDrag = null; state.loupe = null; state.snapMark = null; gesture = false; dragStart = null; requestFull(); }
+function endHandleDrag() { otrackFeed(null); state.handleDrag = null; state.loupe = null; state.snapMark = null; gesture = false; dragStart = null; requestFull(); }
 // ----- Placed dimensions: geometry in drawing units, shared by the live preview and the object that gets created -----
 function dimTextHeight() { return state.textH || defaultTextHeight(); }
 function dimGeom(kind, P, q, th) {

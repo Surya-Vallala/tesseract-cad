@@ -752,28 +752,86 @@ function polarBase() {
   if ((T.name === 'dimlin' || T.name === 'dimali') && T.pts && T.pts.length >= 2) return null; // placing the dimension line
   return state.lastPt || null;
 }
-function polarPoint(w, base, tol, S) {
-  const dx = w[0] - base[0], dy = w[1] - base[1]; if (Math.hypot(dx, dy) < tol * 2) return null;
-  let best = null; for (const a of polarAngles()) { const r = rad(a); const ux = Math.cos(r), uy = Math.sin(r); const t = dx * ux + dy * uy; if (t <= 0) continue; const perp = Math.abs(dy * ux - dx * uy); if (perp <= tol && (!best || perp < best.perp)) best = { a, ux, uy, t, perp }; }
-  if (!best) return null;
-  const { ux, uy } = best; let p = [base[0] + ux * best.t, base[1] + uy * best.t], kind = 12;
-  if (S) { // where the polar ray crosses an object near the finger
-    const hit = pickAt(w[0], w[1], tol * 1.3, S, true); let bd = Infinity;
-    const take = (q) => { const t = (q[0] - base[0]) * ux + (q[1] - base[1]) * uy; if (t <= tol * 0.5) return; const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d <= tol * 1.3 && d < bd) { bd = d; p = q; kind = 13; } };
-    if (hit) {
-      for (const sg of itemSegsNear(hit.item, w[0], w[1], tol * 1.3)) { const q = lineX([base, [base[0] + ux, base[1] + uy]], sg); if (!q) continue; const sx = sg[1][0] - sg[0][0], sy = sg[1][1] - sg[0][1], L2 = sx * sx + sy * sy || 1e-18; const s = ((q[0] - sg[0][0]) * sx + (q[1] - sg[0][1]) * sy) / L2; if (s >= -1e-9 && s <= 1 + 1e-9) take(q); }
-      for (const cv of itemCurvesNear(hit.item, w, tol * 1.3)) { const fx = base[0] - cv.c[0], fy = base[1] - cv.c[1]; const bq = fx * ux + fy * uy, cq = fx * fx + fy * fy - cv.r * cv.r, disc = bq * bq - cq; if (disc < 0) continue; for (const t of [-bq - Math.sqrt(disc), -bq + Math.sqrt(disc)]) { const q = [base[0] + ux * t, base[1] + uy * t]; if (cv.full || angInArc(Math.atan2(q[1] - cv.c[1], q[0] - cv.c[0]), cv.a0, cv.a1, cv.ccw)) take(q); } }
-    }
+// ----- Object snap tracking: pause on a snap point (holding, or with a mouse over it) to pick it up; lines run through it -----
+const otrack = { on: true, polar: false, pause: 500 };
+try { const o = JSON.parse(localStorage.getItem('tct-otrack') || 'null'); if (o) { otrack.on = o.on !== false; otrack.polar = !!o.polar; if ([300, 500, 800].includes(o.pause)) otrack.pause = o.pause; } } catch (e) { }
+function saveOtrack() { try { localStorage.setItem('tct-otrack', JSON.stringify(otrack)); } catch (e) { } renderOtrackSummary(); }
+const ACQ_KINDS = new Set([1, 2, 3, 4, 5, 7, 8, 11]); // real points only
+let acqPend = null, acqTimer = 0, acqTipShown = false;
+function trackPts() { const T = state.tool; return otrack.on && T && PICK_TOOLS.has(T.name) && T.phase !== 'select' && state.otrack && state.otrack.length ? state.otrack : null; }
+function otrackFeed(sn) {
+  const T = state.tool; if (!otrack.on || !sn || !ACQ_KINDS.has(sn.kind) || !T || !PICK_TOOLS.has(T.name) || T.phase === 'select') { clearTimeout(acqTimer); acqPend = null; return; }
+  if (acqPend && Math.hypot(acqPend.x - sn.x, acqPend.y - sn.y) * state.view.s < 1) return; // still on the same point
+  clearTimeout(acqTimer); const p = acqPend = { x: sn.x, y: sn.y };
+  acqTimer = setTimeout(() => { if (acqPend === p) acquirePoint(p); }, otrack.pause);
+}
+function acquirePoint(p) {
+  const L = state.otrack || (state.otrack = []); const i = L.findIndex(q => Math.hypot(q[0] - p.x, q[1] - p.y) * state.view.s < 2);
+  if (i >= 0) L.splice(i, 1); else { L.push([p.x, p.y]); if (L.length > 4) L.shift(); } // pausing again on a picked-up point drops it
+  try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { }
+  if (i < 0 && !acqTipShown) { acqTipShown = true; toast('Point picked up for tracking · move away along a line through it', 2600); }
+  if (state.loupe) { const lp = state.loupe; const sn = snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; }
+  requestFast();
+}
+function trackAngles() { if (!otrack.polar) return [0, 90]; const out = new Set(); for (const a of polarAngles()) out.add(+(a % 180).toFixed(6)); return [...out]; }
+// The polar ray from the last point, and lines through picked-up points: the crossing of two lines wins, then the closest line
+// (where it crosses an object near the finger, if it does), else nothing.
+function alignSnap(w, base, pts, tol, S) {
+  const lines = [];
+  if (base) { const dx = w[0] - base[0], dy = w[1] - base[1]; if (Math.hypot(dx, dy) >= tol * 2) for (const a of polarAngles()) { const r = rad(a); const u = [Math.cos(r), Math.sin(r)]; const t = dx * u[0] + dy * u[1]; if (t <= 0) continue; const perp = Math.abs(dy * u[0] - dx * u[1]); if (perp <= tol) lines.push({ o: base, u, ang: a, src: 'polar', perp }); } }
+  if (pts) for (const A of pts) { const dx = w[0] - A[0], dy = w[1] - A[1]; for (const a of trackAngles()) { const r = rad(a); let u = [Math.cos(r), Math.sin(r)]; const t = dx * u[0] + dy * u[1]; if (Math.abs(t) < tol * 1.5) continue; const perp = Math.abs(dy * u[0] - dx * u[1]); if (perp <= tol) { let ang = a; if (t < 0) { u = [-u[0], -u[1]]; ang = (a + 180) % 360; } lines.push({ o: A, u, ang, src: 'track', perp }); } } }
+  if (!lines.length) return null;
+  const pack = (x, y, kind, ls) => ({ x, y, kind, lines: ls.map(l => ({ o: l.o.slice(), ang: l.ang, src: l.src })), base: base ? base.slice() : null, ang: ls[0].ang });
+  // two lines: their crossing
+  let bx = null, bd = tol * 1.6;
+  for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+    const L1 = lines[i], L2 = lines[j]; if (L1.o === L2.o) continue;
+    const q = lineX([L1.o, [L1.o[0] + L1.u[0], L1.o[1] + L1.u[1]]], [L2.o, [L2.o[0] + L2.u[0], L2.o[1] + L2.u[1]]]); if (!q) continue;
+    if (L1.src === 'polar' && (q[0] - L1.o[0]) * L1.u[0] + (q[1] - L1.o[1]) * L1.u[1] <= 0) continue; if (L2.src === 'polar' && (q[0] - L2.o[0]) * L2.u[0] + (q[1] - L2.o[1]) * L2.u[1] <= 0) continue;
+    const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d < bd) { bd = d; bx = { q, L1, L2 }; }
   }
-  return { x: p[0], y: p[1], kind, base: base.slice(), ang: best.a };
+  if (bx) return pack(bx.q[0], bx.q[1], 15, [bx.L1, bx.L2]);
+  // one line: the nearest, onto an object it crosses near the finger if there is one
+  lines.sort((a, b) => a.perp - b.perp); const L = lines[0]; const t = (w[0] - L.o[0]) * L.u[0] + (w[1] - L.o[1]) * L.u[1];
+  let p = [L.o[0] + L.u[0] * t, L.o[1] + L.u[1] * t], kind = L.src === 'polar' ? 12 : 14;
+  if (S) { const q = rayHitObject(L.o, L.u, w, tol, S); if (q) { p = q; kind = L.src === 'polar' ? 13 : 16; } }
+  return pack(p[0], p[1], kind, [L]);
 }
-// the dotted tracking line through the point, and (without the magnifier) a label with the angle and length
-function drawPolarTrack(c, V, sn, label) {
-  const B = toScreen(sn.base[0], sn.base[1], V), P = toScreen(sn.x, sn.y, V); const dx = P[0] - B[0], dy = P[1] - B[1], L = Math.hypot(dx, dy); if (L < 1) return;
-  const ux = dx / L, uy = dy / L; const far = Math.hypot(cssW, cssH) * 2;
-  c.save(); c.setLineDash([2, 4]); c.lineWidth = 1.4; c.strokeStyle = '#2fd27a'; c.globalAlpha = 0.95; c.beginPath(); c.moveTo(B[0], B[1]); c.lineTo(B[0] + ux * far, B[1] + uy * far); c.stroke(); c.restore();
-  if (label) drawChip(c, P[0] + 14, P[1] + 22, (sn.kind === 13 ? 'Polar + object ' : 'Polar ') + angTxt(sn.ang) + ' · ' + fmtLen(mLen(sn.base, [sn.x, sn.y])), 0, null, 'left');
+function rayHitObject(o, u, w, tol, S) {
+  const hit = pickAt(w[0], w[1], tol * 1.3, S, true); if (!hit) return null; let best = null, bd = Infinity;
+  const take = (q) => { const t = (q[0] - o[0]) * u[0] + (q[1] - o[1]) * u[1]; if (t <= tol * 0.5) return; const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d <= tol * 1.3 && d < bd) { bd = d; best = q; } };
+  for (const sg of itemSegsNear(hit.item, w[0], w[1], tol * 1.3)) { const q = lineX([o, [o[0] + u[0], o[1] + u[1]]], sg); if (!q) continue; const sx = sg[1][0] - sg[0][0], sy = sg[1][1] - sg[0][1], L2 = sx * sx + sy * sy || 1e-18; const s = ((q[0] - sg[0][0]) * sx + (q[1] - sg[0][1]) * sy) / L2; if (s >= -1e-9 && s <= 1 + 1e-9) take(q); }
+  for (const cv of itemCurvesNear(hit.item, w, tol * 1.3)) { const fx = o[0] - cv.c[0], fy = o[1] - cv.c[1]; const bq = fx * u[0] + fy * u[1], cq = fx * fx + fy * fy - cv.r * cv.r, disc = bq * bq - cq; if (disc < 0) continue; for (const t of [-bq - Math.sqrt(disc), -bq + Math.sqrt(disc)]) { const q = [o[0] + u[0] * t, o[1] + u[1] * t]; if (cv.full || angInArc(Math.atan2(q[1] - cv.c[1], q[0] - cv.c[0]), cv.a0, cv.a1, cv.ccw)) take(q); } }
+  return best;
 }
+// dotted green lines from the polar base / picked-up points through the point, and (without the magnifier) a label
+function drawTrack(c, V, sn, label) {
+  const P = toScreen(sn.x, sn.y, V); const far = Math.hypot(cssW, cssH) * 2;
+  c.save(); c.setLineDash([2, 4]); c.lineWidth = 1.4; c.strokeStyle = '#2fd27a'; c.globalAlpha = 0.95;
+  for (const l of sn.lines) { const O = toScreen(l.o[0], l.o[1], V); const r = rad(l.ang); const ux = Math.cos(r), uy = -Math.sin(r); c.beginPath(); if (l.src === 'polar') c.moveTo(O[0], O[1]); else c.moveTo(O[0] - ux * 14, O[1] - uy * 14); const t = Math.max((P[0] - O[0]) * ux + (P[1] - O[1]) * uy, 0); c.lineTo(O[0] + ux * (t + far), O[1] + uy * (t + far)); c.stroke(); }
+  c.restore();
+  if (!label) return;
+  const from = sn.base || sn.lines[0].o; const name = SNAP_NAMES[sn.kind] || 'Tracking';
+  drawChip(c, P[0] + 14, P[1] + 22, name + (sn.kind === 15 ? '' : ' ' + angTxt(sn.ang)) + ' · ' + fmtLen(mLen(from, [sn.x, sn.y])), 0, null, 'left');
+}
+// picked-up points: a small green + while a tool is picking
+function drawTrackPts(c, V) {
+  const pts = trackPts(); if (!pts) return; c.save(); c.strokeStyle = '#2fd27a'; c.lineWidth = 2; c.setLineDash([]);
+  for (const p of pts) { const Q = toScreen(p[0], p[1], V); c.beginPath(); c.moveTo(Q[0] - 6, Q[1]); c.lineTo(Q[0] + 6, Q[1]); c.moveTo(Q[0], Q[1] - 6); c.lineTo(Q[0], Q[1] + 6); c.stroke(); }
+  c.restore();
+}
+function renderOtrackSummary() { const el = $('otrackSummary'); if (el) el.textContent = otrack.on ? 'on · ' + (otrack.polar ? 'polar angles' : 'horizontal and vertical') : 'off'; }
+function renderOtrack() {
+  $('chkOtrack').checked = otrack.on; $('otrackBody').classList.toggle('disabled', !otrack.on);
+  for (const b of $('otrackDir').children) b.setAttribute('aria-pressed', (b.dataset.v === 'polar') === otrack.polar ? 'true' : 'false');
+  for (const b of $('otrackPause').children) b.setAttribute('aria-pressed', +b.dataset.v === otrack.pause ? 'true' : 'false');
+  renderOtrackSummary();
+}
+$('miOtrack').addEventListener('click', () => { closeSheets(); renderOtrack(); openSheet('otrackPanel'); });
+$('chkOtrack').addEventListener('change', (ev) => { otrack.on = ev.target.checked; if (!otrack.on) state.otrack = []; saveOtrack(); renderOtrack(); requestFast(); });
+$('otrackDir').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; otrack.polar = b.dataset.v === 'polar'; saveOtrack(); renderOtrack(); });
+$('otrackPause').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; otrack.pause = +b.dataset.v; saveOtrack(); renderOtrack(); });
+renderOtrackSummary();
 function renderPolarSummary() { const el = $('polarSummary'); if (!el) return; el.textContent = polar.on ? 'on · every ' + angTxt(polar.inc) + (polar.extra.length ? ' + ' + polar.extra.length + ' extra' : '') : 'off'; }
 function renderPolar() {
   $('chkPolar').checked = polar.on; $('polarBody').classList.toggle('disabled', !polar.on);

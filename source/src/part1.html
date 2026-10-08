@@ -354,6 +354,7 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <div class="menu-item"><span>Units shown</span><div class="seg" id="segUnits"><button data-v="auto" aria-pressed="true">Auto</button><button data-v="mm">mm</button><button data-v="m">m</button><button data-v="ft">ft-in</button></div></div>
         <button class="menu-item" id="miSnaps"><span>Snap points <small id="snapSummary">all on</small></span><span>→</span></button>
         <button class="menu-item" id="miPolar"><span>Polar tracking <small id="polarSummary">on · every 90°</small></span><span>→</span></button>
+        <button class="menu-item" id="miOtrack"><span>Object snap tracking <small id="otrackSummary">on · horizontal and vertical</small></span><span>→</span></button>
         <div class="menu-item"><span>Hatch patterns <small>off = faster</small></span><input type="checkbox" id="chkPat" checked></div>
         <div class="menu-item doc-only"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>
         <div class="menu-item doc-only" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
@@ -382,6 +383,17 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
           <div class="pol-chips" id="polarExtra"></div>
           <div class="pol-row"><input id="polarExtraIn" inputmode="decimal" placeholder="Angle, e.g. 37.5" autocomplete="off"><button class="btn" id="polarExtraAdd">Add</button></div>
           <p class="pol-note">Angles go anticlockwise from the right (0° = east, 90° = north). Snap points such as endpoints win when they are close; a dotted green line shows the angle being tracked.</p>
+        </div>
+      </div>
+    </section>
+    <section class="sheet" id="otrackPanel" aria-label="Object snap tracking">
+      <header><h2>Object snap tracking</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <label class="menu-item"><span>Object snap tracking <small>line up with points you pick up</small></span><input type="checkbox" id="chkOtrack" checked></label>
+        <div class="pol-sec" id="otrackBody">
+          <div class="menu-item" style="padding-left:0;padding-right:0"><span>Track along</span><div class="seg" id="otrackDir"><button data-v="ortho" aria-pressed="true">Horizontal &amp; vertical</button><button data-v="polar">Polar angles</button></div></div>
+          <div class="menu-item" style="padding-left:0;padding-right:0"><span>Pause to pick up <small>how long to stay on a point</small></span><div class="seg" id="otrackPause"><button data-v="300">0.3 s</button><button data-v="500" aria-pressed="true">0.5 s</button><button data-v="800">0.8 s</button></div></div>
+          <p class="pol-note"><b>How to use:</b> while placing a point, press and hold, drag onto a snap point (an endpoint, midpoint, centre…) and stay there a moment: a small green + marks it as picked up. Move away and the pointer locks onto dotted green lines through that point; with two picked-up points (or one and the polar line from your last point) it locks onto where the lines cross. Pause on a + again to drop it. Up to 4 points; they clear when the tool ends. With a mouse, resting the pointer on a snap point does the same.</p>
         </div>
       </div>
     </section>
