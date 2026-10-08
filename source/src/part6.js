@@ -42,6 +42,7 @@ function undo() { const a = state.undo.pop(); if (!a) return; applyAction(a, tru
 function redo() { const a = state.redo.pop(); if (!a) return; applyAction(a, false); state.undo.push(a); updateUndoBtns(); toast('Redo'); }
 function nextId() { return state.drawing.nextId++; }
 function addEntities(list, mergeWithLast) {
+  applyCurProps(list); // a Draw tool's current colour / lineweight / linetype
   const sp = curSpace(); for (const e of list) { e.id = nextId(); e.hd = ''; sp.ents.push(e); }
   if (mergeWithLast && state.undo.length && state.undo[state.undo.length - 1].type === 'add' && state.undo[state.undo.length - 1].space === state.spaceIdx && state.undo[state.undo.length - 1].chain) { state.undo[state.undo.length - 1].ents.push(...list); state.dirty = true; }
   else pushUndo({ type: 'add', space: state.spaceIdx, ents: list.slice(), chain: !!mergeWithLast || list.length === 1 && list[0].t === 'LINE' });
@@ -108,7 +109,7 @@ function openProps() {
   const ltNames = ['ByLayer', 'ByBlock', 'Continuous'].concat(Object.keys(D.ltypes || {}).filter(n => !/^(bylayer|byblock|continuous)$/i.test(n)).sort());
   for (const n of ltNames) selT.append(new Option(n, n, false, n === curT));
   selT.addEventListener('change', () => { if (selT.value) { ch.lt = selT.value; mark(selT); } }); row('Linetype', selT);
-  row('Linetype scale', numInput(same(e => e.lts || 1), 'lts', v => v > 0 ? v : 1));
+  row('Linetype scale', numInput(same(e => e.lts || 1), 'lts', v => v > 0 ? v : 1), ltTooSmallHint(sel));
   // Transparency
   const selA = document.createElement('select'); const curA = same(e => alName(e.al)); if (curA === undefined) selA.append(new Option('(varies)', '', true, true));
   const aOpts = ['ByLayer', 'ByBlock', '0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%']; if (curA && !aOpts.includes(curA)) aOpts.push(curA);
@@ -126,6 +127,10 @@ function openProps() {
     if (one) { const ta = document.createElement(one.t === 'MTEXT' ? 'textarea' : 'input'); const plain = one.t === 'MTEXT' ? mtextPlain(one.s).join('\n') : textPlain(one.s); ta.value = plain; ta.addEventListener('input', () => { if (ta.value !== plain) { ch.s = ta.value; mark(ta); } else delete ch.s; }); row('Contents', ta, one.t === 'MTEXT' ? 'Editing replaces any inline formatting' : null); }
     row('Height', numInput(same(e => +fmtFixed(e.h, 4)), 'h', v => v > 0 ? v : undefined));
     row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
+  } else if (t1 === 'POINT') {
+    head(one ? 'Point' : 'Points');
+    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'ptx')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'pty')); }
+    const pb = document.createElement('button'); pb.type = 'button'; pb.className = 'btn'; pb.textContent = 'Point style (all points)…'; pb.addEventListener('click', () => { closeSheets(); openPointStyle(); }); row('Style', pb, 'Style and size are shared by every point in the drawing');
   } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
     head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
   }
@@ -175,6 +180,7 @@ function applyProps(ids, ch) {
       if ('s' in ch) n.s = n.t === 'MTEXT' ? ch.s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\r?\n/g, '\\P') : ch.s.replace(/\r?\n/g, ' ');
     }
     if ((n.t === 'CIRCLE' || n.t === 'ARC') && 'r' in ch) n.r = ch.r;
+    if (n.t === 'POINT' && ('ptx' in ch || 'pty' in ch)) n.p = ['ptx' in ch ? ch.ptx : n.p[0], 'pty' in ch ? ch.pty : n.p[1]];
     items.push({ id: e.id, prev: cloneEnt(e), next: n });
   }
   if (!items.length) return;
@@ -227,7 +233,7 @@ function buildDxf(D) {
   const MS = '1F', PS = '1B', LAYER_CTRL = '2', LTYPE_CTRL = '5', STYLE_CTRL = '3', BLKREC_CTRL = '1';
   const ltNames = new Set(['ByBlock', 'ByLayer', 'Continuous']);
   for (const l of D.layers) if (l.lt && !/^(continuous|bylayer|byblock)$/i.test(l.lt)) ltNames.add(l.lt);
-  w(0, 'SECTION'); w(2, 'HEADER'); w(9, '$ACADVER'); w(1, 'AC1015'); w(9, '$INSUNITS'); w(70, D.header.units || 0); w(9, '$EXTMIN'); w(10, num(D.header.extmin[0])); w(20, num(D.header.extmin[1])); w(30, '0'); w(9, '$EXTMAX'); w(10, num(D.header.extmax[0])); w(20, num(D.header.extmax[1])); w(30, '0'); w(9, '$LTSCALE'); w(40, num(D.header.ltscale || 1)); w(9, '$CLAYER'); w(8, dxfString(state.curLayer)); w(9, '$HANDSEED'); w(5, 'FFFFF'); w(9, '$DWGCODEPAGE'); w(3, 'ANSI_1252'); w(0, 'ENDSEC');
+  w(0, 'SECTION'); w(2, 'HEADER'); w(9, '$ACADVER'); w(1, 'AC1015'); w(9, '$INSUNITS'); w(70, D.header.units || 0); w(9, '$EXTMIN'); w(10, num(D.header.extmin[0])); w(20, num(D.header.extmin[1])); w(30, '0'); w(9, '$EXTMAX'); w(10, num(D.header.extmax[0])); w(20, num(D.header.extmax[1])); w(30, '0'); w(9, '$LTSCALE'); w(40, num(D.header.ltscale || 1)); w(9, '$CLAYER'); w(8, dxfString(state.curLayer)); { const ps = ptStyle(); w(9, '$PDMODE'); w(70, ps.mode); w(9, '$PDSIZE'); w(40, num(ps.size)); } w(9, '$HANDSEED'); w(5, 'FFFFF'); w(9, '$DWGCODEPAGE'); w(3, 'ANSI_1252'); w(0, 'ENDSEC');
   w(0, 'SECTION'); w(2, 'TABLES');
   w(0, 'TABLE'); w(2, 'VPORT'); w(5, '8'); w(330, '0'); w(100, 'AcDbSymbolTable'); w(70, 1); w(0, 'VPORT'); w(5, H()); w(330, '8'); w(100, 'AcDbSymbolTableRecord'); w(100, 'AcDbViewportTableRecord'); w(2, '*ACTIVE'); w(70, 0); w(10, '0'); w(20, '0'); w(11, '1'); w(21, '1'); w(12, num((D.header.extmin[0] + D.header.extmax[0]) / 2)); w(22, num((D.header.extmin[1] + D.header.extmax[1]) / 2)); w(13, '0'); w(23, '0'); w(14, '10'); w(24, '10'); w(15, '10'); w(25, '10'); w(16, '0'); w(26, '0'); w(36, '1'); w(17, '0'); w(27, '0'); w(37, '0'); w(40, num(Math.max(1, D.header.extmax[1] - D.header.extmin[1]))); w(41, '1.5'); w(42, '50'); w(43, '0'); w(44, '0'); w(50, '0'); w(51, '0'); w(71, 0); w(72, 100); w(73, 1); w(74, 3); w(75, 0); w(76, 0); w(77, 0); w(78, 0); w(281, 0); w(65, 1); w(110, '0'); w(120, '0'); w(130, '0'); w(111, '1'); w(121, '0'); w(131, '0'); w(112, '0'); w(122, '1'); w(132, '0'); w(79, 0); w(146, '0'); w(0, 'ENDTAB');
   w(0, 'TABLE'); w(2, 'LTYPE'); w(5, LTYPE_CTRL); w(330, '0'); w(100, 'AcDbSymbolTable'); w(70, ltNames.size);
@@ -335,7 +341,7 @@ const baseName = (n) => String(n || '').endsWith(EDIT_SUFFIX) ? String(n).slice(
 async function saveRecent(withEdits) {
   if (!state.drawing || state.drawing.sample) return;
   const orig = baseName(state.fileName);
-  const rec = { name: withEdits ? orig + EDIT_SUFFIX : orig, orig, when: Date.now(), bytes: state.fileBytes, kind: state.kind };
+  const rec = { name: withEdits && state.kind !== 'new' ? orig + EDIT_SUFFIX : orig, orig, when: Date.now(), bytes: state.fileBytes, kind: state.kind };
   if (withEdits) { rec.drawing = state.drawing; rec.edited = true; }
   await idbPut(rec);
   const all = await idbAll(); all.sort((a, b) => b.when - a.when); for (const r of all.slice(6)) idbDel(r.name);
@@ -358,10 +364,10 @@ function confirmUnsaved(then) {
   if (!state.drawing || !state.dirty || state.drawing.sample) { then(); return; }
   const dlg = $('saveDlg'); const name = baseName(state.fileName);
   $('saveTitle').textContent = 'Save changes to ' + name + '?';
-  $('saveMsg').textContent = 'Save keeps the edited drawing on this phone under Recent as “' + name + EDIT_SUFFIX + '”. The original file is not changed. To use the edits in AutoCAD, export a DXF from the menu.';
+  $('saveMsg').textContent = state.kind === 'new' ? 'Save keeps “' + name + '” on this phone under Recent. To use it in AutoCAD, share it as a DXF from the menu.' : 'Save keeps the edited drawing on this phone under Recent as “' + name + EDIT_SUFFIX + '”. The original file is not changed. To use the edits in AutoCAD, export a DXF from the menu.';
   dlg.classList.add('on');
   const done = () => { dlg.classList.remove('on'); $('saveOk').onclick = $('saveDiscard').onclick = $('saveCancel').onclick = null; };
-  $('saveOk').onclick = async () => { done(); await saveRecent(true); state.dirty = false; toast('Saved on this phone · see Recent: ' + name + EDIT_SUFFIX, 3500); then(); };
+  $('saveOk').onclick = async () => { done(); await saveRecent(true); state.dirty = false; toast('Saved on this phone · see Recent: ' + name + (state.kind === 'new' ? '' : EDIT_SUFFIX), 3500); then(); };
   $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
   $('saveCancel').onclick = () => { done(); };
 }
@@ -375,7 +381,7 @@ function closeDrawing() {
 }
 // Home screen on/off. At home there is no drawing on screen, so the drawing-only controls are hidden (CSS on #app.home).
 const atHome = () => $('welcome').style.display !== 'none';
-function setHome(on) { if (on) closePop(); $('welcome').style.display = on ? '' : 'none'; $('app').classList.toggle('home', on); syncCanvasSize(); updateUndoBtns(); queueBackSync(); }
+function setHome(on) { if (on) closePop(); $('welcome').style.display = on ? '' : 'none'; $('app').classList.toggle('home', on); syncCanvasSize(); updateUndoBtns(); queueBackSync(); renderTabs(); if (typeof renderCurBtns === 'function' && on) $('curBtns').hidden = true; }
 // the tool bar and tabs come and go with the home screen; size the canvas now so a zoom-to-fit right after is exact
 function syncCanvasSize() { const r = stage.getBoundingClientRect(); if (Math.abs(r.width - cssW) > 0.5 || Math.abs(r.height - cssH) > 0.5) resizeCanvas(); }
 
@@ -438,7 +444,7 @@ function parseFile(buf, name, retried) {
 // Each open drawing keeps its own view, layers, selection, undo history and caches. The active one is
 // swapped into `state`; switching tabs stores it back and restores the other.
 const MAX_DOCS = 5;
-const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind', 'results', 'mscale', 'layerHist', 'lastDim'];
+const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind', 'results', 'mscale', 'layerHist', 'lastDim', 'ltMult', 'cur'];
 const docs = []; let activeDoc = null, docSeq = 0;
 function stashActive() { if (!activeDoc) return; for (const k of DOC_KEYS) activeDoc[k] = state[k]; activeDoc.view = { ...state.view }; activeDoc.blockCache = blockCache; }
 function restoreDoc(d) { for (const k of DOC_KEYS) state[k] = d[k]; state.view = { ...d.view }; blockCache = d.blockCache || new Map(); activeDoc = d; lastFull = null; state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.loupe = null; }
@@ -447,17 +453,17 @@ function docField(d, k) { return d === activeDoc ? state[k] : d[k]; } // the act
 function docDirty(d) { return !!docField(d, 'dirty'); }
 const isSampleDoc = (d) => { const D = docField(d, 'drawing'); return !!(D && D.sample); };
 function findOpenDoc(name) { return docs.find(d => docField(d, 'fileName') === name && !isSampleDoc(d)); }
-function canOpenAnother() { if (activeDoc && isSampleDoc(activeDoc) && !state.dirty) return true; if (docs.length >= MAX_DOCS) { toast('Up to ' + MAX_DOCS + ' drawings can be open. Close one first (× on its tab).', 4500); return false; } return true; }
+function canOpenAnother() { if (docs.length >= MAX_DOCS) { toast('Up to ' + MAX_DOCS + ' drawings can be open. Close one first (× on its tab).', 4500); return false; } return true; }
 function loadDrawing(D, name, meta) {
   meta = meta || {};
   // reuse the tab if it only holds the untouched built-in sample, otherwise open a new tab
-  const reuse = activeDoc && isSampleDoc(activeDoc) && !state.dirty;
+  const reuse = false; // every drawing opens in its own tab
   stashActive();
   let d = reuse ? activeDoc : null; if (!d) { d = { id: ++docSeq }; docs.push(d); }
   activeDoc = d; d.title = name;
   state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
   state.fileBytes = meta.bytes || null; state.fileName = meta.fileName || name; state.kind = meta.kind || (/\.dxf$/i.test(name) ? 'dxf' : 'dwg');
-  state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null;
+  state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null; state.ltMult = 1; state.cur = { c: 256, lw: -1, lt: '' };
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
   $('fileName').textContent = name; setHome(false);
@@ -470,14 +476,17 @@ function refreshDocUI() {
 }
 function switchDoc(d) { if (!d || d === activeDoc) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } stashActive(); restoreDoc(d); closeSheets(); refreshDocUI(); }
 let returnTo = null;
-function closeTab(d) { const back = d !== activeDoc ? activeDoc : null; if (back) switchDoc(d); returnTo = back; confirmUnsaved(closeDrawing); }
+function closeTab(d) { const wasHome = atHome(); const back = d !== activeDoc ? activeDoc : null; if (back || wasHome) { if (d !== activeDoc) switchDoc(d); else refreshDocUI(); } returnTo = back; confirmUnsaved(() => { closeDrawing(); if (wasHome && docs.length) goHome(); }); }
+// Home tab: the home page while the drawings stay open in their tabs; a drawing tab brings it back
+function goHome() { if (atHome()) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } closeSheets(); if (activeDoc) stashActive(); showHomeTitle(); setHome(true); renderRecent(); renderTabs(); }
+function openTab(d) { if (d === activeDoc) { if (atHome()) refreshDocUI(); return; } switchDoc(d); }
 function renderTabs() {
-  const bar = $('tabs');
-  bar.hidden = docs.length < 2; if (bar.hidden) { bar.innerHTML = ''; return; }
-  bar.innerHTML = '';
+  const bar = $('tabs'); bar.hidden = false; bar.innerHTML = ''; const home = atHome();
+  const h = document.createElement('button'); h.className = 'thome'; h.setAttribute('role', 'tab'); h.setAttribute('aria-selected', home ? 'true' : 'false'); h.title = 'Home'; h.setAttribute('aria-label', 'Home: open or start a drawing');
+  h.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7M6 9.5V20h12V9.5"/></svg>'; h.addEventListener('click', goHome); bar.append(h);
   for (const d of docs) {
-    const b = document.createElement('div'); b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', d === activeDoc ? 'true' : 'false');
-    const t = document.createElement('button'); t.className = 'tt'; t.textContent = (docDirty(d) ? '• ' : '') + docTitle(d).replace(/\.(dwg|dxf)$/i, ''); t.title = docTitle(d); t.addEventListener('click', () => switchDoc(d));
+    const b = document.createElement('div'); b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', !home && d === activeDoc ? 'true' : 'false');
+    const t = document.createElement('button'); t.className = 'tt'; t.textContent = (docDirty(d) ? '• ' : '') + docTitle(d).replace(/\.(dwg|dxf)$/i, ''); t.title = docTitle(d); t.addEventListener('click', () => openTab(d));
     const x = document.createElement('button'); x.className = 'tx'; x.setAttribute('aria-label', 'Close ' + docTitle(d)); x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg>'; x.addEventListener('click', (ev) => { ev.stopPropagation(); closeTab(d); });
     b.append(t, x); bar.append(b);
   }
@@ -542,7 +551,7 @@ $('btnFit').addEventListener('click', zoomExtents);
 $('btnSpace').addEventListener('click', () => { if (!state.drawing || atHome()) return; renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
 function setFull(on) { document.body.classList.toggle('fs', on); $('btnFull').innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg>'; $('btnFull').title = on ? 'Exit full screen' : 'Full screen'; }
-$('btnFull').addEventListener('click', () => { const on = !document.body.classList.contains('fs'); setFull(on); try { if (on && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } });
+$('btnFull').addEventListener('click', () => { const on = !document.body.classList.contains('fs'); setFull(on); try { if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } }); // the app's own full screen only: the browser's full-screen mode shows a confusing exit message
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs')) setFull(false); });
 $('btnKeys').addEventListener('click', () => { const row = $('promptRow'); row.hidden = !row.hidden; $('btnKeys').setAttribute('aria-pressed', row.hidden ? 'false' : 'true'); if (!row.hidden) setTimeout(() => $('typed').focus(), 30); });
 $('btnUndo').addEventListener('click', undo); $('btnRedo').addEventListener('click', redo);
@@ -553,7 +562,7 @@ $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
 $('miShare').addEventListener('click', () => { closeSheets(); openShare(); }); $('miSnaps').addEventListener('click', () => { closeSheets(); renderSnapList(); openSheet('snapPanel'); });
-$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; $('fileName').textContent = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
+$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = state.kind === 'new' ? baseName(state.fileName) : baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; $('fileName').textContent = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
 $('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); requestFull(); });

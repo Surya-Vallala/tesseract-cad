@@ -84,6 +84,24 @@ input{font:inherit;color:inherit}
 #vbtns{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;z-index:5}
 #vbtns button{width:40px;height:40px;border-radius:10px;background:rgba(20,22,26,.66);color:#e8e4dc;display:grid;place-items:center;backdrop-filter:blur(6px)}
 #vbtns button[hidden]{display:none}
+#curBtns{position:absolute;right:8px;bottom:100px;display:flex;flex-direction:column;gap:6px;z-index:6}
+#curBtns[hidden]{display:none}
+#curBtns button{width:40px;height:40px;border-radius:10px;background:rgba(20,22,26,.78);color:#e8e4dc;display:grid;place-items:center;backdrop-filter:blur(6px);position:relative;padding:0}
+#stage.light #curBtns button{background:rgba(250,250,247,.92);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
+#curBtns svg{width:26px;height:26px}
+#curBtns small{position:absolute;bottom:1px;left:0;right:0;font-size:8.5px;font-family:var(--mono);text-align:center;line-height:1;opacity:.85}
+#curScrim{position:absolute;inset:0;z-index:23}
+#curScrim[hidden],#curPop[hidden]{display:none}
+#curPop{position:absolute;right:56px;bottom:60px;z-index:24;width:min(300px,calc(100% - 72px));max-height:70%;overflow:auto;background:var(--pop-bg);color:var(--pop-fg);border:1px solid var(--pop-line);border-radius:12px;box-shadow:var(--shadow);padding:8px}
+#curPop .cp-ttl{font-size:10.5px;letter-spacing:.08em;font-weight:600;color:var(--pop-muted);text-transform:uppercase;padding:0 4px 6px}
+#curPop .cp-sw{display:flex;flex-wrap:wrap;gap:6px}
+#curPop .cp-sw button{width:34px;height:34px;border-radius:8px;border:1px solid rgba(128,128,128,.45);font-size:9.5px;font-weight:600;color:var(--pop-fg);background:var(--chip)}
+#curPop button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+#curPop .cp-list button{display:flex;align-items:center;gap:10px;width:100%;padding:7px 6px;border-radius:8px;text-align:left;font-size:13px;color:var(--pop-fg)}
+#curPop .cp-list button svg{width:96px;height:14px;flex:0 0 auto}
+#curPop .cp-list button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#curPop .cp-row{display:flex;gap:6px;margin-top:8px}
+#curPop .cp-row input{flex:1;min-width:0;padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
 #stage.light #vbtns button{background:rgba(250,250,247,.9);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
 #vbtns button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #vbtns button:disabled{opacity:.35}
@@ -121,14 +139,17 @@ input{font:inherit;color:inherit}
 #spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 #spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
 /* open drawings: slim tab strip, only when 2+ drawings are open */
-#tabs{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:4px 6px;background:var(--bar-bg);border-bottom:1px solid var(--bar-line);flex:0 0 auto}
+#tabs{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:3px 6px;height:32px;background:var(--bar-bg);border-bottom:1px solid var(--bar-line);flex:0 0 auto}
 #tabs[hidden]{display:none}
 #tabs::-webkit-scrollbar{display:none}
-#tabs .tab{display:flex;align-items:center;flex:0 0 auto;max-width:190px;border-radius:8px;background:var(--bar-chip);color:var(--bar-muted)}
+#tabs .tab{display:flex;align-items:center;flex:0 0 auto;max-width:190px;height:26px;border-radius:7px;background:var(--bar-chip);color:var(--bar-muted)}
+#tabs .thome{width:34px;height:26px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;background:var(--bar-chip);color:var(--bar-muted)}
+#tabs .thome[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+#tabs .thome svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #tabs .tab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
-#tabs .tt{min-width:0;max-width:150px;padding:6px 2px 6px 10px;font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabs .tt{min-width:0;max-width:150px;padding:4px 2px 4px 10px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #tabs .tab[aria-selected="true"] .tt{font-weight:600}
-#tabs .tx,#tabs .tadd{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;flex:0 0 auto;color:inherit}
+#tabs .tx,#tabs .tadd{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;flex:0 0 auto;color:inherit}
 #tabs .tx svg,#tabs .tadd svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
 #tabs .tadd{color:var(--bar-fg);background:transparent}
 /* save prompt */
@@ -200,7 +221,11 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
 .snaprow.off .nm{color:var(--muted)}
 #snapList.disabled{opacity:.45;pointer-events:none}
 /* home screen (no drawing showing): no layers button, tool bar, tabs or drawing-only menu items; the title chip is just a label */
-#app.home #tools, #app.home #tabs, #app.home .doc-only{display:none}
+#app.home #tools, #app.home .doc-only{display:none}
+body.fs #tabs{display:none}
+#app:not(.home) #btnSpace .file{display:none} /* the drawing's name is on its tab */
+#app:not(.home) #top{min-height:38px;padding-top:calc(2px + env(safe-area-inset-top,0px));padding-bottom:2px}
+#app:not(.home) #top .ib{height:36px}
 #app.home #btnSpace{pointer-events:none}
 #app.home #btnSpace .sp svg{display:none}
 #loading{position:absolute;inset:0;z-index:9;display:none;align-items:center;justify-content:center;background:rgba(20,22,26,.6);backdrop-filter:blur(3px)}
@@ -270,6 +295,11 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
 .pol-row{display:flex;gap:6px}
 .pol-row input{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
 .pol-note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.4}
+.pt-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:4px 0 8px}
+.pt-grid button{aspect-ratio:1;border-radius:9px;background:var(--chip);display:grid;place-items:center;padding:0}
+.pt-grid button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px;background:var(--accent-soft)}
+.pt-grid canvas{width:36px;height:36px}
+.pt-unit{align-self:center;font-size:12.5px;color:var(--muted);white-space:nowrap}
 .scrim{position:absolute;inset:0;z-index:19;display:none}
 .scrim.on{display:block}
 @media (prefers-reduced-motion: reduce){ .sheet{transition:none} }
@@ -285,12 +315,13 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
       <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
     </div>
   </header>
-  <nav id="tabs" role="tablist" aria-label="Open drawings" hidden></nav>
+  <nav id="tabs" role="tablist" aria-label="Open drawings"></nav>
   <main id="stage">
     <canvas id="cv"></canvas>
     <div id="prompt" hidden>
       <div id="promptBar">
         <div id="promptText"><span class="tool" id="toolName">View</span><span id="promptMsg"></span></div>
+        <button class="pb" id="btnPtStyle" title="Point style (all points)" aria-label="Point style" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></button>
         <button class="pb" id="btnSimilar" title="Select similar: same type and layer (and block name)" aria-label="Select similar" hidden><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke-dasharray="2.5 2"/><path d="M14 4h6v6M10 20H4v-6" opacity=".55"/></svg></button>
         <button class="pb" id="btnProps" title="Change properties" aria-label="Change properties" hidden><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>
         <button class="pb" id="btnKeys" title="Type a value" aria-label="Type a value" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
@@ -302,6 +333,13 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
       <div id="promptRow" hidden><input id="typed" placeholder="1200 · @1200,0 · @1500<90 · 100,200" inputmode="text" autocomplete="off" enterkeyhint="done"><button class="btn primary" id="btnEnter" title="Enter">Enter</button></div>
     </div>
     <div id="hud" hidden><div class="hud-chip" id="coordChip">X 0.00 · Y 0.00</div></div>
+    <div id="curBtns" hidden>
+      <button id="curC" title="Colour for new objects" aria-label="Colour for new objects"></button>
+      <button id="curW" title="Line thickness for new objects" aria-label="Line thickness for new objects"></button>
+      <button id="curT" title="Line type for new objects" aria-label="Line type for new objects"></button>
+    </div>
+    <div id="curScrim" hidden></div>
+    <div id="curPop" hidden><div class="cp-ttl" id="curPopTtl"></div><div class="cp-body" id="curPopBody"></div></div>
     <div id="vbtns">
       <button id="btnFit" title="Zoom to the whole drawing" aria-label="Zoom extents"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <button id="btnFull" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg></button>
@@ -312,6 +350,7 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <h1>Open a drawing</h1>
         <p>DWG (any version up to 2018) or DXF. Files are read on this device and never uploaded.</p>
         <button class="btn primary big" id="btnOpen2">Open DWG / DXF</button>
+        <button class="btn big" id="btnNew">Start a new drawing</button>
         <div id="recent"><div class="empty">Recently opened files will appear here.</div></div>
         <button class="btn quiet" id="btnSample">Try the sample plan instead</button>
         <p id="engineStatus" style="font-size:11.5px">Loading the DWG engine (about 9 MB, cached after the first visit)…</p>
@@ -356,6 +395,8 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <button class="menu-item" id="miPolar"><span>Polar tracking <small id="polarSummary">on · every 90°</small></span><span>→</span></button>
         <button class="menu-item" id="miOtrack"><span>Object snap tracking <small id="otrackSummary">on · horizontal and vertical</small></span><span>→</span></button>
         <div class="menu-item"><span>Hatch patterns <small>off = faster</small></span><input type="checkbox" id="chkPat" checked></div>
+        <label class="menu-item"><span>Show lineweights <small>thicker lines look thicker on screen</small></span><input type="checkbox" id="chkLw" checked></label>
+        <button class="menu-item doc-only" id="miLtscale"><span>Linetype scale <small id="ltSummary">as drawn</small></span><span>→</span></button>
         <div class="menu-item doc-only"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>
         <div class="menu-item doc-only" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
         <div class="menu-item"><span>Theme</span><div class="seg" id="segSkin"><button data-v="light">Light</button><button data-v="dark" aria-pressed="true">Dark</button><button data-v="mono">B&amp;W</button></div></div>
@@ -395,6 +436,27 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
           <div class="menu-item" style="padding-left:0;padding-right:0"><span>Pause to pick up <small>how long to stay on a point</small></span><div class="seg" id="otrackPause"><button data-v="300">0.3 s</button><button data-v="500" aria-pressed="true">0.5 s</button><button data-v="800">0.8 s</button></div></div>
           <p class="pol-note"><b>How to use:</b> while placing a point, press and hold, drag onto a snap point (an endpoint, midpoint, centre…) and stay there a moment: a small green + marks it as picked up. Move away and the pointer locks onto dotted green lines through that point; with two picked-up points (or one and the polar line from your last point) it locks onto where the lines cross. Pause on a + again to drop it. Up to 4 points; they clear when the tool ends. With a mouse, resting the pointer on a snap point does the same.</p>
         </div>
+      </div>
+    </section>
+    <section class="sheet" id="ltPanel" aria-label="Linetype scale">
+      <header><h2>Linetype scale</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <p class="pol-note" id="ltInfo" style="margin-top:2px"></p>
+        <div class="pol-sec">
+          <div class="pol-h">Make dashes bigger or smaller <small>this drawing · screen and PDF</small></div>
+          <div class="pol-chips" id="ltChips"></div>
+          <div class="pol-row"><input id="ltIn" inputmode="decimal" placeholder="Any factor, e.g. 40" autocomplete="off"><button class="btn" id="ltSet">Use</button></div>
+          <p class="pol-note">When one dash and gap would be smaller than about 3 px on screen, the line is drawn solid (as in AutoCAD); zoom in or raise this. DXF exports keep the drawing's own linetype scale.</p>
+        </div>
+      </div>
+    </section>
+    <section class="sheet" id="ptPanel" aria-label="Point style">
+      <header><h2>Point style <small style="font-weight:400;color:var(--muted)">all points in this drawing</small></h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <div class="pt-grid" id="ptGrid"></div>
+        <div class="menu-item" style="padding-left:0;padding-right:0"><span>Size</span><div class="seg" id="ptMode"><button data-v="rel" aria-pressed="true">Relative to screen</button><button data-v="abs">Absolute units</button></div></div>
+        <div class="pol-row"><input id="ptSize" inputmode="decimal" autocomplete="off"><span class="pt-unit" id="ptUnit">% of screen height</span><button class="btn" id="ptSet">Use</button></div>
+        <p class="pol-note" id="ptNote"></p>
       </div>
     </section>
     <section class="sheet" id="sharePanel" aria-label="Share drawing">
@@ -460,6 +522,14 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
       <label class="chk"><input type="checkbox" id="nlCur" checked> Make it the current layer (new objects go on it)</label>
       <p class="note" id="nlErr" style="color:var(--danger)"></p>
       <div class="row"><button class="btn quiet" id="nlCancel">Cancel</button><button class="btn primary" id="nlOk">Create</button></div>
+    </div></div>
+    <div id="newDlg" class="dlg" role="dialog" aria-modal="true" aria-labelledby="ndTitle"><div class="box">
+      <h3 id="ndTitle">New drawing</h3>
+      <label class="fl" for="ndName">Name</label><input id="ndName" class="fin" autocomplete="off">
+      <label class="fl">Drawing units</label>
+      <div class="menu-item" style="padding:0"><div class="seg" id="ndUnits"><button data-v="4" aria-pressed="true">mm</button><button data-v="5">cm</button><button data-v="6">m</button><button data-v="1">inch</button><button data-v="2">feet</button></div></div>
+      <p class="note">It opens in a new tab. Save it on this phone from the menu, or share it as DXF or PDF.</p>
+      <div class="row"><button class="btn quiet" id="ndCancel">Cancel</button><button class="btn primary" id="ndOk">Create</button></div>
     </div></div>
     <div id="toast" role="status"></div>
   </main>

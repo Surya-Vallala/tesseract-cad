@@ -142,7 +142,7 @@ function findIntersection(wx, wy, tol, S) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 50; // pointer about 8 mm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
+let holdTimer = null, boxArm = false; const BOX_HOLD_MS = 450; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 50; // pointer about 8 mm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
@@ -157,7 +157,7 @@ function updatePrecise(X, Y) {
 }
 function exitPrecise(place) {
   const lp = state.loupe; state.loupe = null; stopEdgePan(); otrackFeed(null); if (!lp) return;
-  if (place && state.drawing) { const sn = lp.sn || snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); state.snapMark = sn.kind ? sn : null; const V = state.view; const q = toScreen(sn.x, sn.y, V); const hit = pickAt(sn.x, sn.y, 6 / V.s); if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, null); }
+  if (place && state.drawing) { const sn = lp.sn || snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); state.snapMark = sn.kind ? sn : null; const V = state.view; const q = toScreen(sn.x, sn.y, V); const hit = pickAt(sn.x, sn.y, 6 / V.s); if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, null); dropTrackLines(); }
   requestFull();
 }
 // While holding near a screen edge, scroll the drawing so you can reach points just off screen.
@@ -168,8 +168,8 @@ cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
 cv.addEventListener('pointerdown', (ev) => {
   cv.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, X: ev.offsetX, Y: ev.offsetY });
   if (pointers.size === 1) { const hi = handleAt(ev.offsetX, ev.offsetY); if (hi >= 0) { cancelHold(); dragStart = null; startHandleDrag(hi, ev.offsetX, ev.offsetY); return; } }
-  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); if (state.drawing && loupeAllowed()) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } }
-  if (pointers.size === 2) { cancelHold(); if (state.tool && state.tool.stroke) state.tool.stroke = null; if (state.handleDrag) state.handleDrag = null; if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
+  if (pointers.size === 1) { dragStart = { X: ev.offsetX, Y: ev.offsetY, t: performance.now(), button: ev.button }; dragMoved = false; panStartView = { ...state.view }; state.boxSel = null; cancelHold(); boxArm = false; if (state.drawing && loupeAllowed()) { const X = ev.offsetX, Y = ev.offsetY; holdTimer = setTimeout(() => { const p = pointers.get(ev.pointerId); enterPrecise(p ? p.X : X, p ? p.Y : Y); }, HOLD_MS); } else if (state.drawing && state.tool && state.tool.name === 'select' && ev.button === 0) { holdTimer = setTimeout(armBoxSelect, BOX_HOLD_MS); } }
+  if (pointers.size === 2) { cancelHold(); if (boxArm) { boxArm = false; state.boxSel = null; } if (state.tool && state.tool.stroke) state.tool.stroke = null; if (state.handleDrag) state.handleDrag = null; if (state.loupe) { state.loupe = null; stopEdgePan(); } const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.X - b.X, a.Y - b.Y), mx: (a.X + b.X) / 2, my: (a.Y + b.Y) / 2, view: { ...state.view } }; gesture = true; dragStart = null; }
 });
 cv.addEventListener('pointermove', (ev) => {
   const p = pointers.get(ev.pointerId);
@@ -187,7 +187,7 @@ cv.addEventListener('pointermove', (ev) => {
     if (!dragMoved && Math.hypot(dx, dy) > 7) { dragMoved = true; gesture = true; cancelHold(); }
     if (dragMoved) {
       if (state.tool && state.tool.freehand && dragStart.button === 0) { state.tool.strokeMove(ev.offsetX, ev.offsetY, dragStart); gesture = false; requestFast(); return; }
-      if (state.tool && state.tool.boxSelect && (dragStart.button === 0)) { state.boxSel = { x0: dragStart.X, y0: dragStart.Y, x1: ev.offsetX, y1: ev.offsetY }; gesture = false; requestFast(); return; }
+      if ((boxArm || (state.tool && state.tool.boxSelect)) && (dragStart.button === 0)) { state.boxSel = { x0: dragStart.X, y0: dragStart.Y, x1: ev.offsetX, y1: ev.offsetY }; gesture = false; requestFast(); return; }
       state.view = { s: panStartView.s, tx: panStartView.tx + dx, ty: panStartView.ty + dy }; requestFast();
     }
   }
@@ -200,16 +200,16 @@ function endPointer(ev) {
   if (p && dragStart && pointers.size === 0) {
     const wasBox = state.boxSel;
     if (dragMoved && state.tool && state.tool.freehand && state.tool.stroke) { dragStart = null; gesture = false; state.tool.strokeEnd(); requestFull(); return; }
-    if (wasBox) { state.boxSel = null; gesture = false; finishBoxSelect(wasBox); dragStart = null; requestFull(); return; }
+    if (wasBox) { state.boxSel = null; gesture = false; const armed = boxArm; boxArm = false; if (!armed || Math.abs(wasBox.x1 - wasBox.x0) + Math.abs(wasBox.y1 - wasBox.y0) > 6) finishBoxSelect(wasBox); dragStart = null; requestFull(); return; }
     if (!dragMoved) { dragStart = null; onTap(p.X, p.Y, ev); }
     else { dragStart = null; gesture = false; requestFull(); }
   }
-  if (pointers.size === 0) { gesture = false; dragStart = null; }
+  if (pointers.size === 0) { gesture = false; dragStart = null; boxArm = false; }
 }
 cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('wheel', (ev) => { ev.preventDefault(); zoomAt(ev.offsetX, ev.offsetY, ev.deltaY < 0 ? 1.15 : 1 / 1.15); requestFull(); }, { passive: false });
 cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
-window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
+window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'c' && state.drawing && state.selection.size) { ev.preventDefault(); clipCopy(null); } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'v' && state.drawing && !atHome()) { ev.preventDefault(); startTool('paste'); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
 function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind); if (picking) otrackFeed(sn); requestFast(); }
 function showCoord(x, y, kind) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + SNAP_NAMES[kind] : ''); }
@@ -221,9 +221,11 @@ function onTap(X, Y, ev) {
   const V = state.view; const w = toWorld(X, Y, V); let hit = pickAt(w[0], w[1], 12 / V.s);
   if (state.tool && MODEL_PICK.has(state.tool.name)) { const vp = vpAt(w[0], w[1]); if (vp && (!hit || hit.item.ent.t === 'VIEWPORT')) { const m = paperToModel(vp, w); const h = pickAt(m[0], m[1], 12 / V.s / vp.sc, getScene(0)); if (h) hit = { ...h, vp, model: true }; } }
   if (state.tool && state.tool.onTap) state.tool.onTap(sn, hit, ev, w);
-  requestFast();
+  dropTrackLines(); requestFast();
 }
 const MODEL_PICK = new Set(['area', 'info', 'entity', 'arclen', 'dimrad', 'dimdia', 'dimarc']);
+// Select mode: press and hold still, then drag = a selection box (left→right window, right→left crossing); a quick drag pans
+function armBoxSelect() { holdTimer = null; if (!dragStart || dragMoved || pointers.size !== 1 || !state.tool || state.tool.name !== 'select') return; boxArm = true; state.boxSel = { x0: dragStart.X, y0: dragStart.Y, x1: dragStart.X, y1: dragStart.Y }; try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { } requestFast(); }
 function finishBoxSelect(b) {
   const V = state.view; const a = toWorld(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), V), c = toWorld(Math.max(b.x0, b.x1), Math.max(b.y0, b.y1), V);
   const rx0 = Math.min(a[0], c[0]), ry0 = Math.min(a[1], c[1]), rx1 = Math.max(a[0], c[0]), ry1 = Math.max(a[1], c[1]);
@@ -245,7 +247,7 @@ function exitToSelect() {
   state.selection.clear(); state.hoverItem = null; state.boxSel = null; state.lastPt = null; state.snapMark = null; setResult(null);
   startTool('select', true); requestFull(); // the tab stays where it was, so the next tool is one tap away
 }
-function doneTool() { if (state.tool && state.tool.onDone) state.tool.onDone(); }
+function doneTool() { if (state.tool && state.tool.onDone) state.tool.onDone(); state.snapMark = null; if (state.loupe) state.loupe.sn = null; requestFast(); } // a finished line leaves no tracking line behind
 function backPoint() { if (state.tool && state.tool.onBack) state.tool.onBack(); requestFast(); }
 function parseTyped(str, base) {
   str = str.trim(); if (!str) return null;
@@ -282,15 +284,15 @@ function selSummary() {
   return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => n + ' ' + k).join(', ') + (c.size > 3 ? '…' : '');
 }
 // The instruction strip shows only while a tool needs input or there is a result to read.
-const PICK_TOOLS = new Set(['coord', 'dist', 'cont', 'area', 'angle', 'facade', 'mscale', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'ellipse', 'revcloud', 'text', 'leader', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont']);
+const PICK_TOOLS = new Set(['clipcopy', 'paste', 'point', 'coord', 'dist', 'cont', 'area', 'angle', 'facade', 'mscale', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'ellipse', 'revcloud', 'text', 'leader', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont']);
 function updateChrome() {
   const t = state.tool ? state.tool.name : 'select'; const hasResult = resultEl.classList.contains('on');
   $('prompt').hidden = !state.drawing || (t === 'select' && !hasResult);
   $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
-  const keysUseful = ['dist', 'cont', 'facade', 'mscale', 'divide', 'ellipse', 'mnum', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
+  const keysUseful = ['point', 'dist', 'cont', 'facade', 'mscale', 'divide', 'ellipse', 'mnum', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
-  $('btnBack').hidden = ['select', 'info', 'box', 'coord', 'entity', 'arclen', 'laycur', 'layoff', 'divide'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'ellipse', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont', 'entity', 'arclen', 'mscale', 'laycur', 'layoff', 'sketch', 'revcloud', 'divide', 'leader', 'mpen', 'marrow', 'mtext', 'mcloud', 'mline', 'mrect', 'mellipse', 'mleader', 'mnum'].includes(t);
-  $('btnProps').hidden = true; $('btnSimilar').hidden = true; // Properties and Similar live in the bottom bar's selection actions
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord', 'entity', 'arclen', 'laycur', 'layoff', 'divide'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'ellipse', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont', 'entity', 'arclen', 'mscale', 'laycur', 'layoff', 'sketch', 'revcloud', 'divide', 'point', 'leader', 'mpen', 'marrow', 'mtext', 'mcloud', 'mline', 'mrect', 'mellipse', 'mleader', 'mnum'].includes(t);
+  $('btnProps').hidden = true; $('btnSimilar').hidden = true; $('btnPtStyle').hidden = t !== 'point'; renderCurBtns(); // Properties and Similar live in the bottom bar's selection actions
   renderBar();
 }
 let holdTipShown = false; try { holdTipShown = !!localStorage.getItem('tct-holdtip'); } catch (e) { }
@@ -319,6 +321,7 @@ function describeItem(it) {
   else if (e.t === 'PLINE' || e.t === 'SPLINE' || e.t === 'LEADER') { const poly = it.polys[0] || []; rows.push(['Length', fmtLenAll(polyLength(poly, false))]); if (it.closed && it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))]); rows.push(['Vertices', String(e.v ? e.v.length : (e.fit && e.fit.length) || (e.cp && e.cp.length) || poly.length / 2)]); }
   else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]);
   else if (e.t === 'ARC') { const sw = normAng(e.a1 - e.a0); rows.push(['Radius', fmtLenAll(e.r)], ['Arc length', fmtLen(e.r * sw)], ['Angle', fmtNum(deg(sw), 2) + '°'], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]); }
+  else if (e.t === 'POINT') rows.push(['X', fmtNum(e.p[0], 3)], ['Y', fmtNum(e.p[1], 3)]);
   else if (e.t === 'ELLIPSE') { const a = Math.hypot(e.m[0], e.m[1]); rows.push(['Major radius', fmtLen(a)], ['Minor radius', fmtLen(a * e.k)]); }
   else if (e.t === 'TEXT' || e.t === 'MTEXT') rows.push(['Text', textPlain(e.s).slice(0, 120)], ['Height', fmtLen(e.h)]);
   else if (e.t === 'HATCH') { rows.push(['Pattern', e.solid ? 'Solid' : e.name]); if (it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))], ['Perimeter', fmtLen(polyLength(it.fillPoly, false))]); }

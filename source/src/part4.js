@@ -58,11 +58,11 @@ function drawContent(V, wr) {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(vp.x0, vp.y0, vp.x1 - vp.x0, vp.y1 - vp.y0);
       const cx = (vp.x0 + vp.x1) / 2, cy = (vp.y0 + vp.y1) / 2; const sc = vp.sc;
       const V2 = { s: V.s * sc, tx: V.tx + V.s * (cx - vp.vc[0] * sc), ty: V.ty - V.s * (cy - vp.vc[1] * sc) };
-      drawScene(MS, V2, true, [cx0, cy0, cx1, cy1].map((v, i) => i % 2 === 0 ? (v - cx) / sc + vp.vc[0] : (v - cy) / sc + vp.vc[1]));
+      drawScene(MS, V2, true, [cx0, cy0, cx1, cy1].map((v, i) => i % 2 === 0 ? (v - cx) / sc + vp.vc[0] : (v - cy) / sc + vp.vc[1]), ltFactor('vp', sc));
       ctx.restore();
     }
-    drawScene(S, V, true, wr);
-  } else drawScene(S, V, onLightBg(), wr);
+    drawScene(S, V, true, wr, ltFactor('paper'));
+  } else drawScene(S, V, onLightBg(), wr, ltFactor('model'));
 }
 function fastDraw() {
   const V = V0(); const dpr = state.dpr; const k = V.s / lastFull.s;
@@ -71,7 +71,8 @@ function fastDraw() {
   drawOverlay();
 }
 
-function drawScene(S, V, onLight, clipWorld) {
+function drawScene(S, V, onLight, clipWorld, ltK) { // ltK: linetype pattern factor (annotation / viewport / user scale)
+  ltK = ltK || 1;
   const dpr = state.dpr; const T = () => ctx.setTransform(V.s * dpr, 0, 0, -V.s * dpr, V.tx * dpr, V.ty * dpr);
   const wr = clipWorld || worldRect(V);
   const minDiag = (RENDER.pdf ? 0.05 : 1.1) / V.s; // objects smaller than ~1px are skipped (on paper: almost nothing is)
@@ -85,6 +86,11 @@ function drawScene(S, V, onLight, clipWorld) {
   ctx.lineWidth = 1 / V.s; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
   const lts = state.drawing ? state.drawing.ltypes : {}; const ltscale = state.drawing ? state.drawing.header.ltscale : 1;
   let lastCol = null, dashed = false, lastAl = 1; ctx.globalAlpha = 1;
+  // dash pattern for a path (in the units of the current transform: sc = world units per local unit); null = draw solid
+  // (when one repeat would be under 3 px on screen, as AutoCAD does with over-dense linetypes)
+  const dashFor = (k, sc) => { if (!k.lt) return null; const pat = lts[k.lt]; if (!pat || !pat.length) return null; let per = 0; const arr = []; const f = ltscale * (k.lts || 1) * ltK / sc; for (const v of pat) { const a = Math.abs(v) * f; arr.push(a < 1e-9 ? 0.5 / (V.s * sc) : a); per += a; } return per * V.s * sc > 3 ? arr : null; };
+  // line width: printed lineweights in exports; on screen about 1 px per 0.25 mm when Show lineweights is on; markups at least 2 px
+  const lineW = (k, sc) => { if (RENDER.lw) return lwOut(k.lw, sc); if (RENDER.pdf) return 1 / (V.s * sc); let px = state.showLw && k.lw > 25 ? k.lw / 25 : 1; if (k.layer === MK_LAYER) px = Math.max(px, 2); return px / (V.s * sc); };
   const setAl = (a) => { a = a == null ? 1 : a; if (a !== lastAl) { ctx.globalAlpha = a; lastAl = a; } };
   const fillOne = (f, Vs, wrL) => {
     if (!layerOn(f.layer)) return; const col = aciCss(f.aci, onLight, true); const fa = RENDER.solidFills || f.al == null ? 1 : f.al;
@@ -101,12 +107,10 @@ function drawScene(S, V, onLight, clipWorld) {
     for (const k of it.paths) {
       if (!k.n || !layerOn(k.layer)) continue;
       const col = aciCss(k.aci, onLight); if (col !== lastCol) { ctx.strokeStyle = col; lastCol = col; } setAl(k.al);
-      let wantDash = null;
-      if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; const f = ltscale * (k.lts || 1); for (const v of pat) { const a = Math.abs(v) * f; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
+      const wantDash = dashFor(k, 1);
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
-      if (RENDER.lw) ctx.lineWidth = lwOut(k.lw, 1);
-      const bold = !RENDER.lw && k.layer === MK_LAYER; if (bold) ctx.lineWidth = 2 / V.s; // markups a little bolder on screen
-      ctx.stroke(k.path); if (bold) ctx.lineWidth = 1 / V.s;
+      ctx.lineWidth = lineW(k, 1);
+      ctx.stroke(k.path);
     }
     // block instances: the block's fills, wipeouts, then its lines
     if (it.inst) for (const ins of it.inst) {
@@ -119,7 +123,8 @@ function drawScene(S, V, onLight, clipWorld) {
         const dpx = g.diag * ins.scale * V.s;
         if (!RENDER.pdf && g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
           const k0 = g.paths[0]; ctx.strokeStyle = aciCss(k0.aci, onLight); ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
-        } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; ctx.strokeStyle = aciCss(k.aci, onLight); ctx.globalAlpha = k.al == null ? 1 : k.al; if (RENDER.lw) ctx.lineWidth = lwOut(k.lw, ins.scale); else ctx.lineWidth = (k.layer === MK_LAYER ? 2 : 1) / (V.s * ins.scale); ctx.stroke(k.path); }
+        } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; ctx.strokeStyle = aciCss(k.aci, onLight); ctx.globalAlpha = k.al == null ? 1 : k.al; ctx.lineWidth = lineW(k, ins.scale); const dd = dashFor(k, ins.scale); ctx.setLineDash(dd || []); ctx.stroke(k.path); }
+        ctx.setLineDash([]);
       }
       ctx.restore(); lastCol = null; lastAl = 1; ctx.globalAlpha = 1;
     }
@@ -128,8 +133,8 @@ function drawScene(S, V, onLight, clipWorld) {
   if (dashed) ctx.setLineDash([]); ctx.globalAlpha = 1; const _t2 = performance.now();
   // pass 3: texts
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  // point objects: a small × at screen size, so divisions and survey points can be seen
-  { let started = false; for (const it of vis) if (it.points) for (const p of it.points) { if (!layerOn(p.layer)) continue; const q = toScreen(p.x, p.y, V); if (!started) { ctx.lineWidth = 1.2; started = true; } ctx.globalAlpha = p.al == null ? 1 : p.al; ctx.strokeStyle = aciCss(p.aci, onLight); ctx.beginPath(); ctx.moveTo(q[0] - 3.5, q[1] - 3.5); ctx.lineTo(q[0] + 3.5, q[1] + 3.5); ctx.moveTo(q[0] + 3.5, q[1] - 3.5); ctx.lineTo(q[0] - 3.5, q[1] + 3.5); ctx.stroke(); } ctx.globalAlpha = 1; }
+  // point objects, in the drawing's point style (PDMODE / PDSIZE)
+  { const st = ptStyle(); const sz = ptSizePx(st, V); for (const it of vis) if (it.points) for (const p of it.points) { if (!layerOn(p.layer)) continue; const q = toScreen(p.x, p.y, V); ctx.globalAlpha = p.al == null ? 1 : p.al; drawPointMark(ctx, q[0], q[1], st.mode, sz, aciCss(p.aci, onLight)); } ctx.globalAlpha = 1; }
   for (const it of vis) if (it.texts.length) for (const t of it.texts) { if (!layerOn(t.layer)) continue; const hp = t.h * V.s; if (hp < (RENDER.pdf ? 0.5 : 2.4)) continue; drawText(t, V, aciCss(t.aci, onLight)); }
   if (window.__prof) window.__prof.push({ vis: vis.length, fills: _t1 - _t0, strokes: _t2 - _t1, texts: performance.now() - _t2 });
 }
@@ -201,7 +206,8 @@ function drawOverlay() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (state.tool && state.tool.draw) state.tool.draw(ctx, V, acc);
   drawRubber(ctx, V, acc); // line / shape following the finger from the last point
-  drawTrackPts(ctx, V); { const ls = state.loupe ? state.loupe.sn : state.snapMark; if (ls && ls.lines) drawTrack(ctx, V, ls, !state.loupe); }
+  if (state.boxSel && !(state.tool && state.tool.boxSelect)) drawBoxSel(ctx); // hold-and-drag box in select mode
+  drawTrackPts(ctx, V); { const ls = state.loupe ? state.loupe.sn : state.snapMark; if (ls && ls.lines && trackStillValid(ls)) drawTrack(ctx, V, ls, !state.loupe); }
   // snap marker
   const sn = state.snapMark; if (sn) { const [X, Y] = toScreen(sn.x, sn.y, V); drawSnapMarker(ctx, X, Y, sn.kind, 6, acc); }
   // crosshair at last picked point
@@ -276,7 +282,7 @@ function drawLoupe(acc) {
   drawPointer(acc);
 }
 function highlightItem(it, V) {
-  ctx.beginPath(); for (const poly of it.polys) { ctx.moveTo(poly[0], poly[1]); for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]); } ctx.stroke();
+  ctx.beginPath(); for (const poly of it.polys) { ctx.moveTo(poly[0], poly[1]); for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]); } if (it.points) { const r = Math.max(8, ptSizePx(ptStyle(), V) * 0.6) / V.s; for (const p of it.points) { ctx.moveTo(p.x + r, p.y); ctx.arc(p.x, p.y, r, 0, TAU); } } ctx.stroke();
   if (it.inst) for (const ins of it.inst) { ctx.save(); ctx.transform(ins.M.a, ins.M.b, ins.M.c, ins.M.d, ins.M.e, ins.M.f); ctx.lineWidth = ctx.lineWidth / ins.scale; const g = ins.g; if (g.polys.length > 20000) { ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]); } else { ctx.beginPath(); for (const poly of g.polys) { ctx.moveTo(poly[0], poly[1]); for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]); } ctx.stroke(); } ctx.restore(); }
 }
 function drawPolyScreen(ctx, pts, V, close) { if (pts.length < 1) return; ctx.beginPath(); const p0 = toScreen(pts[0][0], pts[0][1], V); ctx.moveTo(p0[0], p0[1]); for (let i = 1; i < pts.length; i++) { const p = toScreen(pts[i][0], pts[i][1], V); ctx.lineTo(p[0], p[1]); } if (close) ctx.closePath(); ctx.stroke(); }
@@ -288,7 +294,7 @@ function invalidateScene(idx) { state.scenes.delete(idx); lastFull = null; }
 function zoomExtents() {
   const sp = curSpace(); if (!sp) return; const S = getScene(state.spaceIdx);
   let bb = S.bbox; if (sp.paper && sp.limits && sp.limits[1][0] > sp.limits[0][0]) { bb = [Math.min(sp.limits[0][0], S.bbox[0]), Math.min(sp.limits[0][1], S.bbox[1]), Math.max(sp.limits[1][0], S.bbox[2]), Math.max(sp.limits[1][1], S.bbox[3])]; if (!boxOk(S.bbox)) bb = [sp.limits[0][0], sp.limits[0][1], sp.limits[1][0], sp.limits[1][1]]; }
-  if (!boxOk(bb)) { state.view = { s: 1, tx: cssW / 2, ty: cssH / 2 }; requestFull(); return; }
+  if (!boxOk(bb)) { const H = state.drawing.header; if (H && H.extmax && H.extmax[0] > H.extmin[0] && H.extmax[1] > H.extmin[1]) { zoomToBox([H.extmin[0], H.extmin[1], H.extmax[0], H.extmax[1]]); return; } state.view = { s: 1, tx: cssW / 2, ty: cssH / 2 }; requestFull(); return; } // an empty (new) drawing: its limits
   zoomToBox(bb);
 }
 function zoomToBox(bb) {

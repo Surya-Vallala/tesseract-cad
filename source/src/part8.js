@@ -2,6 +2,9 @@
 
 // ----- Icons and names -----
 Object.assign(ICON, {
+  clipcopy: '<rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
+  paste: '<rect x="5" y="4" width="12" height="16" rx="1.5"/><path d="M8 4V3h6v1"/><path d="M13 13h8M18 10l3 3-3 3"/>',
+  point: '<circle cx="12" cy="12" r="6.5"/><path d="M9 9l6 6M15 9l-6 6"/>',
   c_markup: '<path d="M4 4h16v11H10l-5 4.5V15H4z"/><path d="M8 8.5h8M8 11.5h5"/>',
   mpen: '<path d="M3 18c3-1 3-5 6-5s2 4 5 4 3-3 3-3"/><path d="M15 9l4-4 2 2-4 4-3 1z"/>',
   marrow: '<path d="M5 19 19 5M10 5h9v9"/>',
@@ -47,7 +50,7 @@ Object.assign(ICON, {
   layprev: '<path d="M13 7 6 11l7 4 7-4zM6 16l7 4 7-4"/><path d="M3 6h7M3 6l3-3M3 6l3 3"/>'
 });
 // names shown on the instruction bar while a tool runs
-Object.assign(LABEL, { mpen: 'Pen', marrow: 'Arrow', mtext: 'Text note', mcloud: 'Cloud', mline: 'Line', mrect: 'Rectangle', mellipse: 'Ellipse', mleader: 'Leader', mnum: 'Number tag', leader: 'Leader', cont: 'Continuous', arclen: 'Arc length', entity: 'Object', batch: 'Total of many', facade: 'Wall area', mscale: 'Set scale', dimrad: 'Dim radius', dimdia: 'Dim diameter', dimarc: 'Dim arc length', dimcont: 'Dim continue', dimang: 'Dim angular', ellipse: 'Ellipse', sketch: 'Sketch', revcloud: 'Revcloud', divide: 'Divide', laycur: 'Make current', layoff: 'Layer off', layiso: 'Off others', arc: 'Arc' });
+Object.assign(LABEL, { clipcopy: 'Copy to clipboard', paste: 'Paste', point: 'Point', mpen: 'Pen', marrow: 'Arrow', mtext: 'Text note', mcloud: 'Cloud', mline: 'Line', mrect: 'Rectangle', mellipse: 'Ellipse', mleader: 'Leader', mnum: 'Number tag', leader: 'Leader', cont: 'Continuous', arclen: 'Arc length', entity: 'Object', batch: 'Total of many', facade: 'Wall area', mscale: 'Set scale', dimrad: 'Dim radius', dimdia: 'Dim diameter', dimarc: 'Dim arc length', dimcont: 'Dim continue', dimang: 'Dim angular', ellipse: 'Ellipse', sketch: 'Sketch', revcloud: 'Revcloud', divide: 'Divide', laycur: 'Make current', layoff: 'Layer off', layiso: 'Off others', arc: 'Arc' });
 // names in the tool grid (shorter where the category already says what it is)
 const GRID_LABEL = { dimlin: 'Linear', dimali: 'Aligned', dimang: 'Angular', dimrad: 'Radius', dimdia: 'Diameter', dimarc: 'Arc length', dimcont: 'Continue', laylist: 'Layer list', laynew: 'New layer', laycur: 'Make current', layoff: 'Layer off', layiso: 'Off others', layon: 'All on', layprev: 'Previous', results: 'Results', totals: 'Totals', precision: 'Decimals', arc: 'Arc', more: 'More', props: 'Properties', clearsel: 'Clear', batch: 'Total of many' };
 const gridLabel = (k) => k === 'mhide' ? (state.drawing && state.layerMap.has(MK_LAYER) && !layerOn(MK_LAYER) ? 'Show markups' : 'Hide markups') : GRID_LABEL[k] || LABEL[k] || k;
@@ -55,15 +58,15 @@ const gridLabel = (k) => k === 'mhide' ? (state.drawing && state.layerMap.has(MK
 // ----- Bottom bar: categories; a category opens a grid of its tools -----
 const CATS = [
   { id: 'markup', name: 'Markup', icon: 'c_markup', tools: ['mpen', 'marrow', 'mtext', 'mcloud', 'mline', 'mrect', 'mellipse', 'mleader', 'mnum', 'mhide'] },
-  { id: 'draw', name: 'Draw', icon: 'c_draw', tools: ['line', 'pline', 'rect', 'circle', 'arc', 'ellipse', 'spline', 'text', 'leader', 'sketch', 'revcloud', 'divide'] },
-  { id: 'edit', name: 'Edit', icon: 'c_edit', tools: ['box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'] },
+  { id: 'draw', name: 'Draw', icon: 'c_draw', tools: ['line', 'pline', 'rect', 'circle', 'arc', 'ellipse', 'spline', 'point', 'text', 'leader', 'sketch', 'revcloud', 'divide'] },
+  { id: 'edit', name: 'Edit', icon: 'c_edit', tools: ['box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete', 'paste'] },
   { id: 'layer', name: 'Layer', icon: 'c_layer', tools: ['laylist', 'laynew', 'laycur', 'layoff', 'layiso', 'layon', 'layprev'] },
   { id: 'measure', name: 'Measure', icon: 'c_measure', tools: ['dist', 'cont', 'area', 'angle', 'coord', 'arclen', 'entity', 'batch', 'facade', 'mscale', 'results', 'totals', 'precision'] },
   { id: 'dim', name: 'Dimension', icon: 'c_dim', tools: ['dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont'] }
 ];
 // something selected: the bar shows actions for it; More holds the rest
 const SEL_MAIN = ['move', 'copy', 'rotate', 'mirror', 'delete', 'props', 'more'];
-const SEL_MORE = ['scale', 'align', 'order', 'similar', 'batch', 'laycur', 'layoff', 'layiso', 'clearsel'];
+const SEL_MORE = ['clipcopy', 'scale', 'align', 'order', 'similar', 'batch', 'laycur', 'layoff', 'layiso', 'clearsel'];
 const SCALED_TOOLS = new Set(['dist', 'cont', 'area', 'arclen', 'entity', 'batch', 'facade']);
 const catOf = (k) => CATS.find(c => c.tools.includes(k)) || null;
 const pop = { cat: null };
@@ -573,13 +576,14 @@ function moreTool(T, name, addPt) {
       T.rubber = (c, V, acc, lp) => { if (!T.base) return; const g = contGeom(T.base, [lp.x, lp.y]); if (!g) return; const G = dimGeom(g.kind, g.pts, g.q, dimTextHeight()); if (G) drawDimPreview(c, V, G, acc); };
       break;
     case 'ellipse':
-      T.start = () => { T.pts = []; state.lastPt = null; setPrompt('Tap the centre.'); };
-      T.minorFrom = (p) => { const [c, a] = T.pts; const ux = a[0] - c[0], uy = a[1] - c[1], L = Math.hypot(ux, uy) || 1; return Math.abs((p[0] - c[0]) * -uy / L + (p[1] - c[1]) * ux / L); };
-      T.onTap = (sn) => { const n = T.pts.length; if (n < 2) { addPt(sn); setPrompt(n === 0 ? 'Tap the end of one axis.' : 'Tap a point for the other axis, or type its half-length.'); return; } T.place(T.minorFrom([sn.x, sn.y])); };
+      T.start = () => { T.pts = []; state.lastPt = null; setPrompt('Tap one end of an axis.'); };
+      T.centre = () => [(T.pts[0][0] + T.pts[1][0]) / 2, (T.pts[0][1] + T.pts[1][1]) / 2]; // the two taps are opposite ends of one axis
+      T.minorFrom = (p) => { const [a, b] = T.pts; const c = T.centre(); const ux = b[0] - a[0], uy = b[1] - a[1], L = Math.hypot(ux, uy) || 1; return Math.abs((p[0] - c[0]) * -uy / L + (p[1] - c[1]) * ux / L); };
+      T.onTap = (sn) => { const n = T.pts.length; if (n < 2) { addPt(sn); setPrompt(n === 0 ? 'Tap the other end of that axis.' : 'Tap a point for the other axis, or type its half-length.'); return; } T.place(T.minorFrom([sn.x, sn.y])); };
       T.onNum = (v) => { if (T.pts.length === 2 && v > 0) T.place(v); };
-      T.place = (b) => { const [c, a] = T.pts; let m = [a[0] - c[0], a[1] - c[1]]; const A = Math.hypot(m[0], m[1]); if (!(A > 0) || !(b > 0)) { toast('Pick different points'); return; } let k = b / A; if (k > 1) { m = [-m[1] * k, m[0] * k]; k = 1 / k; } addEntities([{ t: 'ELLIPSE', L: state.curLayer, c: 256, lt: '', ce: c.slice(), m, k, a0: 0, a1: TAU }]); toast('Ellipse ' + fmtLen(2 * A) + ' × ' + fmtLen(2 * b)); T.start(); };
-      T.onBack = () => { if (T.pts.length) { T.pts.pop(); state.lastPt = T.pts.length ? T.pts[T.pts.length - 1] : null; setPrompt(T.pts.length ? 'Tap the end of one axis.' : 'Tap the centre.'); } };
-      T.rubber = (c, V, acc, lp) => { const P = T.pts; if (!P.length) return; const C = toScreen(P[0][0], P[0][1], V); c.save(); c.strokeStyle = acc; c.lineWidth = 1.6; c.setLineDash([]); if (P.length === 1) { const L = toScreen(lp.x, lp.y, V); c.beginPath(); c.moveTo(C[0], C[1]); c.lineTo(L[0], L[1]); c.stroke(); } else { const a = P[1]; const A = Math.hypot(a[0] - P[0][0], a[1] - P[0][1]); const b = T.minorFrom([lp.x, lp.y]); const rot = Math.atan2(a[1] - P[0][1], a[0] - P[0][0]); c.beginPath(); c.ellipse(C[0], C[1], A * V.s, Math.max(0.5, b * V.s), -rot, 0, TAU); c.stroke(); } c.restore(); };
+      T.place = (b) => { const c = T.centre(), a = T.pts[1]; let m = [a[0] - c[0], a[1] - c[1]]; const A = Math.hypot(m[0], m[1]); if (!(A > 0) || !(b > 0)) { toast('Pick different points'); return; } let k = b / A; if (k > 1) { m = [-m[1] * k, m[0] * k]; k = 1 / k; } addEntities([{ t: 'ELLIPSE', L: state.curLayer, c: 256, lt: '', ce: c.slice(), m, k, a0: 0, a1: TAU }]); toast('Ellipse ' + fmtLen(2 * A) + ' × ' + fmtLen(2 * b)); T.start(); };
+      T.onBack = () => { if (T.pts.length) { T.pts.pop(); state.lastPt = T.pts.length ? T.pts[T.pts.length - 1] : null; setPrompt(T.pts.length ? 'Tap the other end of that axis.' : 'Tap one end of an axis.'); } };
+      T.rubber = (c, V, acc, lp) => { const P = T.pts; if (!P.length) return; c.save(); c.strokeStyle = acc; c.lineWidth = 1.6; c.setLineDash([]); if (P.length === 1) { const A0 = toScreen(P[0][0], P[0][1], V), L = toScreen(lp.x, lp.y, V); c.beginPath(); c.moveTo(A0[0], A0[1]); c.lineTo(L[0], L[1]); c.stroke(); } else { const m = T.centre(); const C = toScreen(m[0], m[1], V); const a = P[1]; const A = Math.hypot(a[0] - m[0], a[1] - m[1]); const b = T.minorFrom([lp.x, lp.y]); const rot = Math.atan2(a[1] - m[1], a[0] - m[0]); c.beginPath(); c.ellipse(C[0], C[1], A * V.s, Math.max(0.5, b * V.s), -rot, 0, TAU); c.stroke(); } c.restore(); };
       T.draw = (c, V, acc) => drawDots(c, T.pts, V, acc);
       break;
     case 'sketch': case 'revcloud': {
@@ -600,6 +604,24 @@ function moreTool(T, name, addPt) {
       break;
     }
     case 'leader': leaderTool(T, false); break;
+    case 'clipcopy':
+      T.verb = 'copy to the clipboard'; T.boxSelect = true;
+      T.start = () => { if (needSelection(T)) { T.phase = 'base'; setPrompt('Tap the base point (it goes where you tap when pasting), or ✓ for the bottom-left corner.'); } };
+      T.onTap = (sn, hit) => { if (T.phase === 'select') { if (hit && !hit.model) { const id = hit.item.ent.id; state.selection.has(id) ? state.selection.delete(id) : state.selection.add(id); setResult([['Selected', state.selection.size + '']]); } return; } clipCopy([sn.x, sn.y]); startTool('select', true); };
+      T.onDone = () => { if (T.phase === 'select') { if (needSelection(T)) { T.phase = 'base'; setPrompt('Tap the base point, or ✓ for the bottom-left corner.'); } return; } clipCopy(null); startTool('select', true); };
+      T.draw = (c) => { if (state.boxSel) drawBoxSel(c); };
+      break;
+    case 'paste':
+      T.start = () => { if (!clip.ents.length) { toast('Nothing copied yet: select objects, then More → Copy to clipboard'); exitSoon(); return; } setPrompt('Tap where the base point goes (' + clip.ents.length + ' object' + (clip.ents.length === 1 ? '' : 's') + ' from ' + clip.src + '). ✓ pastes at the same coordinates.'); };
+      T.onTap = (sn) => { clipPaste([sn.x, sn.y]); };
+      T.onDone = () => clipPaste(null);
+      T.rubber = (c, V, acc, lp) => drawClipPreview(c, V, [lp.x, lp.y], acc);
+      break;
+    case 'point':
+      T.start = () => setPrompt('Tap to place a point, or type x,y (or @dx,dy). × ends.');
+      T.onTap = (sn) => { addEntities([{ t: 'POINT', L: state.curLayer, c: 256, lt: '', p: [sn.x, sn.y] }]); state.lastPt = [sn.x, sn.y]; T.n = (T.n || 0) + 1; setResult([['Point', 'X ' + fmtNum(sn.x, 3) + ' · Y ' + fmtNum(sn.y, 3)], ['Placed', String(T.n)]]); };
+      T.onBack = () => { if (T.n > 0) { undo(); T.n--; } };
+      break;
     case 'mpen': case 'marrow': case 'mtext': case 'mcloud': case 'mline': case 'mrect': case 'mellipse': case 'mleader': case 'mnum': markupTool(T, name); break;
     case 'divide':
       T.start = () => { T.ent = null; T.item = null; setPrompt('Tap the object to divide: a line, arc, circle, polyline, spline or ellipse.'); };
@@ -804,6 +826,13 @@ function rayHitObject(o, u, w, tol, S) {
   for (const cv of itemCurvesNear(hit.item, w, tol * 1.3)) { const fx = o[0] - cv.c[0], fy = o[1] - cv.c[1]; const bq = fx * u[0] + fy * u[1], cq = fx * fx + fy * fy - cv.r * cv.r, disc = bq * bq - cq; if (disc < 0) continue; for (const t of [-bq - Math.sqrt(disc), -bq + Math.sqrt(disc)]) { const q = [o[0] + u[0] * t, o[1] + u[1] * t]; if (cv.full || angInArc(Math.atan2(q[1] - cv.c[1], q[0] - cv.c[0]), cv.a0, cv.a1, cv.ccw)) take(q); } }
   return best;
 }
+// after a point is placed (or Done) the tracking lines that led to it go away; the snap mark stays as feedback
+function dropTrackLines() { if (state.snapMark && state.snapMark.lines) state.snapMark = Object.assign({}, state.snapMark, { lines: null, kind: state.snapMark.kind >= 12 ? 0 : state.snapMark.kind }); }
+function trackStillValid(sn) {
+  const pb = polarBase(), tp = trackPts();
+  for (const l of sn.lines) { if (l.src === 'polar' && !(pb && Math.abs(pb[0] - l.o[0]) < 1e-9 && Math.abs(pb[1] - l.o[1]) < 1e-9)) return false; if (l.src === 'track' && !(tp && tp.some(p => Math.abs(p[0] - l.o[0]) < 1e-9 && Math.abs(p[1] - l.o[1]) < 1e-9))) return false; }
+  return true;
+}
 // dotted green lines from the polar base / picked-up points through the point, and (without the magnifier) a label
 function drawTrack(c, V, sn, label) {
   const P = toScreen(sn.x, sn.y, V); const far = Math.hypot(cssW, cssH) * 2;
@@ -850,7 +879,179 @@ $('polarExtraAdd').addEventListener('click', () => { let a = readAng($('polarExt
 for (const id of ['polarIncIn', 'polarExtraIn']) $(id).addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $(id === 'polarIncIn' ? 'polarIncSet' : 'polarExtraAdd').click(); } });
 renderPolarSummary();
 
+// ===================== Linetype display: annotation scale, paper-sized linetypes in viewports, a per-drawing factor =====================
+state.showLw = true; try { state.showLw = localStorage.getItem('tct-lwt') !== '0'; } catch (e) { }
+$('chkLw').checked = state.showLw;
+$('chkLw').addEventListener('change', (ev) => { state.showLw = ev.target.checked; try { localStorage.setItem('tct-lwt', state.showLw ? '1' : '0'); } catch (e) { } lastFull = null; requestFull(); });
+// model: × the annotation scale (MSLTSCALE = 1); viewports with PSLTSCALE = 1: dashes sized in paper units; × the user's factor everywhere
+function ltFactor(where, sc) {
+  const D = state.drawing; if (!D) return 1; const H = D.header || {}; const um = state.ltMult || 1; const anno = H.msltscale === 0 ? 1 : (H.annoScale || 1);
+  if (where === 'vp') return um * (H.psltscale === 0 ? anno : 1 / (sc || 1));
+  if (where === 'paper') return um;
+  return um * anno;
+}
+const LT_CHIPS = [0.5, 1, 2, 5, 10, 25, 50, 100];
+const multTxt = (v) => '×' + (+v.toFixed(4));
+function renderLtSummary() { const el = $('ltSummary'); if (el) el.textContent = (state.ltMult || 1) === 1 ? 'as drawn' : multTxt(state.ltMult) + ' (this drawing)'; }
+function renderLt() {
+  const D = state.drawing; if (!D) return; const H = D.header || {}; const cur = state.ltMult || 1;
+  $('ltInfo').textContent = 'The drawing’s own scale: LTSCALE ' + (+((H.ltscale || 1).toFixed(4))) + (H.annoScale && H.annoScale !== 1 ? ' · annotation scale ' + (H.annoName || ('1:' + H.annoScale)) + ' (applied in Model)' : '') + ' · layouts size dashes on the paper.';
+  const w = $('ltChips'); w.innerHTML = ''; const chips = LT_CHIPS.includes(cur) ? LT_CHIPS : LT_CHIPS.concat([cur]).sort((a, b) => a - b);
+  for (const v of chips) { const b = document.createElement('button'); b.type = 'button'; b.textContent = v === 1 ? '×1 as drawn' : multTxt(v); b.setAttribute('aria-pressed', v === cur ? 'true' : 'false'); b.addEventListener('click', () => setLtMult(v)); w.append(b); }
+  renderLtSummary();
+}
+function setLtMult(v) { state.ltMult = v; renderLt(); lastFull = null; requestFull(); }
+$('miLtscale').addEventListener('click', () => { closeSheets(); if (!state.drawing) return; renderLt(); openSheet('ltPanel'); });
+$('ltSet').addEventListener('click', () => { const v = parseFloat(String($('ltIn').value).replace(',', '.')); if (!(v > 0 && v <= 100000)) { toast('Type a factor such as 40 or 0.5'); return; } $('ltIn').value = ''; setLtMult(+v.toFixed(4)); });
+$('ltIn').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $('ltSet').click(); } });
+// Properties: say so when the selected object's dashes are too small to see at this zoom
+function ltTooSmallHint(sel) {
+  const D = state.drawing; const sp = curSpace(); if (!D || !sp) return null;
+  for (const e of sel) {
+    const lt = resolveLt(e, { lt: '' }, e.L || '0'); const pat = lt && D.ltypes[lt]; if (!pat || !pat.length) continue;
+    let per = 0; for (const v of pat) per += Math.abs(v); per *= (D.header.ltscale || 1) * (e.lts || 1) * ltFactor(sp.paper ? 'paper' : 'model') * state.view.s;
+    if (per < 3) return 'Dashes too small to see at this zoom (one repeat ≈ ' + (per < 0.1 ? per.toFixed(2) : per.toFixed(1)) + ' px). Zoom in, raise this, or use Menu → Linetype scale.';
+    return null;
+  }
+  return null;
+}
+
+// ===================== Point style (PDMODE / PDSIZE): shared by every point in the drawing =====================
+// Mode: 0 dot, 1 nothing, 2 +, 3 ×, 4 tick; +32 circle, +64 square. Size: negative = % of the screen (or page) height,
+// positive = drawing units, 0 = 5 %. Drawings that don't set one (0 / 0) show × in a circle at 2 % (Surya's choice).
+function ptStyle() { const H = state.drawing ? state.drawing.header : {}; let mode = (H && H.pdmode) | 0, size = H && +H.pdsize || 0; if (!(H && H.ptSet) && mode === 0 && size === 0) { mode = 35; size = -2; } return { mode, size }; }
+function ptSizePx(st, V) { const s = st.size; if (s > 0) return Math.max(2, s * V.s); return Math.max(4, cssH * (s < 0 ? -s : 5) / 100); }
+function drawPointMark(c, X, Y, mode, S, col) {
+  const h = S / 2, base = mode % 32, circ = (mode & 32) !== 0, sq = (mode & 64) !== 0; const x = circ ? h * 0.72 : h;
+  c.save(); c.setLineDash([]); c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 1.2; c.beginPath();
+  if (base === 0) { c.moveTo(X + 1.3, Y); c.arc(X, Y, 1.3, 0, TAU); c.fill(); c.beginPath(); }
+  else if (base === 2) { c.moveTo(X - h, Y); c.lineTo(X + h, Y); c.moveTo(X, Y - h); c.lineTo(X, Y + h); }
+  else if (base === 3) { c.moveTo(X - x, Y - x); c.lineTo(X + x, Y + x); c.moveTo(X - x, Y + x); c.lineTo(X + x, Y - x); }
+  else if (base === 4) { c.moveTo(X, Y); c.lineTo(X, Y - h); }
+  if (circ) { c.moveTo(X + h, Y); c.arc(X, Y, h, 0, TAU); }
+  if (sq) c.rect(X - h, Y - h, S, S);
+  c.stroke(); c.restore();
+}
+function openPointStyle() { if (!state.drawing) return; renderPointStyle(); openSheet('ptPanel'); }
+function renderPointStyle() {
+  const st = ptStyle(); const g = $('ptGrid'); g.innerHTML = ''; const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() || '#fff';
+  for (const enc of [0, 32, 64, 96]) for (const b of [0, 1, 2, 3, 4]) {
+    const m = b + enc; const btn = document.createElement('button'); btn.type = 'button'; btn.setAttribute('aria-pressed', m === st.mode ? 'true' : 'false'); btn.title = 'Style ' + m;
+    const cvs = document.createElement('canvas'); const d = state.dpr; cvs.width = 36 * d; cvs.height = 36 * d; const c2 = cvs.getContext('2d'); c2.scale(d, d); drawPointMark(c2, 18, 18, m, 20, fg); btn.append(cvs);
+    btn.addEventListener('click', () => { setPointStyle(m, st.size); }); g.append(btn);
+  }
+  const rel = st.size <= 0; for (const b of $('ptMode').children) b.setAttribute('aria-pressed', (b.dataset.v === 'rel') === rel ? 'true' : 'false');
+  $('ptSize').value = rel ? String(st.size < 0 ? -st.size : 5) : String(+st.size.toFixed(4)); $('ptUnit').textContent = rel ? '% of screen height' : (UNIT_NAME[state.drawing.header.units] || 'drawing units');
+  $('ptNote').textContent = rel ? 'Relative: points keep the same size on screen when you zoom; in a PDF they are that share of the page height.' : 'Absolute: points are a real size in the drawing, grow and shrink with zoom, and print at that size.';
+}
+function setPointStyle(mode, size) { const H = state.drawing.header; H.pdmode = mode; H.pdsize = size; H.ptSet = true; const was = state.dirty; state.dirty = true; if (!was) renderTabs(); renderPointStyle(); lastFull = null; requestFull(); }
+$('ptMode').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; const st = ptStyle(); const rel = b.dataset.v === 'rel'; if (rel === (st.size <= 0)) return; if (rel) setPointStyle(st.mode, -2); else { const px = ptSizePx(st, state.view); setPointStyle(st.mode, +mkSize(px).toFixed(4)); } });
+$('ptSet').addEventListener('click', () => { const v = parseFloat(String($('ptSize').value).replace(',', '.')); const st = ptStyle(); if (!(v > 0)) { toast('Type a size above 0'); return; } setPointStyle(st.mode, st.size <= 0 ? -Math.min(v, 50) : v); });
+$('ptSize').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $('ptSet').click(); } });
+$('btnPtStyle').addEventListener('click', openPointStyle);
+
+// ===================== Current colour / lineweight / linetype for new objects (AutoCAD CECOLOR / CELWEIGHT / CELTYPE) =====================
+// Three floating buttons above Extents / Full screen while a Draw tool runs; the choice is kept per drawing (ByLayer to start).
+const DRAW_PROP_TOOLS = new Set(['line', 'pline', 'rect', 'circle', 'arc', 'ellipse', 'spline', 'point', 'text', 'leader', 'sketch', 'revcloud', 'divide']);
+const CUR_COLORS = [256, 1, 2, 3, 4, 5, 6, 7, 8, 9, 250, 251, 252, 253, 254];
+const CUR_LWS = [-1, -3, 9, 13, 18, 25, 35, 50, 70, 100, 140, 200];
+// standard linetypes added to a drawing when first used (acadiso.lin, in mm; scaled for other units)
+const STD_LTS = { DASHED: [12.7, -6.35], HIDDEN: [6.35, -3.175], CENTER: [31.75, -6.35, 6.35, -6.35], DASHDOT: [12.7, -6.35, 0, -6.35], PHANTOM: [31.75, -6.35, 6.35, -6.35, 6.35, -6.35] };
+const curOf = () => state.cur || (state.cur = { c: 256, lw: -1, lt: '' });
+function applyCurProps(list) {
+  const T = state.tool; if (!T || !DRAW_PROP_TOOLS.has(T.name) || !state.drawing) return; const cu = curOf();
+  for (const e of list) { if (e.dim || e.mk) continue; if (e.c === 256 && cu.c !== 256) e.c = cu.c; if (cu.lw !== -1 && e.lw == null) e.lw = cu.lw; if (cu.lt && !e.lt) e.lt = cu.lt; }
+}
+const lwTxt = (v) => v === -1 ? 'ByLayer' : v === -3 ? 'Default' : (v / 100).toFixed(2) + ' mm';
+function ltPattern(name) { const D = state.drawing; return (D && D.ltypes[name]) || STD_LTS[name] || null; }
+function dashSvg(pat, w, sw) { // a dash sample of a pattern, sized to fit
+  w = w || 96; const y = 7; if (!pat || !pat.length) return '<svg viewBox="0 0 ' + w + ' 14"><path d="M2 ' + y + 'H' + (w - 2) + '" stroke="currentColor" stroke-width="' + (sw || 1.6) + '"/></svg>';
+  let per = 0; for (const v of pat) per += Math.abs(v); const k = (w - 4) / 3 / (per || 1); let x = 2, d = ''; let i = 0;
+  while (x < w - 2 && i < 200) { const v = pat[i % pat.length]; const L = Math.abs(v) * k; if (v > 0) d += 'M' + x.toFixed(1) + ' ' + y + 'H' + Math.min(w - 2, x + L).toFixed(1); else if (v === 0) d += 'M' + x.toFixed(1) + ' ' + y + 'h0.01'; x += Math.max(L, v === 0 ? 0 : 0.5); i++; }
+  return '<svg viewBox="0 0 ' + w + ' 14"><path d="' + d + '" stroke="currentColor" stroke-width="' + (sw || 1.6) + '" stroke-linecap="round" fill="none"/></svg>';
+}
+function renderCurBtns() {
+  const T = state.tool; const show = !!(state.drawing && !atHome() && T && DRAW_PROP_TOOLS.has(T.name)); $('curBtns').hidden = !show; if (!show) { closeCurPop(); return; }
+  const cu = curOf(); const col = cu.c === 256 ? null : aciCss(cu.c, false, true);
+  $('curC').innerHTML = '<svg viewBox="0 0 26 26"><circle cx="13" cy="12" r="8" fill="' + (col || 'none') + '" stroke="currentColor" stroke-width="1.4" ' + (col ? '' : 'stroke-dasharray="2.5 2"') + '/></svg><small>' + (cu.c === 256 ? 'Layer' : cu.c) + '</small>';
+  const sw = cu.lw > 0 ? Math.max(1, Math.min(6, cu.lw / 25)) : 1.4;
+  $('curW').innerHTML = '<svg viewBox="0 0 26 26"><path d="M4 12H22" stroke="currentColor" stroke-width="' + sw + '" stroke-linecap="round"/></svg><small>' + (cu.lw === -1 ? 'Layer' : cu.lw === -3 ? 'Def' : (cu.lw / 100).toFixed(2)) + '</small>';
+  $('curT').innerHTML = '<svg viewBox="0 0 26 26">' + dashSvg(cu.lt ? ltPattern(cu.lt) : null, 22, 1.6).replace(/^<svg[^>]*>/, '<g transform="translate(2 5)">').replace('</svg>', '</g>') + '</svg><small>' + (cu.lt ? cu.lt.slice(0, 6) : 'Layer') + '</small>';
+}
+function closeCurPop() { $('curPop').hidden = true; $('curScrim').hidden = true; }
+function openCurPop(kind) {
+  const cu = curOf(); const body = $('curPopBody'); body.innerHTML = ''; $('curPop').hidden = false; $('curScrim').hidden = false;
+  const done = () => { closeCurPop(); renderCurBtns(); };
+  if (kind === 'c') {
+    $('curPopTtl').textContent = 'Colour for new objects'; const w = document.createElement('div'); w.className = 'cp-sw';
+    for (const v of CUR_COLORS) { const b = document.createElement('button'); b.type = 'button'; if (v === 256) b.textContent = 'Layer'; else { b.style.background = aciCss(v, false, true); b.title = 'Colour ' + v; } b.setAttribute('aria-pressed', cu.c === v ? 'true' : 'false'); b.addEventListener('click', () => { cu.c = v; done(); }); w.append(b); }
+    const r = document.createElement('div'); r.className = 'cp-row'; const inp = document.createElement('input'); inp.inputMode = 'numeric'; inp.placeholder = 'Colour number 1–255'; const ok = document.createElement('button'); ok.className = 'btn'; ok.textContent = 'Use';
+    ok.addEventListener('click', () => { const v = parseInt(inp.value, 10); if (!(v >= 1 && v <= 255)) { toast('Type a colour number 1–255'); return; } cu.c = v; done(); }); r.append(inp, ok); body.append(w, r);
+  } else if (kind === 'w') {
+    $('curPopTtl').textContent = 'Line thickness for new objects'; const l = document.createElement('div'); l.className = 'cp-list';
+    for (const v of CUR_LWS) { const b = document.createElement('button'); b.type = 'button'; const sw = v > 0 ? Math.max(1, Math.min(8, v / 25)) : 1.2; b.innerHTML = '<svg viewBox="0 0 96 14"><path d="M2 7H94" stroke="currentColor" stroke-width="' + sw + '" stroke-linecap="round"/></svg><span></span>'; b.querySelector('span').textContent = lwTxt(v); b.setAttribute('aria-pressed', cu.lw === v ? 'true' : 'false'); b.addEventListener('click', () => { cu.lw = v; done(); if (v > 25 && !state.showLw) toast('Menu → Show lineweights shows thickness on screen'); }); l.append(b); }
+    body.append(l);
+  } else {
+    $('curPopTtl').textContent = 'Line type for new objects'; const l = document.createElement('div'); l.className = 'cp-list'; const D = state.drawing;
+    const names = ['', 'Continuous']; for (const n of Object.keys(D.ltypes || {})) if (!/^(bylayer|byblock|continuous)$/i.test(n) && (D.ltypes[n] || []).length && !names.includes(n)) names.push(n); for (const n of Object.keys(STD_LTS)) if (!names.some(x => x.toUpperCase() === n)) names.push(n);
+    for (const n of names) { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = dashSvg(n ? ltPattern(n) : null) + '<span></span>'; b.querySelector('span').textContent = n || 'ByLayer'; b.setAttribute('aria-pressed', cu.lt === n ? 'true' : 'false'); b.addEventListener('click', () => { if (n && !D.ltypes[n] && STD_LTS[n]) { const toM = UNIT_TO_M[D.header.units] || 0.001; D.ltypes[n] = STD_LTS[n].map(v => v * 0.001 / toM); const was = state.dirty; state.dirty = true; if (!was) renderTabs(); } cu.lt = n; done(); }); l.append(b); }
+    body.append(l);
+  }
+}
+$('curC').addEventListener('click', () => openCurPop('c')); $('curW').addEventListener('click', () => openCurPop('w')); $('curT').addEventListener('click', () => openCurPop('t'));
+$('curScrim').addEventListener('click', closeCurPop);
+
+// ===================== New drawing (Home tab) =====================
+function nextDrawingName() { let i = 1; const taken = (n) => docs.some(d => docTitle(d) === n); while (taken('Drawing ' + i)) i++; return 'Drawing ' + i; }
+let ndUnits = 4;
+$('btnNew').addEventListener('click', () => { if (!canOpenAnother()) return; $('ndName').value = nextDrawingName(); for (const b of $('ndUnits').children) b.setAttribute('aria-pressed', +b.dataset.v === ndUnits ? 'true' : 'false'); $('newDlg').classList.add('on'); setTimeout(() => { $('ndName').focus(); $('ndName').select(); }, 50); });
+$('ndUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; ndUnits = +b.dataset.v; for (const x of $('ndUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+$('ndCancel').addEventListener('click', () => $('newDlg').classList.remove('on'));
+$('ndName').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $('ndOk').click(); } });
+$('ndOk').addEventListener('click', () => {
+  const name = ($('ndName').value || '').trim() || nextDrawingName(); $('newDlg').classList.remove('on');
+  const toM = UNIT_TO_M[ndUnits] || 0.001; const W = 12 / toM, H = 8 / toM; // a 12 × 8 m area to start
+  const D = { name, layers: [{ name: '0', aci: 7, off: false, frozen: false, locked: false, lw: -3, lt: 'Continuous' }], ltypes: {}, blocks: {}, spaces: [{ name: 'Model', paper: false, ents: [] }], header: { units: ndUnits, extmin: [0, 0], extmax: [W, H], ltscale: 1, clayer: '0', luprec: 2, textsize: 2.5, pdmode: 0, pdsize: 0, psltscale: 1 }, skipped: {}, nextId: 1 };
+  loadDrawing(D, name, { fileName: name, kind: 'new', bytes: null }); toast('New drawing · ' + (UNIT_NAME[ndUnits] || '') + ' · draw from the bottom bar');
+});
+
+// ===================== Copy and paste between drawings (AutoCAD COPYCLIP / COPYBASE / PASTECLIP / PASTEORIG) =====================
+// The clipboard holds copies of the objects, the blocks, layers and linetypes they use, the source units and the base point.
+const clip = { ents: [], blocks: {}, layers: [], ltypes: {}, units: 0, base: [0, 0], src: '', preview: [] };
+function clipCopy(base) {
+  const D = state.drawing; const sel = selectedEnts(); if (!D || !sel.length) { toast('Select objects first'); return; }
+  const S = getScene(state.spaceIdx); const bb = emptyBox(); const preview = []; let npts = 0;
+  for (const it of S.items) { if (!state.selection.has(it.ent.id)) continue; bboxAdd(bb, it.bbox[0], it.bbox[1]); bboxAdd(bb, it.bbox[2], it.bbox[3]);
+    if (npts < 40000) { for (const p of it.polys) { preview.push(p.slice()); npts += p.length; } if (it.inst) for (const ins of it.inst) for (const p of ins.g.polys) { if (npts > 40000) break; const q = []; for (let i = 0; i < p.length; i += 2) { const w = mApply(ins.M, [p[i], p[i + 1]]); q.push(w[0], w[1]); } preview.push(q); npts += q.length; } } }
+  const b = base || [bb[0], bb[1]];
+  const names = blockNamesDeep(sel.filter(e => e.t === 'INSERT').map(e => e.n)); const blocks = {}; for (const n of names) if (D.blocks[n]) blocks[n] = structuredClone(D.blocks[n]);
+  const usedL = new Set(sel.map(e => e.L || '0')); const usedT = new Set(sel.map(e => e.lt).filter(Boolean));
+  for (const n of names) for (const e of (D.blocks[n] ? D.blocks[n].ents : [])) { if (e.L && e.L !== '0') usedL.add(e.L); if (e.lt) usedT.add(e.lt); }
+  const layers = D.layers.filter(l => usedL.has(l.name)).map(l => structuredClone(l)); for (const l of layers) if (l.lt) usedT.add(l.lt);
+  const ltypes = {}; for (const t of usedT) if (D.ltypes[t]) ltypes[t] = D.ltypes[t].slice();
+  Object.assign(clip, { ents: sel.map(e => structuredClone(e)), blocks, layers, ltypes, units: D.header.units || 0, base: b.slice(), src: docTitle(activeDoc).replace(/\.(dwg|dxf)$/i, ''), preview: preview.map(p => { const q = []; for (let i = 0; i < p.length; i += 2) q.push(p[i] - b[0], p[i + 1] - b[1]); return q; }) });
+  toast(sel.length + ' object' + (sel.length === 1 ? '' : 's') + ' copied · in another tab: Edit → Paste', 3200);
+}
+function clipScale() { const D = state.drawing; const a = clip.units, b = D.header.units; if (!a || !b || a === b || !UNIT_TO_M[a] || !UNIT_TO_M[b]) return 1; return UNIT_TO_M[a] / UNIT_TO_M[b]; }
+function drawClipPreview(c, V, at, col) {
+  const k = clipScale(); c.save(); c.strokeStyle = col; c.globalAlpha = 0.75; c.lineWidth = 1.2; c.setLineDash([]); c.beginPath();
+  for (const p of clip.preview) { for (let i = 0; i < p.length; i += 2) { const q = toScreen(at[0] + p[i] * k, at[1] + p[i + 1] * k, V); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); } }
+  c.stroke(); c.restore();
+}
+function clipPaste(at) {
+  const D = state.drawing; if (!D || !clip.ents.length) return; const k = clipScale();
+  const M = at ? mMul(mTranslate(at[0], at[1]), mMul(mScale(k, k), mTranslate(-clip.base[0], -clip.base[1]))) : mScale(k, k);
+  let kept = 0, addedL = 0;
+  for (const [n, b] of Object.entries(clip.blocks)) { if (D.blocks[n]) { if (!/^TC_(DIM|MK)_/.test(n)) kept++; continue; } const nb = structuredClone(b); for (const e of nb.ents) e.id = nextId(); D.blocks[n] = nb; }
+  for (const l of clip.layers) if (!state.layerMap.has(l.name)) { const nl = structuredClone(l); D.layers.push(nl); state.layerMap.set(nl.name, nl); state.layerVis.set(nl.name, !(nl.off || nl.frozen)); addedL++; }
+  for (const [t, pat] of Object.entries(clip.ltypes)) if (!D.ltypes[t]) D.ltypes[t] = pat.map(v => v * k);
+  const list = clip.ents.map(e => { const c = structuredClone(e); c.hd = ''; return transformEntity(c, M); });
+  addEntities(list); state.selection.clear(); for (const e of list) state.selection.add(e.id); if (addedL) renderLayers();
+  toast('Pasted ' + list.length + ' object' + (list.length === 1 ? '' : 's') + (at ? '' : ' at the same coordinates') + (k !== 1 ? ' · scaled from ' + (UNIT_NAME[clip.units] || '') + ' to ' + (UNIT_NAME[D.header.units] || '') : '') + (kept ? ' · kept this drawing’s version of ' + kept + ' block' + (kept === 1 ? '' : 's') : '') + (addedL ? ' · ' + addedL + ' layer' + (addedL === 1 ? '' : 's') + ' added' : ''), 3600);
+  startTool('select', true); showSelection(); requestFull();
+}
+
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();
-// First frame: show the built-in sample so the app opens in a working state; the welcome card sits on top until a file is chosen.
-loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); setHome(true); showHomeTitle();
+// Start on the Home tab with nothing open; drawings open in their own tabs.
+showHomeTitle(); setHome(true); renderTabs(); updateChrome();

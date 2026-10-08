@@ -32,7 +32,7 @@ function openShare() {
   if (!state.drawing) return;
   const hasDwg = state.kind === 'dwg' && !!state.fileBytes && !state.drawing.sample;
   $('shDwg').disabled = !hasDwg;
-  $('shDwgHint').textContent = state.drawing.sample ? 'not available for the sample' : !hasDwg ? 'not available: this drawing was opened from a DXF' : isEditedDoc() ? 'the original file as opened: your edits are not in it' : 'the original file as it was opened';
+  $('shDwgHint').textContent = state.drawing.sample ? 'not available for the sample' : state.kind === 'new' ? 'not available for a new drawing: share a DXF' : !hasDwg ? 'not available: this drawing was opened from a DXF' : isEditedDoc() ? 'the original file as opened: your edits are not in it' : 'the original file as it was opened';
   openSheet('sharePanel');
 }
 // The file is made first, then shared from a button, because Android only allows sharing straight after a tap.

@@ -185,6 +185,22 @@ function readDrawOrder(lib, dwg) {
   } catch (e) { /* draw order is optional */ }
   return out;
 }
+// Linetype scaling the converter leaves out: MSLTSCALE, PSLTSCALE and the current annotation scale (CANNOSCALE → SCALE object).
+// With MSLTSCALE = 1 AutoCAD multiplies model-space linetypes by the annotation scale (1:100 → ×100).
+function readScaleVars(lib, dwg) {
+  const out = {};
+  try { const v = lib.dwg_dynapi_header_value(dwg, 'PSLTSCALE'); if (v && v.success && isFinite(Number(v.data))) out.psltscale = Number(v.data); } catch (e) { }
+  // CANNOSCALE / MSLTSCALE live in the AcDbVariableDictionary (DICTIONARYVAR objects); the scale name reads like "1:100"
+  try {
+    const n = lib.dwg_get_num_objects(dwg);
+    for (let i = 0; i < n; i++) {
+      const obj = lib.dwg_get_object(dwg, i); if (!obj || lib.dwg_object_get_fixedtype(obj) !== Dwg_Object_Type.DWG_TYPE_DICTIONARYVAR) continue;
+      const v = lib.dwg_dynapi_entity_value(lib.dwg_object_to_object_tio(obj), 'strvalue'); const t = v && v.success && typeof v.data === 'string' ? v.data.trim() : '';
+      const m = t.match(/^(\d*\.?\d+)\s*:\s*(\d*\.?\d+)$/); if (m && +m[1] > 0 && +m[2] > 0 && out.annoScale == null) { out.annoScale = +m[2] / +m[1]; out.annoName = t; }
+    }
+  } catch (e) { /* no annotation scale */ }
+  return out;
+}
 function applyDrawOrder(ents, table) {
   if (!table) return ents;
   const key = (e) => { const h = e.hd || ''; const s = table[h]; return s != null ? s : (parseInt(h, 16) || 0); };
@@ -226,7 +242,7 @@ function slim(db, name, layerAl, drawOrder) {
   const defs = {};
   for (const [n, rec] of Object.entries(blocks)) if (!/^\*(Model|Paper)_Space/i.test(n)) defs[n] = { base: rec.base, ents: rec.ents };
   const H = db.header || {};
-  const header = { units: num(H.INSUNITS, 0), extmin: P(H.EXTMIN), extmax: P(H.EXTMAX), ltscale: num(H.LTSCALE, 1) || 1, clayer: H.CLAYER || '0', luprec: num(H.LUPREC, 2), textsize: num(H.TEXTSIZE, 2.5) };
+  const header = { units: num(H.INSUNITS, 0), extmin: P(H.EXTMIN), extmax: P(H.EXTMAX), ltscale: num(H.LTSCALE, 1) || 1, clayer: H.CLAYER || '0', luprec: num(H.LUPREC, 2), textsize: num(H.TEXTSIZE, 2.5), pdmode: num(H.PDMODE, 0), pdsize: num(H.PDSIZE, 0), psltscale: num(H.PSLTSCALE, 1) };
   return { name, layers, ltypes, blocks: defs, spaces, header, skipped, nextId: idc.n };
 }
 
@@ -251,10 +267,10 @@ onmessage = async (ev) => {
       if (!dwg) throw new Error('LibreDWG could not read this file. Try saving it as AutoCAD 2018 or 2013 DWG and open again.');
       postMessage({ type: 'progress', stage: 'Converting entities', pct: 55 });
       const db = lib.convert(dwg);
-      const layerAl = layerAlphas(lib, dwg); const drawOrder = readDrawOrder(lib, dwg);
+      const layerAl = layerAlphas(lib, dwg); const drawOrder = readDrawOrder(lib, dwg); const scaleVars = readScaleVars(lib, dwg);
       try { lib.dwg_free(dwg); } catch (e) { /* ignore */ }
       postMessage({ type: 'progress', stage: 'Building drawing', pct: 80 });
-      drawing = slim(db, name, layerAl, drawOrder);
+      drawing = slim(db, name, layerAl, drawOrder); Object.assign(drawing.header, scaleVars);
     }
     drawing.parseMs = Math.round(performance.now() - t0);
     postMessage({ type: 'done', drawing });
