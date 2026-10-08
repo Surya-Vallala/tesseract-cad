@@ -191,8 +191,8 @@ input{font:inherit;color:inherit}
 .prop-head{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;padding:10px 0 2px}
 /* full screen: only the drawing, the strip and the view buttons */
 body.fs #top, body.fs #tools{display:none}
-#welcome{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);color:var(--fg);overflow-y:auto}
-#welcome .card{width:min(100%,420px);background:var(--panel);color:var(--fg);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+#welcome{position:absolute;inset:0;z-index:8;display:flex;align-items:flex-start;justify-content:center;padding:16px;background:var(--bg);color:var(--fg);overflow-y:auto}
+#welcome .card{margin:auto 0;width:min(100%,420px);background:var(--panel);color:var(--fg);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
 #welcome h1{margin:4px 0 0;font-size:18px;font-weight:500;text-wrap:balance}
 .brandhead{display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px 0 10px;border-bottom:1px solid var(--line)}
 .brandlogo{width:min(100%,300px);height:auto;display:block}
@@ -4190,7 +4190,7 @@ showHomeTitle(); setHome(true); renderTabs(); updateChrome();
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610081056' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610081606' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }
