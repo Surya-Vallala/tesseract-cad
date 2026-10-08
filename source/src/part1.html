@@ -102,6 +102,7 @@ input{font:inherit;color:inherit}
 .tool{flex:0 0 auto;width:57px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px 2px 2px;border-radius:9px;color:var(--bar-fg)}
 .tool svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .tool span{font-size:10.5px;color:var(--bar-muted);white-space:nowrap;max-width:56px;overflow:hidden;text-overflow:ellipsis}
+.tool.wide{width:66px} .tool.wide span{max-width:64px}
 .tool[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
 .tool[aria-pressed="true"] span{color:var(--accent)}
 .tool.danger{color:var(--danger)}
@@ -322,7 +323,7 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <button class="menu-item doc-only" id="miShare"><span>Share drawing <small>PDF, DWG or DXF</small></span><span>→</span></button>
         <button class="menu-item doc-only" id="miSave"><span>Save edits on this device <small>keeps your changes in Recent</small></span><span>→</span></button>
         <div class="menu-item"><span>Canvas</span><div class="seg" id="segCanvas"><button data-v="dark" aria-pressed="true">Dark</button><button data-v="light">Light</button></div></div>
-        <div class="menu-item"><span>Units shown</span><div class="seg" id="segUnits"><button data-v="auto" aria-pressed="true">Drawing</button><button data-v="mm">mm</button><button data-v="m">m</button><button data-v="ft">ft-in</button></div></div>
+        <div class="menu-item"><span>Units shown</span><div class="seg" id="segUnits"><button data-v="auto" aria-pressed="true">Auto</button><button data-v="mm">mm</button><button data-v="m">m</button><button data-v="ft">ft-in</button></div></div>
         <button class="menu-item" id="miSnaps"><span>Snap points <small id="snapSummary">all on</small></span><span>→</span></button>
         <div class="menu-item"><span>Hatch patterns <small>off = faster</small></span><input type="checkbox" id="chkPat" checked></div>
         <div class="menu-item doc-only"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>

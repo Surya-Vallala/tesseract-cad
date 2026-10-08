@@ -253,7 +253,7 @@ function submitTyped() { const v = parseTyped(typed.value); if (!v) { toast('Use
 // With no tool running, tapping the drawing selects (the Select pointer), so Select is not a button.
 const TOOL_GROUPS = {
   view: ['box', 'info', 'fit'],
-  measure: ['dist', 'area', 'angle', 'coord'],
+  measure: ['dist', 'area', 'angle', 'coord', 'dimlin', 'dimali', 'dimang'],
   edit: ['move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'],
   draw: ['line', 'pline', 'rect', 'circle', 'arc', 'spline', 'text']
 };
@@ -264,9 +264,10 @@ const ICON = {
   dist: '<path d="M3 17 17 3M3 17v-4M3 17h4M17 3h-4M17 3v4"/>', area: '<path d="M4 6l6-2 10 4-3 12-13-3z"/>', angle: '<path d="M4 20 20 6M4 20h16M11 20a8 8 0 0 0-1.5-5"/>', coord: '<path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/>',
   move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>', rotate: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>', mirror: '<path d="M12 3v18M4 7l5 5-5 5zM20 7l-5 5 5 5z"/>', scale: '<path d="M4 20V10h10v10zM10 4h10v10M14 10l6-6"/>', align: '<path d="M4 8h16M4 16h10M4 4v16M20 4v8"/>', order: '<rect x="3" y="3" width="11" height="11" rx="1"/><path d="M10 10h11v11H10z" fill="currentColor" fill-opacity=".25"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
   props: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/>', similar: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke-dasharray="2.5 2"/><path d="M14 4h6v6M10 20H4v-6" opacity=".55"/>',
+  dimlin: '<path d="M4 6v12M20 6v12M4 12h16M2.6 13.4l2.8-2.8M18.6 13.4l2.8-2.8"/>', dimali: '<path d="M5 17 17 5M3 14l4 4M14 3l4 4M3.6 18.4l2.8-2.8M15.6 6.4l2.8-2.8" transform="translate(1 1)"/>', dimang: '<path d="M4 20 19 7M4 20h16M15.5 20a11.5 11.5 0 0 0-3.6-8.4M13.8 21.4l2.6-2.6M10.7 13.4l2.6-2.6"/>',
   line: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>', pline: '<path d="M3 19l5-11 5 7 4-9 4 4"/>', rect: '<rect x="4" y="6" width="16" height="12"/>', circle: '<circle cx="12" cy="12" r="8"/>', arc: '<path d="M4 18a10 10 0 0 1 16 0"/>', spline: '<path d="M3 17c4-12 6 12 10 0s4-6 8-2"/>', text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>'
 };
-const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area', props: 'Properties', similar: 'Similar' };
+const LABEL = { select: 'Select', box: 'Box select', info: 'Info', fit: 'Extents', dist: 'Distance', area: 'Area', angle: 'Angle', coord: 'Coords', move: 'Move', copy: 'Copy', rotate: 'Rotate', mirror: 'Mirror', scale: 'Scale', align: 'Align', order: 'Order', delete: 'Delete', line: 'Line', pline: 'Polyline', rect: 'Rectangle', circle: 'Circle', arc: 'Arc (3 pt)', spline: 'Spline', text: 'Text', pdfwin: 'PDF area', props: 'Properties', similar: 'Similar', dimlin: 'Dim linear', dimali: 'Dim aligned', dimang: 'Dim angle' };
 // ----- Bottom bar: tabs + tools, or (something selected) a selection row + actions. Both are the same height. -----
 const GROUP_NAME = { view: 'View', measure: 'Measure', edit: 'Edit', draw: 'Draw' };
 const groupOf = (k) => Object.keys(TOOL_GROUPS).find(g => TOOL_GROUPS[g].includes(k)) || null;
@@ -296,7 +297,7 @@ function renderBar(force) {
   }
   row.innerHTML = '';
   for (const k of (sm ? SEL_ACTIONS : TOOL_GROUPS[state.group])) {
-    const b = document.createElement('button'); b.className = 'tool' + (k === 'delete' ? ' danger' : ''); b.dataset.tool = k;
+    const b = document.createElement('button'); b.className = 'tool' + (k === 'delete' ? ' danger' : '') + (/^dim/.test(k) ? ' wide' : ''); b.dataset.tool = k;
     b.innerHTML = '<svg viewBox="0 0 24 24">' + ICON[k] + '</svg><span>' + LABEL[k] + '</span>'; b.setAttribute('aria-pressed', !sm && t === k ? 'true' : 'false');
     b.addEventListener('click', () => barAction(k, sm)); row.appendChild(b);
   }
@@ -314,14 +315,14 @@ function renderToolRow() { renderBar(true); }
 function setGroup(g) { state.group = g; state.returnGroup = null; renderBar(true); updateUndoBtns(); }
 function closeGroups() { $('groups').classList.remove('open'); if (!document.querySelector('.sheet.open')) $('scrim').classList.remove('on'); }
 // The instruction strip shows only while a tool needs input or there is a result to read.
-const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text', 'pdfwin']);
+const PICK_TOOLS = new Set(['coord', 'dist', 'area', 'angle', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang']);
 function updateChrome() {
   const t = state.tool ? state.tool.name : 'select'; const hasResult = resultEl.classList.contains('on');
   $('prompt').hidden = !state.drawing || (t === 'select' && !hasResult);
   $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
   const keysUseful = ['dist', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
-  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text', 'pdfwin'].includes(t);
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang'].includes(t);
   $('btnProps').hidden = true; $('btnSimilar').hidden = true; // Properties and Similar live in the bottom bar's selection actions
   renderBar();
 }
@@ -550,6 +551,21 @@ function makeTool(name) {
       T.onTap = (sn) => { addPt(sn); const n = T.pts.length; if (n === 1) setPrompt('Tap a point on the arc.'); else if (n === 2) setPrompt('Tap the end point.'); else { const arc = arc3pt(T.pts[0], T.pts[1], T.pts[2]); if (arc) { addEntities([{ t: 'ARC', L: state.curLayer, c: 256, lt: '', ce: arc.c, r: arc.r, a0: arc.a0, a1: arc.a1 }]); toast('Arc placed'); } else toast('Points are in a line'); T.pts = []; state.lastPt = null; setPrompt('Tap the start point of the arc.'); } };
       T.draw = (c, V, acc) => { c.strokeStyle = acc; c.lineWidth = 1.5; drawPolyScreen(c, T.pts, V, false); drawDots(c, T.pts, V, acc); };
       break;
+    case 'dimlin': case 'dimali': // linear (horizontal / vertical) or aligned dimension: two points, then where the line goes
+      T.kind = name === 'dimlin' ? 'linear' : 'aligned';
+      T.prompts = ['Tap the first point to dimension.', 'Tap the second point.', name === 'dimlin' ? 'Tap where the dimension line goes: above or below for horizontal, left or right for vertical.' : 'Tap where the dimension line goes.'];
+      T.start = () => setPrompt(T.prompts[T.pts.length] || T.prompts[0]);
+      T.onTap = (sn) => { if (T.pts.length < 2) { addPt(sn); T.start(); return; } if (placeDimension(T.kind, T.pts, [sn.x, sn.y])) toast('Dimension placed'); T.pts = []; state.lastPt = null; T.start(); };
+      T.onBack = () => { T.pts.pop(); state.lastPt = T.pts.length ? T.pts[T.pts.length - 1] : null; T.start(); };
+      T.draw = (c, V, acc) => { if (T.pts.length === 2) { c.save(); c.strokeStyle = acc; c.lineWidth = 1.2; c.setLineDash([4, 3]); drawPolyScreen(c, T.pts, V, false); c.restore(); } drawDots(c, T.pts, V, acc); };
+      break;
+    case 'dimang': // angular dimension: vertex, a point on each side, then where the arc goes
+      T.prompts = ['Tap the corner (vertex) of the angle.', 'Tap a point on the first side.', 'Tap a point on the second side.', 'Tap where the arc goes (the side you tap picks the angle).'];
+      T.start = () => setPrompt(T.prompts[T.pts.length] || T.prompts[0]);
+      T.onTap = (sn) => { if (T.pts.length < 3) { addPt(sn); if (T.pts.length === 3) state.lastPt = T.pts[0]; T.start(); return; } if (placeDimension('angular', T.pts, [sn.x, sn.y])) toast('Dimension placed'); T.pts = []; state.lastPt = null; T.start(); };
+      T.onBack = () => { T.pts.pop(); state.lastPt = T.pts.length ? T.pts[T.pts.length - 1] : null; T.start(); };
+      T.draw = (c, V, acc) => { c.save(); c.strokeStyle = acc; c.lineWidth = 1.2; c.setLineDash([4, 3]); if (T.pts.length >= 2) drawPolyScreen(c, [T.pts[1], T.pts[0]], V, false); if (T.pts.length >= 3) drawPolyScreen(c, [T.pts[0], T.pts[2]], V, false); c.restore(); drawDots(c, T.pts, V, acc); };
+      break;
     case 'pdfwin': // pick the area to print
       T.start = () => setPrompt('Tap one corner of the area to print, then the opposite corner.');
       T.onTap = (sn) => { addPt(sn); if (T.pts.length === 2) { const [a, b] = T.pts; T.pts = []; state.lastPt = null; if (Math.abs(a[0] - b[0]) < 1e-9 || Math.abs(a[1] - b[1]) < 1e-9) { toast('Pick two opposite corners'); T.start(); return; } pdfWindowPicked([Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]); } else setPrompt('Now tap the opposite corner.'); };
@@ -608,16 +624,15 @@ function handleAt(X, Y) {
 }
 function startHandleDrag(i, X, Y) {
   const p = state.tool.pts[i]; const q = toScreen(p[0], p[1], state.view);
-  state.handleDrag = { i, gx: q[0] - X, gy: q[1] - Y }; state.loupe = { X: q[0], Y: q[1], fx: X, fy: Y, sn: null }; gesture = false;
+  state.handleDrag = { i, x0: X, y0: Y, orig: p.slice(), moved: false }; state.loupe = { X: q[0], Y: q[1], fx: X, fy: Y, sn: null }; gesture = false;
   try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) { }
-  updateHandleDrag(X, Y);
+  requestFast();
 }
 function updateHandleDrag(X, Y) {
   const hd = state.handleDrag, lp = state.loupe, T = state.tool; if (!hd || !lp || !T || !T.pts[hd.i]) return;
-  const px = X + hd.gx, py = Y + hd.gy; lp.fx = X; lp.fy = Y; lp.X = px; lp.Y = py;
-  // the magnifier sits above the finger (beside it near the top edge), showing the point being moved
-  if (py - POINTER_LIFT - LOUPE_R > 4) { lp.bx = px; lp.by = py - POINTER_LIFT; } else { lp.bx = px + (px < cssW / 2 ? 1 : -1) * (LOUPE_R + 46); lp.by = Math.max(LOUPE_R + 4, py); }
-  const sn = snapPoint(px, py, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
+  if (!hd.moved && Math.hypot(X - hd.x0, Y - hd.y0) < 6) return; hd.moved = true; // a plain tap on a handle changes nothing
+  lp.fx = X; lp.fy = Y; lp.X = X; lp.Y = Y - Math.max(0, Math.min(POINTER_LIFT, Y - 12)); // pointer above the finger
+  const sn = snapPoint(lp.X, lp.Y, PRECISE_SNAP_PX); lp.sn = sn; state.snapMark = sn.kind ? sn : null; showCoord(sn.x, sn.y, sn.kind);
   T.pts[hd.i] = [sn.x, sn.y]; if (hd.i === T.pts.length - 1) state.lastPt = T.pts[hd.i];
   if (T.onHandleMoved) T.onHandleMoved(hd.i, sn); else if (T.update) T.update();
   requestFast();
@@ -632,6 +647,57 @@ function handleDragLabel() {
   return '';
 }
 function endHandleDrag() { state.handleDrag = null; state.loupe = null; state.snapMark = null; gesture = false; dragStart = null; requestFull(); }
+// ----- Placed dimensions: geometry in drawing units, shared by the live preview and the object that gets created -----
+function dimTextHeight() { return state.textH || defaultTextHeight(); }
+function dimGeom(kind, P, q, th) {
+  const gap = th * 0.35, ext = th * 0.6, tick = th * 0.5, over = th * 0.45, tgap = th * 0.35; const lines = [], arcs = [];
+  const tickAt = (p, u) => { const t = [(u[0] - u[1]) * 0.7071 * tick, (u[1] + u[0]) * 0.7071 * tick]; lines.push([[p[0] - t[0], p[1] - t[1]], [p[0] + t[0], p[1] + t[1]]]); };
+  const readable = (ang) => { let a = Math.atan2(Math.sin(ang), Math.cos(ang)); if (a > Math.PI / 2 + 1e-9) a -= Math.PI; else if (a <= -Math.PI / 2 + 1e-9) a += Math.PI; return a; };
+  if (kind === 'linear' || kind === 'aligned') {
+    const [p1, p2] = P; let d1, d2;
+    if (kind === 'aligned') { const dx = p2[0] - p1[0], dy = p2[1] - p1[1], Ln = Math.hypot(dx, dy); if (Ln < 1e-9) return null; const n = [-dy / Ln, dx / Ln]; const s = (q[0] - p1[0]) * n[0] + (q[1] - p1[1]) * n[1]; d1 = [p1[0] + n[0] * s, p1[1] + n[1] * s]; d2 = [p2[0] + n[0] * s, p2[1] + n[1] * s]; }
+    else { const minX = Math.min(p1[0], p2[0]), maxX = Math.max(p1[0], p2[0]), minY = Math.min(p1[1], p2[1]), maxY = Math.max(p1[1], p2[1]); const outY = Math.max(0, q[1] - maxY, minY - q[1]), outX = Math.max(0, q[0] - maxX, minX - q[0]); const horiz = outY >= outX; d1 = horiz ? [p1[0], q[1]] : [q[0], p1[1]]; d2 = horiz ? [p2[0], q[1]] : [q[0], p2[1]]; }
+    const dl = Math.hypot(d2[0] - d1[0], d2[1] - d1[1]); if (dl < 1e-9) return null; const u = [(d2[0] - d1[0]) / dl, (d2[1] - d1[1]) / dl];
+    for (const [p, d] of [[p1, d1], [p2, d2]]) { const ex = d[0] - p[0], ey = d[1] - p[1], el = Math.hypot(ex, ey); if (el > gap) { const e = [ex / el, ey / el]; lines.push([[p[0] + e[0] * gap, p[1] + e[1] * gap], [d[0] + e[0] * ext, d[1] + e[1] * ext]]); } }
+    lines.push([[d1[0] - u[0] * over, d1[1] - u[1] * over], [d2[0] + u[0] * over, d2[1] + u[1] * over]]); tickAt(d1, u); tickAt(d2, u);
+    const rot = readable(Math.atan2(u[1], u[0])); const up = [-Math.sin(rot), Math.cos(rot)];
+    return { lines, arcs, text: { p: [(d1[0] + d2[0]) / 2 + up[0] * tgap, (d1[1] + d2[1]) / 2 + up[1] * tgap], rot, s: fmtDimText(mLen(d1, d2)) } };
+  }
+  if (kind === 'angular') {
+    const [v, a, b] = P; const ra = Math.hypot(a[0] - v[0], a[1] - v[1]), rb = Math.hypot(b[0] - v[0], b[1] - v[1]); if (ra < 1e-9 || rb < 1e-9) return null;
+    const A0 = Math.atan2(a[1] - v[1], a[0] - v[0]), B0 = Math.atan2(b[1] - v[1], b[0] - v[0]); const r = Math.max(Math.hypot(q[0] - v[0], q[1] - v[1]), th);
+    const Q = Math.atan2(q[1] - v[1], q[0] - v[0]); let s0 = A0, s1 = B0, sweep = normAng(B0 - A0); if (sweep < 1e-9) return null;
+    if (normAng(Q - A0) > sweep) { s0 = B0; s1 = A0; sweep = TAU - sweep; } // the finger is on the other side: dimension that angle
+    arcs.push({ c: v.slice(), r, a0: s0, a1: s0 + sweep });
+    for (const [ang, len] of [[A0, ra], [B0, rb]]) if (r > len + gap) { const e = [Math.cos(ang), Math.sin(ang)]; lines.push([[v[0] + e[0] * (len + gap), v[1] + e[1] * (len + gap)], [v[0] + e[0] * (r + ext), v[1] + e[1] * (r + ext)]]); }
+    for (const ang of [s0, s0 + sweep]) tickAt([v[0] + Math.cos(ang) * r, v[1] + Math.sin(ang) * r], [-Math.sin(ang), Math.cos(ang)]);
+    const m = s0 + sweep / 2; const o = [Math.cos(m), Math.sin(m)]; const rot = readable(m - Math.PI / 2); const up = [-Math.sin(rot), Math.cos(rot)];
+    const rr = r + tgap + (up[0] * o[0] + up[1] * o[1] < 0 ? th : 0); const dg = deg(sweep);
+    return { lines, arcs, text: { p: [v[0] + o[0] * rr, v[1] + o[1] * rr], rot, s: (Math.abs(dg - Math.round(dg)) < 0.005 ? String(Math.round(dg)) : dg.toFixed(2)) + '°' } };
+  }
+  return null;
+}
+function drawDimPreview(c, V, G, acc) {
+  c.save(); c.strokeStyle = acc; c.fillStyle = acc; c.lineWidth = 1.5; c.setLineDash([]); c.beginPath();
+  for (const [a, b] of G.lines) { const A = toScreen(a[0], a[1], V), B = toScreen(b[0], b[1], V); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); }
+  for (const ar of G.arcs) { const C = toScreen(ar.c[0], ar.c[1], V); c.moveTo(C[0] + Math.cos(-ar.a0) * ar.r * V.s, C[1] + Math.sin(-ar.a0) * ar.r * V.s); c.arc(C[0], C[1], ar.r * V.s, -ar.a0, -ar.a1, true); }
+  c.stroke();
+  const th = dimTextHeight(); const px = Math.max(9, th * V.s / CAP); const T = toScreen(G.text.p[0], G.text.p[1], V);
+  c.translate(T[0], T[1]); c.rotate(-G.text.rot); c.font = '600 ' + px + 'px ' + TEXT_FONT; c.textAlign = 'center'; c.textBaseline = 'alphabetic'; c.fillText(G.text.s, 0, 0);
+  c.restore();
+}
+// The dimension becomes one object: a block of lines, ticks and text (ByBlock, on the current layer), marked as a dimension
+function placeDimension(kind, P, q) {
+  const th = dimTextHeight(); const G = dimGeom(kind, P, q, th); if (!G) { toast('Pick two different points'); return false; }
+  const D = state.drawing; let name; do { name = 'TC_DIM_' + Math.random().toString(36).slice(2, 8).toUpperCase(); } while (D.blocks[name]);
+  const ents = [];
+  for (const [a, b] of G.lines) ents.push({ id: nextId(), hd: '', t: 'LINE', L: '0', c: 0, lt: '', a: a.slice(), b: b.slice() });
+  for (const ar of G.arcs) ents.push({ id: nextId(), hd: '', t: 'ARC', L: '0', c: 0, lt: '', ce: ar.c.slice(), r: ar.r, a0: normAng(ar.a0), a1: normAng(ar.a1) });
+  ents.push({ id: nextId(), hd: '', t: 'TEXT', L: '0', c: 0, lt: '', p: G.text.p.slice(), ap: G.text.p.slice(), h: th, rot: G.text.rot, s: G.text.s, ha: 1, va: 0, wf: 1 });
+  D.blocks[name] = { base: [0, 0], ents };
+  addEntities([{ t: 'INSERT', L: state.curLayer, c: 256, lt: '', n: name, p: [0, 0], sx: 1, sy: 1, rot: 0, dim: true, dimDef: { kind, pts: P.map(p => p.slice()), q: q.slice() } }]);
+  return true;
+}
 // ----- Rubber band: while you hold a finger on the drawing (magnifier) or hover a mouse, the next segment or shape
 // follows the live snapped point from the tool's last point.
 function liveSnap() { if (state.loupe && state.loupe.sn) return state.loupe.sn; return state.hoverSn || null; }
@@ -648,6 +714,11 @@ function drawRubber(c, V, acc) {
     case 'spline': if (pts.length) { const flat = catmullPoints(pts.concat([[lp.x, lp.y]]), false, [], null); c.beginPath(); for (let i = 0; i < flat.length; i += 2) { const p = toScreen(flat[i], flat[i + 1], V); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); } c.stroke(); } break;
     case 'area': if (pts.length) { seg(pts[pts.length - 1]); if (pts.length >= 2) seg(pts[0], true); } break;
     case 'dist': { const b = rubberBase(); if (b) { c.restore(); drawDimLine(c, V, b, [lp.x, lp.y], fmtLen(mLen(b, [lp.x, lp.y])), acc); return; } break; }
+    case 'dimlin': case 'dimali': case 'dimang': {
+      const need = T.name === 'dimang' ? 3 : 2;
+      if (pts.length === need) { c.restore(); const G = dimGeom(T.name === 'dimlin' ? 'linear' : T.name === 'dimali' ? 'aligned' : 'angular', pts, [lp.x, lp.y], dimTextHeight()); if (G) drawDimPreview(c, V, G, acc); return; }
+      if (pts.length) seg(T.name === 'dimang' ? pts[0] : pts[pts.length - 1]); break;
+    }
     case 'text': case 'coord': case 'pdfwin': break;
     default: { const b = rubberBase(); if (b) seg(b); }
   }
