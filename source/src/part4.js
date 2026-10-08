@@ -105,7 +105,8 @@ function drawScene(S, V, onLight, clipWorld) {
       if (k.lt) { const pat = lts[k.lt]; if (pat && pat.length) { let per = 0; const arr = []; const f = ltscale * (k.lts || 1); for (const v of pat) { const a = Math.abs(v) * f; arr.push(a < 1e-9 ? 0.5 / V.s : a); per += a; } if (per * V.s > 6) wantDash = arr; } }
       if (wantDash) { ctx.setLineDash(wantDash); dashed = true; } else if (dashed) { ctx.setLineDash([]); dashed = false; }
       if (RENDER.lw) ctx.lineWidth = lwOut(k.lw, 1);
-      ctx.stroke(k.path);
+      const bold = !RENDER.lw && k.layer === MK_LAYER; if (bold) ctx.lineWidth = 2 / V.s; // markups a little bolder on screen
+      ctx.stroke(k.path); if (bold) ctx.lineWidth = 1 / V.s;
     }
     // block instances: the block's fills, wipeouts, then its lines
     if (it.inst) for (const ins of it.inst) {
@@ -118,7 +119,7 @@ function drawScene(S, V, onLight, clipWorld) {
         const dpx = g.diag * ins.scale * V.s;
         if (!RENDER.pdf && g.segs > 150 && g.segs > dpx * 12) { // too dense to matter at this size: draw its outline only
           const k0 = g.paths[0]; ctx.strokeStyle = aciCss(k0.aci, onLight); ctx.globalAlpha = 0.7 * (k0.al == null ? 1 : k0.al); ctx.strokeRect(g.bbox[0], g.bbox[1], g.bbox[2] - g.bbox[0], g.bbox[3] - g.bbox[1]);
-        } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; ctx.strokeStyle = aciCss(k.aci, onLight); ctx.globalAlpha = k.al == null ? 1 : k.al; if (RENDER.lw) ctx.lineWidth = lwOut(k.lw, ins.scale); ctx.stroke(k.path); }
+        } else for (const k of g.paths) { if (!k.n || !layerOn(k.layer)) continue; ctx.strokeStyle = aciCss(k.aci, onLight); ctx.globalAlpha = k.al == null ? 1 : k.al; if (RENDER.lw) ctx.lineWidth = lwOut(k.lw, ins.scale); else ctx.lineWidth = (k.layer === MK_LAYER ? 2 : 1) / (V.s * ins.scale); ctx.stroke(k.path); }
       }
       ctx.restore(); lastCol = null; lastAl = 1; ctx.globalAlpha = 1;
     }
@@ -200,13 +201,14 @@ function drawOverlay() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (state.tool && state.tool.draw) state.tool.draw(ctx, V, acc);
   drawRubber(ctx, V, acc); // line / shape following the finger from the last point
+  { const ls = state.loupe ? state.loupe.sn : state.snapMark; if (ls && ls.base && (ls.kind === 12 || ls.kind === 13)) drawPolarTrack(ctx, V, ls, !state.loupe); }
   // snap marker
   const sn = state.snapMark; if (sn) { const [X, Y] = toScreen(sn.x, sn.y, V); drawSnapMarker(ctx, X, Y, sn.kind, 6, acc); }
   // crosshair at last picked point
   if (state.lastPt) { const [X, Y] = toScreen(state.lastPt[0], state.lastPt[1], V); ctx.save(); ctx.strokeStyle = acc; ctx.globalAlpha = 0.8; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X - 10, Y); ctx.lineTo(X + 10, Y); ctx.moveTo(X, Y - 10); ctx.lineTo(X, Y + 10); ctx.stroke(); ctx.restore(); }
   if (state.loupe) drawLoupe(acc);
 }
-const SNAP_NAMES = { 0: 'Free point', 1: 'Endpoint', 2: 'Midpoint', 3: 'Centre', 4: 'Insertion', 5: 'Intersection', 6: 'Nearest', 7: 'Quadrant', 8: 'Node', 9: 'Perpendicular', 10: 'Tangent', 11: 'Geometric centre' };
+const SNAP_NAMES = { 0: 'Free point', 1: 'Endpoint', 2: 'Midpoint', 3: 'Centre', 4: 'Insertion', 5: 'Intersection', 6: 'Nearest', 7: 'Quadrant', 8: 'Node', 9: 'Perpendicular', 10: 'Tangent', 11: 'Geometric centre', 12: 'Polar', 13: 'Polar + object' };
 // AutoCAD-style markers: square endpoint, triangle midpoint, circle centre, X intersection, hourglass nearest
 function drawSnapMarker(c, X, Y, kind, r, col) {
   if (!kind) return;
@@ -223,6 +225,8 @@ function drawSnapMarker(c, X, Y, kind, r, col) {
     else if (kind === 9) { c.moveTo(X - r, Y - r); c.lineTo(X - r, Y + r); c.lineTo(X + r, Y + r); c.moveTo(X - r, Y); c.lineTo(X, Y); c.lineTo(X, Y + r); }
     else if (kind === 10) { c.arc(X, Y + r * 0.25, r * 0.75, 0, TAU); c.moveTo(X - r, Y - r * 0.5); c.lineTo(X + r, Y - r * 0.5); }
     else if (kind === 11) { c.arc(X, Y, r, 0, TAU); c.moveTo(X - r * 0.55, Y); c.lineTo(X + r * 0.55, Y); c.moveTo(X, Y - r * 0.55); c.lineTo(X, Y + r * 0.55); }
+    else if (kind === 12) { const q = r * 0.6; c.moveTo(X - q, Y - q); c.lineTo(X + q, Y + q); c.moveTo(X - q, Y + q); c.lineTo(X + q, Y - q); }
+    else if (kind === 13) { c.moveTo(X - r, Y - r); c.lineTo(X + r, Y + r); c.moveTo(X - r, Y + r); c.lineTo(X + r, Y - r); c.moveTo(X + r * 1.25, Y); c.arc(X, Y, r * 1.25, 0, TAU); }
   };
   path(); c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 4; c.stroke();
   path(); c.strokeStyle = col; c.lineWidth = 2; c.stroke();

@@ -29,7 +29,9 @@ const NEAR_K = 1.3; // Nearest catches a little further out than point snaps
 // Nearest is used only when nothing else is close.
 function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y,kind,item,vp}
   const V = state.view; const w = toWorld(X, Y, V); const tol = (tolPx || 16) / V.s;
-  if (!state.drawing || !state.snapOn) return { x: w[0], y: w[1], kind: 0 };
+  if (!state.drawing) return { x: w[0], y: w[1], kind: 0 };
+  const pb = polarBase(); const ptol = Math.max(9, (tolPx || 16) * 0.8) / V.s; // polar tracking from the last point
+  if (!state.snapOn) return (pb && polarPoint(w, pb, ptol, null)) || { x: w[0], y: w[1], kind: 0 };
   const S = getScene(state.spaceIdx); const cands = [];
   const base = (snapOn[9] || snapOn[10]) && state.lastPt ? state.lastPt : null;
   // on the sheet (or in model space)
@@ -51,6 +53,7 @@ function snapPoint(X, Y, tolPx) { // screen -> world with snapping; returns {x,y
     if (h2 && h2.x != null && base && vpAt(base[0], base[1]) === vp) { const d = dynSnap(h2.item, m, paperToModel(vp, base), mt); if (d) push(d[0], d[1], d[2], h2.item); }
   }
   if (cands.length) { let best = null, bsc = Infinity; for (const c of cands) { const k = c.kind === 1 ? 0.8 : c.kind === 5 ? 0.85 : c.kind === 3 ? 0.9 : 1; if (c.d * k < bsc) { bsc = c.d * k; best = c; } } return best; }
+  if (pb) { const ps = polarPoint(w, pb, ptol, S); if (ps) return ps; } // point snaps win; polar wins over Nearest
   if (snapOn[6]) {
     if (onSheet) return { x: hit.x, y: hit.y, kind: 6, item: hit.item };
     if (h2 && h2.x != null) { const q = modelToPaper(vp, [h2.x, h2.y]); return { x: q[0], y: q[1], kind: 6, item: h2.item, vp }; }
@@ -278,14 +281,14 @@ function selSummary() {
   return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => n + ' ' + k).join(', ') + (c.size > 3 ? '…' : '');
 }
 // The instruction strip shows only while a tool needs input or there is a result to read.
-const PICK_TOOLS = new Set(['coord', 'dist', 'cont', 'area', 'angle', 'facade', 'mscale', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'ellipse', 'revcloud', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont']);
+const PICK_TOOLS = new Set(['coord', 'dist', 'cont', 'area', 'angle', 'facade', 'mscale', 'move', 'copy', 'rotate', 'scale', 'mirror', 'align', 'line', 'pline', 'spline', 'rect', 'circle', 'arc', 'ellipse', 'revcloud', 'text', 'leader', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont']);
 function updateChrome() {
   const t = state.tool ? state.tool.name : 'select'; const hasResult = resultEl.classList.contains('on');
   $('prompt').hidden = !state.drawing || (t === 'select' && !hasResult);
   $('hud').hidden = !state.drawing || !PICK_TOOLS.has(t);
-  const keysUseful = ['dist', 'cont', 'facade', 'mscale', 'divide', 'ellipse', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
+  const keysUseful = ['dist', 'cont', 'facade', 'mscale', 'divide', 'ellipse', 'mnum', 'line', 'pline', 'spline', 'rect', 'circle', 'move', 'copy', 'rotate', 'scale', 'coord'].includes(t);
   $('btnKeys').hidden = !keysUseful; if (!keysUseful) { $('promptRow').hidden = true; $('btnKeys').setAttribute('aria-pressed', 'false'); }
-  $('btnBack').hidden = ['select', 'info', 'box', 'coord', 'entity', 'arclen', 'laycur', 'layoff', 'divide'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'ellipse', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont', 'entity', 'arclen', 'mscale', 'laycur', 'layoff', 'sketch', 'revcloud', 'divide'].includes(t);
+  $('btnBack').hidden = ['select', 'info', 'box', 'coord', 'entity', 'arclen', 'laycur', 'layoff', 'divide'].includes(t); $('btnDone').hidden = ['select', 'info', 'box', 'coord', 'angle', 'rect', 'circle', 'arc', 'ellipse', 'text', 'pdfwin', 'dimlin', 'dimali', 'dimang', 'dimrad', 'dimdia', 'dimarc', 'dimcont', 'entity', 'arclen', 'mscale', 'laycur', 'layoff', 'sketch', 'revcloud', 'divide', 'leader', 'mpen', 'marrow', 'mtext', 'mcloud', 'mline', 'mrect', 'mellipse', 'mleader', 'mnum'].includes(t);
   $('btnProps').hidden = true; $('btnSimilar').hidden = true; // Properties and Similar live in the bottom bar's selection actions
   renderBar();
 }
@@ -306,7 +309,7 @@ function startTool(name, keepSel) {
   requestFast();
 }
 // Anonymous *U blocks are dynamic blocks in a non-default state
-function blockLabel(n) { return /^\*U/i.test(n || '') ? 'Dynamic block' : 'Block · ' + n; }
+function blockLabel(n) { return /^\*U/i.test(n || '') ? 'Dynamic block' : /^TC_MK_/.test(n || '') ? 'Markup' : /^TC_DIM_/.test(n || '') ? 'Dimension' : 'Block · ' + n; }
 function describeItem(it) {
   const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t], ['Layer', resolveLayer(e, { layer: null })]];
   const col = e.rgb ? 'RGB ' + e.rgb : (e.c === 256 || e.c == null) ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);

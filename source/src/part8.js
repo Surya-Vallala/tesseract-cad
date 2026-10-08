@@ -2,6 +2,18 @@
 
 // ----- Icons and names -----
 Object.assign(ICON, {
+  c_markup: '<path d="M4 4h16v11H10l-5 4.5V15H4z"/><path d="M8 8.5h8M8 11.5h5"/>',
+  mpen: '<path d="M3 18c3-1 3-5 6-5s2 4 5 4 3-3 3-3"/><path d="M15 9l4-4 2 2-4 4-3 1z"/>',
+  marrow: '<path d="M5 19 19 5M10 5h9v9"/>',
+  mtext: '<path d="M6 19 12 5l6 14M8.5 14h7"/>',
+  mcloud: '<path d="M6.5 18a3.2 3.2 0 0 1-.4-6.4 4.3 4.3 0 0 1 8-2.2 3.6 3.6 0 0 1 5.6 3.4A2.6 2.6 0 0 1 19 18z"/>',
+  mline: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="1.5"/><circle cx="20" cy="4" r="1.5"/>',
+  mrect: '<rect x="4" y="6" width="16" height="12"/>',
+  mellipse: '<ellipse cx="12" cy="12" rx="9" ry="5.5"/>',
+  leader: '<path d="M3 21l8-10h3"/><path d="M3 21l.6-3.6M3 21l3.6-.6"/><path d="M15 7h6M15 11h6M15 15h4"/>',
+  mleader: '<path d="M3 21l8-10h3"/><path d="M3 21l.6-3.6M3 21l3.6-.6"/><path d="M15 7h6M15 11h6M15 15h4"/>',
+  mnum: '<circle cx="12" cy="12" r="8.5"/><text x="12" y="15.6" text-anchor="middle" font-size="10.5" font-family="Jost,sans-serif" font-weight="600" fill="currentColor" stroke="none">1</text>',
+  mhide: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20 20 4"/>',
   c_draw: '<path d="M4 20l1.2-4.2L16.5 4.5l3 3L8.2 18.8z"/><path d="M14.5 6.5l3 3"/>',
   c_edit: '<path d="M11 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6"/><path d="M10 14l.8-3.2L18.5 3l2.5 2.5-7.8 7.7z"/>',
   c_layer: '<path d="M12 4 3 9l9 5 9-5zM3 14l9 5 9-5"/>',
@@ -35,14 +47,15 @@ Object.assign(ICON, {
   layprev: '<path d="M13 7 6 11l7 4 7-4zM6 16l7 4 7-4"/><path d="M3 6h7M3 6l3-3M3 6l3 3"/>'
 });
 // names shown on the instruction bar while a tool runs
-Object.assign(LABEL, { cont: 'Continuous', arclen: 'Arc length', entity: 'Object', batch: 'Total of many', facade: 'Wall area', mscale: 'Set scale', dimrad: 'Dim radius', dimdia: 'Dim diameter', dimarc: 'Dim arc length', dimcont: 'Dim continue', dimang: 'Dim angular', ellipse: 'Ellipse', sketch: 'Sketch', revcloud: 'Revcloud', divide: 'Divide', laycur: 'Make current', layoff: 'Layer off', layiso: 'Off others', arc: 'Arc' });
+Object.assign(LABEL, { mpen: 'Pen', marrow: 'Arrow', mtext: 'Text note', mcloud: 'Cloud', mline: 'Line', mrect: 'Rectangle', mellipse: 'Ellipse', mleader: 'Leader', mnum: 'Number tag', leader: 'Leader', cont: 'Continuous', arclen: 'Arc length', entity: 'Object', batch: 'Total of many', facade: 'Wall area', mscale: 'Set scale', dimrad: 'Dim radius', dimdia: 'Dim diameter', dimarc: 'Dim arc length', dimcont: 'Dim continue', dimang: 'Dim angular', ellipse: 'Ellipse', sketch: 'Sketch', revcloud: 'Revcloud', divide: 'Divide', laycur: 'Make current', layoff: 'Layer off', layiso: 'Off others', arc: 'Arc' });
 // names in the tool grid (shorter where the category already says what it is)
 const GRID_LABEL = { dimlin: 'Linear', dimali: 'Aligned', dimang: 'Angular', dimrad: 'Radius', dimdia: 'Diameter', dimarc: 'Arc length', dimcont: 'Continue', laylist: 'Layer list', laynew: 'New layer', laycur: 'Make current', layoff: 'Layer off', layiso: 'Off others', layon: 'All on', layprev: 'Previous', results: 'Results', totals: 'Totals', precision: 'Decimals', arc: 'Arc', more: 'More', props: 'Properties', clearsel: 'Clear', batch: 'Total of many' };
-const gridLabel = (k) => GRID_LABEL[k] || LABEL[k] || k;
+const gridLabel = (k) => k === 'mhide' ? (state.drawing && state.layerMap.has(MK_LAYER) && !layerOn(MK_LAYER) ? 'Show markups' : 'Hide markups') : GRID_LABEL[k] || LABEL[k] || k;
 
 // ----- Bottom bar: categories; a category opens a grid of its tools -----
 const CATS = [
-  { id: 'draw', name: 'Draw', icon: 'c_draw', tools: ['line', 'pline', 'rect', 'circle', 'arc', 'ellipse', 'spline', 'text', 'sketch', 'revcloud', 'divide'] },
+  { id: 'markup', name: 'Markup', icon: 'c_markup', tools: ['mpen', 'marrow', 'mtext', 'mcloud', 'mline', 'mrect', 'mellipse', 'mleader', 'mnum', 'mhide'] },
+  { id: 'draw', name: 'Draw', icon: 'c_draw', tools: ['line', 'pline', 'rect', 'circle', 'arc', 'ellipse', 'spline', 'text', 'leader', 'sketch', 'revcloud', 'divide'] },
   { id: 'edit', name: 'Edit', icon: 'c_edit', tools: ['box', 'move', 'copy', 'rotate', 'mirror', 'scale', 'align', 'order', 'delete'] },
   { id: 'layer', name: 'Layer', icon: 'c_layer', tools: ['laylist', 'laynew', 'laycur', 'layoff', 'layiso', 'layon', 'layprev'] },
   { id: 'measure', name: 'Measure', icon: 'c_measure', tools: ['dist', 'cont', 'area', 'angle', 'coord', 'arclen', 'entity', 'batch', 'facade', 'mscale', 'results', 'totals', 'precision'] },
@@ -118,6 +131,7 @@ function runTool(k) {
     case 'results': openResults('list'); return;
     case 'totals': openResults('totals'); return;
     case 'precision': openDecimals(); return;
+    case 'mhide': toggleMarkups(); return;
   }
   startTool(k);
 }
@@ -396,14 +410,14 @@ function contGeom(base, np) {
 }
 
 // ----- Revision cloud: arcs along a closed outline, bulging outward -----
-function placeCloud(poly) {
+function placeCloud(poly, layer) {
   if (poly.length < 3) { toast('Draw around an area'); return false; }
   const ring = poly.concat([poly[0]]); let L = 0; for (let i = 1; i < ring.length; i++) L += Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]); if (!(L > 0)) return false;
   let chord = 26 / state.view.s; const p10 = Math.pow(10, Math.floor(Math.log10(chord))); chord = [1, 2, 2.5, 5, 10].map(f => f * p10).reduce((a, b) => Math.abs(b - chord) < Math.abs(a - chord) ? b : a); // a round size
   const n = Math.max(6, Math.round(L / chord)); const step = L / n; const out = []; let seg = 1, acc = 0;
   for (let k = 0; k < n; k++) { const target = k * step; while (seg < ring.length - 1 && acc + Math.hypot(ring[seg][0] - ring[seg - 1][0], ring[seg][1] - ring[seg - 1][1]) < target) { acc += Math.hypot(ring[seg][0] - ring[seg - 1][0], ring[seg][1] - ring[seg - 1][1]); seg++; } const a = ring[seg - 1], b = ring[seg]; const sl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; const t = Math.min(1, (target - acc) / sl); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
   const flat = []; for (const p of out) flat.push(p[0], p[1]); const bulge = polyArea(flat) > 0 ? 0.55 : -0.55; // outward for either direction
-  addEntities([{ t: 'PLINE', L: state.curLayer, c: 256, lt: '', v: out.map(p => [p[0], p[1], bulge]), closed: true, w: 0 }]); toast('Revision cloud placed'); return true;
+  addEntities([{ t: 'PLINE', L: layer || state.curLayer, c: 256, lt: '', v: out.map(p => [p[0], p[1], bulge]), closed: true, w: 0 }]); toast(layer === MK_LAYER ? 'Cloud placed' : 'Revision cloud placed'); return true;
 }
 // ----- Divide: points at equal spacing along an object -----
 function dividePoints(e, it, n) {
@@ -585,6 +599,8 @@ function moreTool(T, name, addPt) {
       T.rubber = (c, V, acc, lp) => { if (name === 'revcloud' && T.pts.length === 1) { const A = toScreen(T.pts[0][0], T.pts[0][1], V), L = toScreen(lp.x, lp.y, V); c.save(); c.strokeStyle = acc; c.lineWidth = 1.6; c.setLineDash([6, 4]); c.strokeRect(Math.min(A[0], L[0]), Math.min(A[1], L[1]), Math.abs(L[0] - A[0]), Math.abs(L[1] - A[1])); c.restore(); } };
       break;
     }
+    case 'leader': leaderTool(T, false); break;
+    case 'mpen': case 'marrow': case 'mtext': case 'mcloud': case 'mline': case 'mrect': case 'mellipse': case 'mleader': case 'mnum': markupTool(T, name); break;
     case 'divide':
       T.start = () => { T.ent = null; T.item = null; setPrompt('Tap the object to divide: a line, arc, circle, polyline, spline or ellipse.'); };
       T.onTap = (sn, hit) => {
@@ -601,6 +617,180 @@ function moreTool(T, name, addPt) {
       break;
   }
 }
+
+// ===================== Markup (drawn): red, on its own layer inside the drawing =====================
+// Sizes follow the zoom when you draw (a round number of drawing units), so notes read the same on screen at any scale.
+const MK_LAYER = 'TS - Markup';
+function ensureMarkupLayer() {
+  const D = state.drawing; let l = state.layerMap.get(MK_LAYER);
+  if (!l) { l = { name: MK_LAYER, aci: 1, off: false, frozen: false, locked: false, lw: 35, lt: 'Continuous' }; D.layers.push(l); state.layerMap.set(MK_LAYER, l); state.layerVis.set(MK_LAYER, true); renderLayers(); }
+  else if (!layerOn(MK_LAYER)) { state.layerVis.set(MK_LAYER, true); layersChanged(); toast('Markups shown'); }
+  return MK_LAYER;
+}
+function toggleMarkups() {
+  if (!state.layerMap.has(MK_LAYER)) { toast('No markups in this drawing yet'); return; }
+  const on = !layerOn(MK_LAYER); pushLayerHist(); state.layerVis.set(MK_LAYER, on); layersChanged(); toast(on ? 'Markups shown' : 'Markups hidden · Hide/Show markups brings them back');
+}
+function mkSize(px) { const v = px / state.view.s; const p10 = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 2.5, 5, 10].map(f => f * p10).reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a); }
+// several pieces kept as one object: a block (pieces ByBlock) inserted on the layer, like the app's dimensions
+function placeGroup(kind, pieces, layer, extra) {
+  const D = state.drawing; let name; do { name = 'TC_MK_' + Math.random().toString(36).slice(2, 8).toUpperCase(); } while (D.blocks[name]);
+  D.blocks[name] = { base: [0, 0], ents: pieces.map(e => Object.assign({ id: nextId(), hd: '', L: '0', c: 0, lt: '' }, e)) };
+  addEntities([Object.assign({ t: 'INSERT', L: layer, c: 256, lt: '', n: name, p: [0, 0], sx: 1, sy: 1, rot: 0, mk: kind }, extra || {})]);
+}
+function arrowHead(tip, from, hl) { const dx = tip[0] - from[0], dy = tip[1] - from[1], L = Math.hypot(dx, dy) || 1; const u = [dx / L, dy / L]; const hw = hl * 0.32; const b = [tip[0] - u[0] * hl, tip[1] - u[1] * hl]; const n = [-u[1] * hw, u[0] * hw]; return { solid: { t: 'SOLID', pts: [tip.slice(), [b[0] + n[0], b[1] + n[1]], [b[0] - n[0], b[1] - n[1]], [b[0] - n[0], b[1] - n[1]]] }, neck: [tip[0] - u[0] * hl * 0.85, tip[1] - u[1] * hl * 0.85] }; }
+// geometry of the two-point markups, shared by the live preview and the objects created
+function mkShape(kind, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  switch (kind) {
+    case 'mline': return Math.hypot(dx, dy) > 0 ? { ents: [{ t: 'LINE', a: a.slice(), b: b.slice() }] } : null;
+    case 'mrect': return Math.abs(dx) > 0 && Math.abs(dy) > 0 ? { ents: [{ t: 'PLINE', v: [[a[0], a[1], 0], [b[0], a[1], 0], [b[0], b[1], 0], [a[0], b[1], 0]], closed: true, w: 0 }] } : null;
+    case 'mellipse': { const rx = Math.abs(dx) / 2, ry = Math.abs(dy) / 2; if (!(rx > 0 && ry > 0)) return null; const c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; return { ents: [rx >= ry ? { t: 'ELLIPSE', ce: c, m: [rx, 0], k: ry / rx, a0: 0, a1: TAU } : { t: 'ELLIPSE', ce: c, m: [0, ry], k: rx / ry, a0: 0, a1: TAU }] }; }
+    case 'marrow': { const hl = mkSize(14); if (Math.hypot(dx, dy) < hl * 1.4) return null; const h = arrowHead(b, a, hl); return { group: true, ents: [{ t: 'LINE', a: a.slice(), b: h.neck }, h.solid] }; }
+  }
+  return null;
+}
+function drawMkPreview(c, V, kind, a, b, col) {
+  const sh = mkShape(kind, a, b); if (!sh) return; c.save(); c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 2; c.setLineDash([]);
+  for (const e of sh.ents) {
+    c.beginPath();
+    if (e.t === 'LINE') { const A = toScreen(e.a[0], e.a[1], V), B = toScreen(e.b[0], e.b[1], V); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke(); }
+    else if (e.t === 'PLINE') { e.v.forEach((p, i) => { const Q = toScreen(p[0], p[1], V); i ? c.lineTo(Q[0], Q[1]) : c.moveTo(Q[0], Q[1]); }); c.closePath(); c.stroke(); }
+    else if (e.t === 'ELLIPSE') { const C = toScreen(e.ce[0], e.ce[1], V); const A = Math.hypot(e.m[0], e.m[1]); c.ellipse(C[0], C[1], A * V.s, A * e.k * V.s, -Math.atan2(e.m[1], e.m[0]), 0, TAU); c.stroke(); }
+    else if (e.t === 'SOLID') { e.pts.forEach((p, i) => { const Q = toScreen(p[0], p[1], V); i ? c.lineTo(Q[0], Q[1]) : c.moveTo(Q[0], Q[1]); }); c.closePath(); c.fill(); }
+  }
+  c.restore();
+}
+function nextTagNumber() { let n = 0; for (const e of curSpace().ents) if (e.mk === 'tag' && e.num > n) n = e.num; return n + 1; }
+// Leader: an arrow to a point, a short landing and a text. Markup: red, sizes from the zoom; Draw: current layer, text height as dimensions.
+function placeLeader(tip, at, text, h, layer, mk) {
+  const hl = mk ? mkSize(14) : h * 1.2; const dir = at[0] >= tip[0] ? 1 : -1; const land = h * 1.2, gap = h * 0.5;
+  const arrow = arrowHead(tip, at, hl); const end = [at[0] + dir * land, at[1]];
+  const pieces = [{ t: 'LINE', a: at.slice(), b: arrow.neck }, arrow.solid, { t: 'LINE', a: at.slice(), b: end }, { t: 'TEXT', p: [end[0] + dir * gap, end[1]], ap: [end[0] + dir * gap, end[1]], h, rot: 0, s: text, ha: dir > 0 ? 0 : 2, va: 2, wf: 1 }];
+  placeGroup(mk ? 'leader' : 'dleader', pieces, layer); toast('Leader placed');
+}
+function leaderTool(T, mk) {
+  const layer = () => mk ? ensureMarkupLayer() : state.curLayer; const th = () => mk ? mkSize(13) : dimTextHeight();
+  const msg = 'Tap the point the arrow shows' + (mk ? ' (or drag from it to where the text goes).' : '.');
+  T.pts = [];
+  T.start = () => { T.pts = []; state.lastPt = null; setPrompt(msg); };
+  const ask = (tip, at) => { if (Math.hypot(at[0] - tip[0], at[1] - tip[1]) < (mk ? mkSize(14) : th()) * 1.4) { toast('Put the text a little further from the point'); T.start(); return; } T.pts = [tip, at]; openTextDialog(at, { h: th(), onText: (s, h) => { placeLeader(tip, at, s, h, layer(), mk); T.start(); }, onCancel: () => T.start() }); setPrompt('Type the text for the leader.'); };
+  T.onTap = (sn, hit, ev, w) => { const p = mk ? (w || [sn.x, sn.y]) : [sn.x, sn.y]; if (!T.pts.length) { T.pts = [p]; state.lastPt = p; setPrompt('Tap where the text goes.'); return; } ask(T.pts[0], p); };
+  if (mk) { T.freehand = true; T.strokeMove = (X, Y, ds) => { const V = state.view; if (!T.stroke) T.stroke = [toWorld(ds.X, ds.Y, V)]; T.stroke[1] = toWorld(X, Y, V); }; T.strokeEnd = () => { const S = T.stroke; T.stroke = null; if (S && S.length === 2) ask(S[0], S[1]); }; }
+  T.onBack = () => { if (T.pts.length) { T.start(); return; } undo(); };
+  T.draw = (c, V, acc) => { const S = T.stroke || (T.pts.length === 2 ? T.pts : null); if (S && S.length === 2) { drawMkPreview(c, V, 'marrow', S[1], S[0], acc); } drawDots(c, T.pts.slice(0, 1), V, acc); };
+  T.rubber = (c, V, acc, lp) => { if (T.pts.length === 1) drawMkPreview(c, V, 'marrow', [lp.x, lp.y], T.pts[0], acc); };
+}
+function markupTool(T, name) {
+  const col = '#ff3b30'; const twoPt = ['marrow', 'mline', 'mrect', 'mellipse'].includes(name);
+  if (name === 'mleader') { leaderTool(T, true); return; }
+  T.n = 0; T.pts = [];
+  if (twoPt) {
+    const what = { marrow: 'Tap where the arrow starts, then where it points', mline: 'Tap the two ends of the line', mrect: 'Tap two opposite corners', mellipse: 'Tap two opposite corners of the box around the ellipse' }[name];
+    T.freehand = true;
+    T.start = () => { T.pts = []; setPrompt(what + ', or drag. Two fingers move and zoom.'); };
+    const make = (a, b) => { const sh = mkShape(name, a, b); if (!sh) { toast(name === 'marrow' ? 'Make the arrow a little longer' : 'Make it a little bigger'); return false; } const L = ensureMarkupLayer(); if (sh.group) placeGroup('arrow', sh.ents, L); else addEntities(sh.ents.map(e => Object.assign({ L, c: 256, lt: '' }, e))); T.n++; return true; };
+    T.strokeMove = (X, Y, ds) => { const V = state.view; if (!T.stroke) T.stroke = [toWorld(ds.X, ds.Y, V)]; T.stroke[1] = toWorld(X, Y, V); };
+    T.strokeEnd = () => { const S = T.stroke; T.stroke = null; T.pts = []; if (S && S.length === 2) make(S[0], S[1]); T.start(); };
+    T.onTap = (sn, hit, ev, w) => { const p = w || [sn.x, sn.y]; T.pts.push(p); if (T.pts.length < 2) { setPrompt(name === 'marrow' ? 'Now tap where it points.' : 'Now tap the other ' + (name === 'mline' ? 'end.' : 'corner.')); return; } const [a, b] = T.pts; T.pts = []; make(a, b); T.start(); };
+    T.onBack = () => { if (T.pts.length) { T.start(); return; } if (T.n > 0) { undo(); T.n--; } };
+    T.draw = (c, V, acc) => { const S = T.stroke; if (S && S.length === 2) drawMkPreview(c, V, name, S[0], S[1], col); else if (T.pts.length === 1 && state.hoverSn) drawMkPreview(c, V, name, T.pts[0], [state.hoverSn.x, state.hoverSn.y], col); drawDots(c, T.pts, V, col); };
+    return;
+  }
+  switch (name) {
+    case 'mpen': case 'mcloud':
+      T.freehand = true;
+      T.start = () => setPrompt(name === 'mpen' ? 'Draw with one finger. Two fingers move and zoom. Back removes the last stroke.' : 'Drag around what you want to cloud, or tap two opposite corners. Two fingers move and zoom.');
+      T.strokeMove = (X, Y, ds) => { const V = state.view; if (!T.stroke) T.stroke = [toWorld(ds.X, ds.Y, V)]; const l = T.stroke[T.stroke.length - 1]; const q = toScreen(l[0], l[1], V); if (Math.hypot(X - q[0], Y - q[1]) >= 2.5) T.stroke.push(toWorld(X, Y, V)); };
+      T.strokeEnd = () => {
+        const S = T.stroke; T.stroke = null; if (!S || S.length < 2) return; const V = state.view; const L = ensureMarkupLayer();
+        if (name === 'mpen') { const pts = simplifyDP(S, 1 / V.s); if (pts.length < 2) return; addEntities([{ t: 'PLINE', L, c: 256, lt: '', v: pts.map(p => [p[0], p[1], 0]), closed: false, w: 0 }]); T.n++; }
+        else if (placeCloud(simplifyDP(S, 2 / V.s), L)) T.n++;
+        T.pts = [];
+      };
+      T.onTap = (sn, hit, ev, w) => { if (name !== 'mcloud') return; const p = w || [sn.x, sn.y]; T.pts.push(p); if (T.pts.length < 2) { setPrompt('Now tap the opposite corner.'); return; } const [a, b] = T.pts; T.pts = []; if (Math.abs(a[0] - b[0]) > 0 && Math.abs(a[1] - b[1]) > 0 && placeCloud([[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]], ensureMarkupLayer())) T.n++; T.start(); };
+      T.onBack = () => { if (T.pts.length) { T.pts = []; T.start(); return; } if (T.n > 0) { undo(); T.n--; } };
+      T.draw = (c, V, acc) => { if (T.stroke && T.stroke.length > 1) { c.save(); c.strokeStyle = col; c.lineWidth = 2; c.lineJoin = 'round'; c.lineCap = 'round'; c.setLineDash([]); drawPolyScreen(c, T.stroke, V, false); c.restore(); } drawDots(c, T.pts, V, col); };
+      break;
+    case 'mtext':
+      T.start = () => setPrompt('Tap where the note starts.');
+      T.onTap = (sn, hit, ev, w) => { const p = w || [sn.x, sn.y]; T.pt = p; openTextDialog(p, { h: mkSize(14), onText: (s, h) => { addEntities([{ t: 'TEXT', L: ensureMarkupLayer(), c: 256, lt: '', p: p.slice(), ap: [0, 0], h, rot: 0, s, ha: 0, va: 0, wf: 1 }]); T.n++; toast('Note placed'); T.pt = null; }, onCancel: () => { T.pt = null; requestFast(); } }); };
+      T.onBack = () => { if (T.n > 0) { undo(); T.n--; } };
+      T.draw = (c, V, acc) => { if (T.pt) drawDots(c, [T.pt], V, col); };
+      break;
+    case 'mnum':
+      T.next = null;
+      T.start = () => { const n = T.next || nextTagNumber(); setPrompt('Tap to place tag ' + n + '. Each tap counts up. Type a number to start from another.'); };
+      T.onTypedRaw = (str) => { const n = parseInt(str, 10); if (!(n >= 0) || String(n) !== str.trim()) { toast('Type a whole number'); return true; } T.next = n; closeTyped(); T.start(); return true; };
+      T.onTap = (sn, hit, ev, w) => {
+        const p = w || [sn.x, sn.y]; const n = T.next || nextTagNumber(); const digits = String(n).length; const R = mkSize(12) * (digits > 2 ? 1 + 0.28 * (digits - 2) : 1);
+        placeGroup('tag', [{ t: 'CIRCLE', ce: p.slice(), r: R }, { t: 'TEXT', p: p.slice(), ap: p.slice(), h: R * 0.9, rot: 0, s: String(n), ha: 1, va: 2, wf: 1 }], ensureMarkupLayer(), { num: n });
+        T.next = n + 1; T.n++; T.start();
+      };
+      T.onBack = () => { if (T.n > 0) { undo(); T.n--; T.next = null; T.start(); } };
+      break;
+  }
+}
+
+// ===================== Polar tracking =====================
+// From the last picked point, the pointer locks onto every `inc` degrees and onto the extra angles (and their opposite).
+// Point snaps (endpoint, midpoint…) win when close; the polar ray also snaps to where it crosses an object.
+const POLAR_TOOLS = new Set(['line', 'pline', 'spline', 'dist', 'cont', 'area', 'facade', 'move', 'copy', 'rotate', 'mirror', 'dimlin', 'dimali', 'dimcont', 'leader']);
+const POLAR_STEPS = [90, 45, 30, 22.5, 15, 10, 5];
+const polar = { on: true, inc: 90, extra: [] };
+try { const o = JSON.parse(localStorage.getItem('tct-polar') || 'null'); if (o) { polar.on = o.on !== false; if (o.inc > 0 && o.inc <= 180) polar.inc = o.inc; if (Array.isArray(o.extra)) polar.extra = o.extra.filter(a => isFinite(a)).slice(0, 12); } } catch (e) { }
+function savePolar() { try { localStorage.setItem('tct-polar', JSON.stringify(polar)); } catch (e) { } renderPolarSummary(); }
+const angTxt = (a) => (Math.abs(a - Math.round(a)) < 1e-9 ? String(Math.round(a)) : String(+a.toFixed(3))) + '°';
+function polarAngles() {
+  const out = new Set(); const n = Math.round(360 / polar.inc); if (Math.abs(n * polar.inc - 360) < 1e-6) { for (let i = 0; i < n; i++) out.add(+(i * polar.inc).toFixed(6)); } else for (let a = 0; a < 360 - 1e-9; a += polar.inc) out.add(+a.toFixed(6));
+  for (const a of polar.extra) { const b = ((a % 360) + 360) % 360; out.add(+b.toFixed(6)); out.add(+((b + 180) % 360).toFixed(6)); }
+  return [...out];
+}
+function polarBase() {
+  const T = state.tool; if (!polar.on || !T || !POLAR_TOOLS.has(T.name) || T.phase === 'select' || state.handleDrag) return null;
+  if (T.name === 'dist' && T.pts && T.pts.length >= 2) return null; // the next tap starts a new distance
+  if ((T.name === 'dimlin' || T.name === 'dimali') && T.pts && T.pts.length >= 2) return null; // placing the dimension line
+  return state.lastPt || null;
+}
+function polarPoint(w, base, tol, S) {
+  const dx = w[0] - base[0], dy = w[1] - base[1]; if (Math.hypot(dx, dy) < tol * 2) return null;
+  let best = null; for (const a of polarAngles()) { const r = rad(a); const ux = Math.cos(r), uy = Math.sin(r); const t = dx * ux + dy * uy; if (t <= 0) continue; const perp = Math.abs(dy * ux - dx * uy); if (perp <= tol && (!best || perp < best.perp)) best = { a, ux, uy, t, perp }; }
+  if (!best) return null;
+  const { ux, uy } = best; let p = [base[0] + ux * best.t, base[1] + uy * best.t], kind = 12;
+  if (S) { // where the polar ray crosses an object near the finger
+    const hit = pickAt(w[0], w[1], tol * 1.3, S, true); let bd = Infinity;
+    const take = (q) => { const t = (q[0] - base[0]) * ux + (q[1] - base[1]) * uy; if (t <= tol * 0.5) return; const d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d <= tol * 1.3 && d < bd) { bd = d; p = q; kind = 13; } };
+    if (hit) {
+      for (const sg of itemSegsNear(hit.item, w[0], w[1], tol * 1.3)) { const q = lineX([base, [base[0] + ux, base[1] + uy]], sg); if (!q) continue; const sx = sg[1][0] - sg[0][0], sy = sg[1][1] - sg[0][1], L2 = sx * sx + sy * sy || 1e-18; const s = ((q[0] - sg[0][0]) * sx + (q[1] - sg[0][1]) * sy) / L2; if (s >= -1e-9 && s <= 1 + 1e-9) take(q); }
+      for (const cv of itemCurvesNear(hit.item, w, tol * 1.3)) { const fx = base[0] - cv.c[0], fy = base[1] - cv.c[1]; const bq = fx * ux + fy * uy, cq = fx * fx + fy * fy - cv.r * cv.r, disc = bq * bq - cq; if (disc < 0) continue; for (const t of [-bq - Math.sqrt(disc), -bq + Math.sqrt(disc)]) { const q = [base[0] + ux * t, base[1] + uy * t]; if (cv.full || angInArc(Math.atan2(q[1] - cv.c[1], q[0] - cv.c[0]), cv.a0, cv.a1, cv.ccw)) take(q); } }
+    }
+  }
+  return { x: p[0], y: p[1], kind, base: base.slice(), ang: best.a };
+}
+// the dotted tracking line through the point, and (without the magnifier) a label with the angle and length
+function drawPolarTrack(c, V, sn, label) {
+  const B = toScreen(sn.base[0], sn.base[1], V), P = toScreen(sn.x, sn.y, V); const dx = P[0] - B[0], dy = P[1] - B[1], L = Math.hypot(dx, dy); if (L < 1) return;
+  const ux = dx / L, uy = dy / L; const far = Math.hypot(cssW, cssH) * 2;
+  c.save(); c.setLineDash([2, 4]); c.lineWidth = 1.4; c.strokeStyle = '#2fd27a'; c.globalAlpha = 0.95; c.beginPath(); c.moveTo(B[0], B[1]); c.lineTo(B[0] + ux * far, B[1] + uy * far); c.stroke(); c.restore();
+  if (label) drawChip(c, P[0] + 14, P[1] + 22, (sn.kind === 13 ? 'Polar + object ' : 'Polar ') + angTxt(sn.ang) + ' · ' + fmtLen(mLen(sn.base, [sn.x, sn.y])), 0, null, 'left');
+}
+function renderPolarSummary() { const el = $('polarSummary'); if (!el) return; el.textContent = polar.on ? 'on · every ' + angTxt(polar.inc) + (polar.extra.length ? ' + ' + polar.extra.length + ' extra' : '') : 'off'; }
+function renderPolar() {
+  $('chkPolar').checked = polar.on; $('polarBody').classList.toggle('disabled', !polar.on);
+  const inc = $('polarInc'); inc.innerHTML = ''; const steps = POLAR_STEPS.includes(polar.inc) ? POLAR_STEPS : POLAR_STEPS.concat([polar.inc]);
+  for (const v of steps) { const b = document.createElement('button'); b.type = 'button'; b.textContent = angTxt(v); b.setAttribute('aria-pressed', v === polar.inc ? 'true' : 'false'); b.addEventListener('click', () => { polar.inc = v; savePolar(); renderPolar(); }); inc.append(b); }
+  const ex = $('polarExtra'); ex.innerHTML = '';
+  if (!polar.extra.length) { const d = document.createElement('span'); d.className = 'empty'; d.textContent = 'None yet'; ex.append(d); }
+  for (const a of polar.extra) { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', 'Remove ' + angTxt(a)); b.innerHTML = '<span></span><span class="x">✕</span>'; b.firstChild.textContent = angTxt(a); b.addEventListener('click', () => { polar.extra = polar.extra.filter(x => x !== a); savePolar(); renderPolar(); }); ex.append(b); }
+  renderPolarSummary();
+}
+const readAng = (v) => { const a = parseFloat(String(v).replace(',', '.').replace('°', '')); return isFinite(a) ? a : NaN; };
+$('miPolar').addEventListener('click', () => { closeSheets(); renderPolar(); openSheet('polarPanel'); });
+$('chkPolar').addEventListener('change', (ev) => { polar.on = ev.target.checked; savePolar(); renderPolar(); });
+$('polarIncSet').addEventListener('click', () => { const a = readAng($('polarIncIn').value); if (!(a >= 0.5 && a <= 180)) { toast('Type a step between 0.5° and 180°'); return; } polar.inc = +a.toFixed(4); $('polarIncIn').value = ''; savePolar(); renderPolar(); toast('Polar every ' + angTxt(polar.inc)); });
+$('polarExtraAdd').addEventListener('click', () => { let a = readAng($('polarExtraIn').value); if (!isFinite(a)) { toast('Type an angle, e.g. 37.5'); return; } a = +(((a % 360) + 360) % 360).toFixed(4); if (polar.extra.includes(a)) { toast(angTxt(a) + ' is already there'); return; } if (polar.extra.length >= 12) { toast('Up to 12 extra angles'); return; } polar.extra.push(a); polar.extra.sort((x, y) => x - y); $('polarExtraIn').value = ''; savePolar(); renderPolar(); });
+for (const id of ['polarIncIn', 'polarExtraIn']) $(id).addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $(id === 'polarIncIn' ? 'polarIncSet' : 'polarExtraAdd').click(); } });
+renderPolarSummary();
 
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();

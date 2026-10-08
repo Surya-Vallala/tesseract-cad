@@ -200,7 +200,7 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
 .snaprow.off .nm{color:var(--muted)}
 #snapList.disabled{opacity:.45;pointer-events:none}
 /* home screen (no drawing showing): no layers button, tool bar, tabs or drawing-only menu items; the title chip is just a label */
-#app.home #btnLayers, #app.home #tools, #app.home #tabs, #app.home .doc-only{display:none}
+#app.home #tools, #app.home #tabs, #app.home .doc-only{display:none}
 #app.home #btnSpace{pointer-events:none}
 #app.home #btnSpace .sp svg{display:none}
 #loading{position:absolute;inset:0;z-index:9;display:none;align-items:center;justify-content:center;background:rgba(20,22,26,.6);backdrop-filter:blur(3px)}
@@ -258,6 +258,18 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
 .dlg .fin{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:15px;width:100%}
 .dlg .chk{display:flex;gap:8px;align-items:center;font-size:13px}
 .dlg .chk input{width:18px;height:18px;accent-color:var(--accent)}
+.pol-sec{display:flex;flex-direction:column;gap:6px;padding:4px 8px 8px}
+.pol-sec.disabled{opacity:.45;pointer-events:none}
+.pol-h{font-size:13.5px;margin-top:8px}
+.pol-h small{color:var(--muted);font-size:12px;margin-left:4px}
+.pol-chips{display:flex;flex-wrap:wrap;gap:6px}
+.pol-chips button{padding:7px 11px;border-radius:8px;background:var(--chip);font-size:13px;font-family:var(--mono);display:inline-flex;gap:6px;align-items:center}
+.pol-chips button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.pol-chips .x{opacity:.7;font-family:var(--font)}
+.pol-chips .empty{font-size:12.5px;color:var(--muted);padding:4px 0}
+.pol-row{display:flex;gap:6px}
+.pol-row input{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.pol-note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.4}
 .scrim{position:absolute;inset:0;z-index:19;display:none}
 .scrim.on{display:block}
 @media (prefers-reduced-motion: reduce){ .sheet{transition:none} }
@@ -270,7 +282,6 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
     <div class="actions">
       <button class="ib" id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
       <button class="ib" id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
-      <button class="ib" id="btnLayers" title="Layers" aria-label="Layers"><svg viewBox="0 0 24 24"><path d="M12 4 3 9l9 5 9-5zM3 14l9 5 9-5"/></svg></button>
       <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
     </div>
   </header>
@@ -342,6 +353,7 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <div class="menu-item"><span>Canvas</span><div class="seg" id="segCanvas"><button data-v="dark" aria-pressed="true">Dark</button><button data-v="light">Light</button></div></div>
         <div class="menu-item"><span>Units shown</span><div class="seg" id="segUnits"><button data-v="auto" aria-pressed="true">Auto</button><button data-v="mm">mm</button><button data-v="m">m</button><button data-v="ft">ft-in</button></div></div>
         <button class="menu-item" id="miSnaps"><span>Snap points <small id="snapSummary">all on</small></span><span>→</span></button>
+        <button class="menu-item" id="miPolar"><span>Polar tracking <small id="polarSummary">on · every 90°</small></span><span>→</span></button>
         <div class="menu-item"><span>Hatch patterns <small>off = faster</small></span><input type="checkbox" id="chkPat" checked></div>
         <div class="menu-item doc-only"><span>Current layer for new objects</span><select id="selLayer" style="max-width:50%;padding:6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)"></select></div>
         <div class="menu-item doc-only" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
@@ -357,6 +369,21 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
         <div id="snapList"></div>
       </div>
       <div class="tools"><button class="btn" id="snapAll">All on</button><button class="btn" id="snapNone">All off</button></div>
+    </section>
+    <section class="sheet" id="polarPanel" aria-label="Polar tracking">
+      <header><h2>Polar tracking</h2><button class="btn quiet" data-close>Close</button></header>
+      <div class="body">
+        <label class="menu-item"><span>Polar tracking <small>from the last point, lines lock onto these angles</small></span><input type="checkbox" id="chkPolar" checked></label>
+        <div class="pol-sec" id="polarBody">
+          <div class="pol-h">Every <small>the angle step: 0°, step, 2 × step…</small></div>
+          <div class="pol-chips" id="polarInc"></div>
+          <div class="pol-row"><input id="polarIncIn" inputmode="decimal" placeholder="Any step, e.g. 18 or 7.5" autocomplete="off"><button class="btn" id="polarIncSet">Use</button></div>
+          <div class="pol-h">Extra angles <small>also tracked, with their opposite (+180°)</small></div>
+          <div class="pol-chips" id="polarExtra"></div>
+          <div class="pol-row"><input id="polarExtraIn" inputmode="decimal" placeholder="Angle, e.g. 37.5" autocomplete="off"><button class="btn" id="polarExtraAdd">Add</button></div>
+          <p class="pol-note">Angles go anticlockwise from the right (0° = east, 90° = north). Snap points such as endpoints win when they are close; a dotted green line shows the angle being tracked.</p>
+        </div>
+      </div>
     </section>
     <section class="sheet" id="sharePanel" aria-label="Share drawing">
       <header><h2>Share drawing</h2><button class="btn quiet" data-close>Close</button></header>

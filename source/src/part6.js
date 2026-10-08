@@ -190,7 +190,7 @@ function applyProps(ids, ch) {
 $('btnProps').addEventListener('click', openProps);
 // ----- Select similar (AutoCAD default: same type and layer; blocks by name, hatches by pattern) -----
 function similarKey(e) {
-  if (e.t === 'INSERT') { if (e.dim) return 'DIM|' + e.L; const n = e.n || ''; return 'INS|' + e.L + '|' + (/^\*U/i.test(n) ? dynSignature(n) : n); }
+  if (e.t === 'INSERT') { if (e.dim) return 'DIM|' + e.L; if (e.mk) return 'MK|' + e.L + '|' + e.mk; const n = e.n || ''; return 'INS|' + e.L + '|' + (/^\*U/i.test(n) ? dynSignature(n) : n); }
   if (e.t === 'HATCH') return 'HATCH|' + e.L + '|' + (e.solid ? 'SOLID' : e.name);
   return e.t + '|' + e.L;
 }
@@ -206,12 +206,13 @@ function selectSimilar() {
 $('btnSimilar').addEventListener('click', selectSimilar);
 
 // text dialog
-function openTextDialog(pt) {
-  const dlg = $('textDlg'); dlg.classList.add('on'); $('txtVal').value = ''; $('txtH').value = state.textH || defaultTextHeight(); setTimeout(() => $('txtVal').focus(), 50);
+function openTextDialog(pt, opt) { // opt: { h, onText(s, h) } for markup notes and leaders
+  opt = opt || {};
+  const dlg = $('textDlg'); dlg.classList.add('on'); $('txtVal').value = ''; $('txtH').value = opt.h || state.textH || defaultTextHeight(); setTimeout(() => $('txtVal').focus(), 50);
   const close = () => { dlg.classList.remove('on'); ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); };
   const ok = $('txtOk'), cancel = $('txtCancel');
-  const onOk = () => { const s = $('txtVal').value.trim(); const h = parseFloat($('txtH').value); if (!s || !(h > 0)) { toast('Enter text and a height'); return; } state.textH = h; addEntities([{ t: 'TEXT', L: state.curLayer, c: 256, lt: '', p: pt.slice(), ap: [0, 0], h, rot: 0, s, ha: 0, va: 0, wf: 1 }]); close(); toast('Text placed'); setPrompt('Tap where the next text should start.'); };
-  const onCancel = () => { close(); };
+  const onOk = () => { const s = $('txtVal').value.trim(); const h = parseFloat($('txtH').value); if (!s || !(h > 0)) { toast('Enter text and a height'); return; } if (opt.onText) { close(); opt.onText(s, h); return; } state.textH = h; addEntities([{ t: 'TEXT', L: state.curLayer, c: 256, lt: '', p: pt.slice(), ap: [0, 0], h, rot: 0, s, ha: 0, va: 0, wf: 1 }]); close(); toast('Text placed'); setPrompt('Tap where the next text should start.'); };
+  const onCancel = () => { close(); if (opt.onCancel) opt.onCancel(); };
   ok.addEventListener('click', onOk); cancel.addEventListener('click', onCancel);
 }
 function defaultTextHeight() { const sp = curSpace(); const hs = []; for (const e of sp.ents) if ((e.t === 'TEXT' || e.t === 'MTEXT') && e.h > 0) hs.push(e.h); if (hs.length) { hs.sort((a, b) => a - b); return +hs[hs.length >> 1].toPrecision(3); } const u = state.drawing.header.units; return u === 4 ? 250 : u === 6 ? 0.25 : u === 1 ? 10 : 2.5; }
@@ -548,7 +549,6 @@ $('btnUndo').addEventListener('click', undo); $('btnRedo').addEventListener('cli
 $('btnDone').addEventListener('click', doneTool); $('btnCancel').addEventListener('click', exitToSelect); $('btnBack').addEventListener('click', backPoint);
 function openSheet(id) { $(id).classList.add('open'); $('scrim').classList.add('on'); if (id === 'layersPanel') renderLayers(); }
 function closeSheets() { for (const s of document.querySelectorAll('.sheet')) s.classList.remove('open'); closePop(); $('scrim').classList.remove('on'); }
-$('btnLayers').addEventListener('click', () => { if (!state.drawing) { toast('Open a drawing first'); return; } openSheet('layersPanel'); });
 $('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
