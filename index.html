@@ -1172,7 +1172,7 @@ function loupeRect() {
 function drawPointer(acc) { // crosshair at the pointer and a dotted lead down to the finger
   const lp = state.loupe; const dpr = state.dpr; if (!lp) return; const X = lp.X, Y = lp.Y;
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.5)';
-  if (lp.fy - Y > 30) { ctx.beginPath(); ctx.moveTo(X, Y + 14); ctx.lineTo(lp.fx, lp.fy - 26); ctx.stroke(); }
+  if (lp.fy - Y > 40) { ctx.beginPath(); ctx.moveTo(X, Y + 18); ctx.lineTo(lp.fx, lp.fy - 20); ctx.stroke(); }
   ctx.setLineDash([]); const arm = (c, w) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(X - 16, Y); ctx.lineTo(X - 4, Y); ctx.moveTo(X + 4, Y); ctx.lineTo(X + 16, Y); ctx.moveTo(X, Y - 16); ctx.lineTo(X, Y - 4); ctx.moveTo(X, Y + 4); ctx.lineTo(X, Y + 16); ctx.stroke(); };
   arm('rgba(0,0,0,.6)', 3.5); arm(acc, 1.6); ctx.restore();
 }
@@ -1356,7 +1356,7 @@ function findIntersection(wx, wy, tol, S) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 88; // pointer about 1.5 cm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 60; // pointer about 1 cm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
@@ -2980,7 +2980,7 @@ async function writePdf({ W, H, content, image, alphas, title }) {
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610080301' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610080314' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }

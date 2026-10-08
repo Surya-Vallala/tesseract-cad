@@ -241,7 +241,7 @@ function loupeRect() {
 function drawPointer(acc) { // crosshair at the pointer and a dotted lead down to the finger
   const lp = state.loupe; const dpr = state.dpr; if (!lp) return; const X = lp.X, Y = lp.Y;
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.strokeStyle = onLightBg() ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.5)';
-  if (lp.fy - Y > 30) { ctx.beginPath(); ctx.moveTo(X, Y + 14); ctx.lineTo(lp.fx, lp.fy - 26); ctx.stroke(); }
+  if (lp.fy - Y > 40) { ctx.beginPath(); ctx.moveTo(X, Y + 18); ctx.lineTo(lp.fx, lp.fy - 20); ctx.stroke(); }
   ctx.setLineDash([]); const arm = (c, w) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(X - 16, Y); ctx.lineTo(X - 4, Y); ctx.moveTo(X + 4, Y); ctx.lineTo(X + 16, Y); ctx.moveTo(X, Y - 16); ctx.lineTo(X, Y - 4); ctx.moveTo(X, Y + 4); ctx.lineTo(X, Y + 16); ctx.stroke(); };
   arm('rgba(0,0,0,.6)', 3.5); arm(acc, 1.6); ctx.restore();
 }

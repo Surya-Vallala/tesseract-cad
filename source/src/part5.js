@@ -133,7 +133,7 @@ function findIntersection(wx, wy, tol, S) {
 // One finger: tap = pick, drag = pan. Press and hold (still) = precise pick with a magnifier:
 // drag to the exact spot, let go to place the point. Two fingers: pinch zoom / pan.
 const pointers = new Map(); let pinch0 = null; let dragStart = null, dragMoved = false, panStartView = null; let tapTimer = null;
-let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 88; // pointer about 1.5 cm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
+let holdTimer = null; const HOLD_MS = 330, PRECISE_SNAP_PX = 5, POINTER_LIFT = 60; // pointer about 1 cm above the fingertip // magnifier: snaps let go after ~5 px (20 px in the 4× loupe)
 function loupeAllowed() { const t = state.tool; return !!(t && PICK_TOOLS.has(t.name) && t.phase !== 'select'); }
 function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
 function enterPrecise(X, Y) {
