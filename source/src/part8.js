@@ -1077,5 +1077,5 @@ async function takeSharedFiles() {
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();
 // Start on the Home tab with nothing open; drawings open in their own tabs.
-showHomeTitle(); setHome(true); renderTabs(); updateChrome();
+setHome(true); renderTabs(); updateChrome();
 takeSharedFiles();

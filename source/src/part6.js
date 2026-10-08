@@ -371,13 +371,12 @@ function confirmUnsaved(then) {
   $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
   $('saveCancel').onclick = () => { done(); };
 }
-function showHomeTitle() { $('fileName').textContent = 'Tesseract Studio'; $('spaceName').textContent = 'CAD Tools'; }
 function closeDrawing() {
   const i = docs.indexOf(activeDoc); if (i >= 0) docs.splice(i, 1);
   activeDoc = null; const back = returnTo && docs.includes(returnTo) ? returnTo : null; returnTo = null;
   if (docs.length) { restoreDoc(back || docs[Math.max(0, i - 1)]); refreshDocUI(); return; }
   state.drawing = null; state.scenes = new Map(); blockCache = new Map(); state.undo = []; state.redo = []; state.dirty = false; state.selection = new Set(); state.fileName = ''; state.fileBytes = null;
-  showHomeTitle(); setHome(true); $('spaces').innerHTML = ''; setResult(null); renderTabs(); renderRecent(); requestFull();
+  setHome(true); $('spaces').innerHTML = ''; setResult(null); renderTabs(); renderRecent(); requestFull();
 }
 // Home screen on/off. At home there is no drawing on screen, so the drawing-only controls are hidden (CSS on #app.home).
 const atHome = () => $('welcome').style.display !== 'none';
@@ -466,19 +465,19 @@ function loadDrawing(D, name, meta) {
   state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null; state.ltMult = 1; state.cur = { c: 256, lw: -1, lt: '' };
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
-  $('fileName').textContent = name; setHome(false);
+  setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs();
   startTool('select', true); syncCanvasSize(); zoomExtents();
 }
 function refreshDocUI() {
-  $('fileName').textContent = docTitle(activeDoc); setHome(false);
+  setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs(); startTool('select', true); requestFull();
 }
 function switchDoc(d) { if (!d || d === activeDoc) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } stashActive(); restoreDoc(d); closeSheets(); refreshDocUI(); }
 let returnTo = null;
 function closeTab(d) { const wasHome = atHome(); const back = d !== activeDoc ? activeDoc : null; if (back || wasHome) { if (d !== activeDoc) switchDoc(d); else refreshDocUI(); } returnTo = back; confirmUnsaved(() => { closeDrawing(); if (wasHome && docs.length) goHome(); }); }
 // Home tab: the home page while the drawings stay open in their tabs; a drawing tab brings it back
-function goHome() { if (atHome()) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } closeSheets(); if (activeDoc) stashActive(); showHomeTitle(); setHome(true); renderRecent(); renderTabs(); }
+function goHome() { if (atHome()) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } closeSheets(); if (activeDoc) stashActive(); setHome(true); renderRecent(); renderTabs(); }
 function openTab(d) { if (d === activeDoc) { if (atHome()) refreshDocUI(); return; } switchDoc(d); }
 function renderTabs() {
   const bar = $('tabs'); bar.hidden = false; bar.innerHTML = ''; const home = atHome();
@@ -495,10 +494,21 @@ function renderTabs() {
 }
 function updateInfo() { const D = state.drawing; if (!D) return; const nM = D.spaces[0].ents.length; const sk = Object.entries(D.skipped || {}).map(([k, v]) => k + ' ×' + v).join(', '); $('infoText').textContent = (D.sample ? 'Sample drawing' : state.fileName) + ' · ' + nM + ' objects in model · ' + (D.spaces.length - 1) + ' layout' + (D.spaces.length === 2 ? '' : 's') + ' · ' + D.layers.length + ' layers · units: ' + (UNIT_NAME[D.header.units] || 'unitless') + (D.parseMs ? ' · parsed in ' + (D.parseMs / 1000).toFixed(1) + ' s' : '') + (sk ? ' · not shown: ' + sk : ''); }
 function renderSpaces() {
-  const nav = $('spaces'); nav.innerHTML = '';
-  const setChip = () => { const sp = state.drawing.spaces[state.spaceIdx]; $('spaceName').innerHTML = ''; $('spaceName').append(document.createTextNode(sp.name + ' ')); const t = document.createElement('span'); t.className = 'tag'; t.textContent = sp.paper ? 'LAYOUT' : (state.drawing.spaces.length > 1 ? '· ' + (state.drawing.spaces.length - 1) + ' LAYOUTS' : ''); $('spaceName').append(t); };
-  state.drawing.spaces.forEach((sp, i) => { const b = document.createElement('button'); b.append(document.createTextNode(sp.name)); const t = document.createElement('span'); t.className = 'paper-tag'; t.textContent = sp.paper ? 'LAYOUT' : 'MODEL'; b.appendChild(t); b.setAttribute('aria-selected', i === state.spaceIdx ? 'true' : 'false'); b.addEventListener('click', () => { closeSheets(); if (state.spaceIdx === i) return; state.spaceIdx = i; state.selection.clear(); lastFull = null; for (const x of nav.children) x.setAttribute('aria-selected', 'false'); b.setAttribute('aria-selected', 'true'); setChip(); showLoading(true, 'Opening ' + sp.name, 50); setTimeout(() => { zoomExtents(); showLoading(false); }, 20); }); nav.appendChild(b); });
-  setChip();
+  const nav = $('spaces'); nav.innerHTML = ''; if (!state.drawing) return;
+  state.drawing.spaces.forEach((sp, i) => { const b = document.createElement('button'); b.append(document.createTextNode(sp.name)); const t = document.createElement('span'); t.className = 'paper-tag'; t.textContent = sp.paper ? 'LAYOUT' : 'MODEL'; b.appendChild(t); b.setAttribute('aria-selected', i === state.spaceIdx ? 'true' : 'false'); b.addEventListener('click', () => { closeSheets(); switchSpace(i); }); nav.appendChild(b); });
+  renderSpaceTabs();
+}
+// Layout strip above the tools: Model first, then every layout in drawing order; the current one is highlighted and kept in view.
+function renderSpaceTabs() {
+  const bar = $('spaceTabs'); bar.innerHTML = ''; const D = state.drawing; if (!D) return;
+  D.spaces.forEach((sp, i) => { const b = document.createElement('button'); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', i === state.spaceIdx ? 'true' : 'false'); b.textContent = sp.name; b.title = sp.paper ? 'Layout: ' + sp.name : 'Model space'; b.dataset.i = i; b.addEventListener('click', () => switchSpace(i)); bar.append(b); });
+  const act = bar.children[state.spaceIdx]; if (act) requestAnimationFrame(() => { const l = act.offsetLeft - 6, r = act.offsetLeft + act.offsetWidth - bar.clientWidth + 22; if (bar.scrollLeft > l) bar.scrollLeft = l; else if (bar.scrollLeft < r) bar.scrollLeft = r; });
+}
+function switchSpace(i) {
+  const D = state.drawing; if (!D || !D.spaces[i] || state.spaceIdx === i) return;
+  if ((state.tool && state.tool.name !== 'select') || state.selection.size) exitToSelect(); // a half-drawn line or a selection belongs to the old sheet
+  state.spaceIdx = i; state.selection.clear(); lastFull = null; renderSpaces();
+  showLoading(true, 'Opening ' + D.spaces[i].name, 50); setTimeout(() => { zoomExtents(); showLoading(false); }, 20);
 }
 function renderLayers() {
   const list = $('layerList'); list.innerHTML = ''; const D = state.drawing; if (!D) return;
@@ -548,7 +558,6 @@ $('btnOpen').addEventListener('click', () => { closeSheets(); if (canOpenAnother
 $('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const open = findOpenDoc(f.name); if (open) { switchDoc(open); toast('Already open · switched to its tab'); return; } if (!canOpenAnother()) return; const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
 $('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { if (open !== activeDoc) switchDoc(open); else refreshDocUI(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
 $('btnFit').addEventListener('click', zoomExtents);
-$('btnSpace').addEventListener('click', () => { if (!state.drawing || atHome()) return; renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
 function setFull(on) { document.body.classList.toggle('fs', on); $('btnFull').innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg>'; $('btnFull').title = on ? 'Exit full screen' : 'Full screen'; }
 $('btnFull').addEventListener('click', () => { const on = !document.body.classList.contains('fs'); setFull(on); try { if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } }); // the app's own full screen only: the browser's full-screen mode shows a confusing exit message
@@ -558,11 +567,11 @@ $('btnUndo').addEventListener('click', undo); $('btnRedo').addEventListener('cli
 $('btnDone').addEventListener('click', doneTool); $('btnCancel').addEventListener('click', exitToSelect); $('btnBack').addEventListener('click', backPoint);
 function openSheet(id) { $(id).classList.add('open'); $('scrim').classList.add('on'); if (id === 'layersPanel') renderLayers(); }
 function closeSheets() { for (const s of document.querySelectorAll('.sheet')) s.classList.remove('open'); closePop(); $('scrim').classList.remove('on'); }
-$('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
+$('btnMenu').addEventListener('click', () => openSheet('menuPanel')); $('btnMenuHome').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
 $('miShare').addEventListener('click', () => { closeSheets(); openShare(); }); $('miSnaps').addEventListener('click', () => { closeSheets(); renderSnapList(); openSheet('snapPanel'); });
-$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = state.kind === 'new' ? baseName(state.fileName) : baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; $('fileName').textContent = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
+$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = state.kind === 'new' ? baseName(state.fileName) : baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
 $('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); requestFull(); });

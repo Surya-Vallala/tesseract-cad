@@ -47,17 +47,9 @@ input{font:inherit;color:inherit}
 /* Layout (v2): the drawing gets the whole screen. One slim top bar (file + Model/Layout picker, Layers, menu),
    a floating instruction strip over the drawing while a tool is active, and one bottom toolbar row with a group switcher. */
 #app{height:100%;display:flex;flex-direction:column;min-height:0}
-#top{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 10px;padding-top:calc(4px + env(safe-area-inset-top,0px));background:var(--bar-bg);color:var(--bar-fg);border-bottom:1px solid var(--bar-line);flex:0 0 auto;min-height:44px}
+#top{display:flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;padding-top:calc(4px + env(safe-area-inset-top,0px));background:var(--bar-bg);color:var(--bar-fg);border-bottom:1px solid var(--bar-line);flex:0 0 auto;min-height:44px}
 .logo{width:28px;height:28px;display:grid;place-items:center;flex:0 0 auto}
 .logo svg{width:28px;height:28px;fill:none;stroke:var(--brand-red);stroke-width:2.2;stroke-linecap:square;stroke-linejoin:miter}
-#btnSpace{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:2px 6px;border-radius:7px}
-#btnSpace:active{background:var(--bar-chip)}
-#btnSpace .file{font-size:11px;color:var(--bar-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);max-width:100%}
-#btnSpace .sp{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;align-items:center;gap:4px}
-#btnSpace .sp svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
-#btnSpace .tag{font-size:9.5px;letter-spacing:.07em;color:var(--bar-muted);font-weight:500}
-#spaceName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} /* long layout names shorten with … so the arrow always shows */
-.actions{display:flex;gap:2px;flex:0 0 auto}
 .ib{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--bar-fg)}
 .ib:active{background:var(--bar-chip)}
 .ib[hidden]{display:none}
@@ -120,6 +112,15 @@ input{font:inherit;color:inherit}
 #stage.light #vbtns button{background:rgba(250,250,247,.9);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
 #vbtns button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #vbtns button:disabled{opacity:.35}
+/* layout strip above the tools: Model + every layout as a tab (swipe for more), then undo, redo and the menu */
+#spaceBar{display:flex;align-items:center;gap:4px;height:42px;flex:0 0 auto;padding:0 2px 0 6px;border-bottom:1px solid var(--bar-line)}
+#spaceTabs{display:flex;gap:4px;align-items:center;flex:1 1 auto;min-width:0;height:100%;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);padding-right:14px}
+#spaceTabs::-webkit-scrollbar{display:none}
+#spaceTabs button{flex:0 0 auto;height:30px;max-width:190px;padding:0 11px;border-radius:8px;background:var(--bar-chip);color:var(--bar-muted);font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#spaceTabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+#spaceBar .sb-act{display:flex;flex:0 0 auto;align-items:center;gap:0;padding-left:2px;border-left:1px solid var(--bar-line)}
+#spaceBar .ib{width:40px;height:40px}
+#app:not(.home) #btnMenuHome{display:none} /* at home there is no strip, so the menu stays at the top */
 /* bottom toolbar: one row of categories (or, with something selected, actions for it); a category opens a grid of its tools */
 #tools{flex:0 0 auto;display:flex;flex-direction:column;background:var(--bar-bg);color:var(--bar-fg);border-top:1px solid var(--bar-line);padding:0 0 env(safe-area-inset-bottom,0px)}
 #catBar{height:60px;flex:0 0 auto;display:flex;align-items:stretch;padding:0 2px}
@@ -153,18 +154,18 @@ input{font:inherit;color:inherit}
 #spaces button:active{background:var(--chip)}
 #spaces button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 #spaces .paper-tag{font-size:10px;opacity:.7;letter-spacing:.06em;font-weight:500}
-/* open drawings: slim tab strip, only when 2+ drawings are open */
-#tabs{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:3px 6px;height:32px;background:var(--bar-bg);border-bottom:1px solid var(--bar-line);flex:0 0 auto}
+/* open drawings: Home, one tab per drawing and +, in the top row beside the logo */
+#tabs{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0;height:36px;padding:0 2px} /* in the top row, beside the logo */
 #tabs[hidden]{display:none}
 #tabs::-webkit-scrollbar{display:none}
-#tabs .tab{display:flex;align-items:center;flex:0 0 auto;max-width:190px;height:26px;border-radius:7px;background:var(--bar-chip);color:var(--bar-muted)}
-#tabs .thome{width:34px;height:26px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;background:var(--bar-chip);color:var(--bar-muted)}
+#tabs .tab{display:flex;align-items:center;flex:0 0 auto;max-width:190px;height:28px;border-radius:7px;background:var(--bar-chip);color:var(--bar-muted)}
+#tabs .thome{width:34px;height:28px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;background:var(--bar-chip);color:var(--bar-muted)}
 #tabs .thome[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
 #tabs .thome svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #tabs .tab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
 #tabs .tt{min-width:0;max-width:150px;padding:4px 2px 4px 10px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #tabs .tab[aria-selected="true"] .tt{font-weight:600}
-#tabs .tx,#tabs .tadd{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;flex:0 0 auto;color:inherit}
+#tabs .tx,#tabs .tadd{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;flex:0 0 auto;color:inherit}
 #tabs .tx svg,#tabs .tadd svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
 #tabs .tadd{color:var(--bar-fg);background:transparent}
 /* save prompt */
@@ -235,14 +236,10 @@ select.pick{max-width:55%;padding:6px;border-radius:7px;border:1px solid var(--l
 .snaprow input{width:18px;height:18px;accent-color:var(--accent);margin:0}
 .snaprow.off .nm{color:var(--muted)}
 #snapList.disabled{opacity:.45;pointer-events:none}
-/* home screen (no drawing showing): no layers button, tool bar, tabs or drawing-only menu items; the title chip is just a label */
+/* home screen (no drawing showing): no tool bar, layout strip or drawing-only menu items */
 #app.home #tools, #app.home .doc-only{display:none}
 body.fs #tabs{display:none}
-#app:not(.home) #btnSpace .file{display:none} /* the drawing's name is on its tab */
 #app:not(.home) #top{min-height:38px;padding-top:calc(2px + env(safe-area-inset-top,0px));padding-bottom:2px}
-#app:not(.home) #top .ib{height:36px}
-#app.home #btnSpace{pointer-events:none}
-#app.home #btnSpace .sp svg{display:none}
 #loading{position:absolute;inset:0;z-index:9;display:none;align-items:center;justify-content:center;background:rgba(20,22,26,.6);backdrop-filter:blur(3px)}
 #loading.on{display:flex}
 #loading .box{background:var(--panel);color:var(--fg);border-radius:12px;padding:16px 18px;width:min(92vw,360px);box-shadow:var(--shadow)}
@@ -323,14 +320,9 @@ body.fs #tabs{display:none}
 <div id="app" class="home">
   <header id="top">
     <div class="logo" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M2.84 8.71H12.50V19.29"/><path d="M25.16 8.71H16.41V19.29H25.16"/></svg></div>
-    <button id="btnSpace" title="Switch between Model and layouts"><span id="fileName" class="file">No drawing open</span><span class="sp"><span id="spaceName">Tesseract CAD Tools</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>
-    <div class="actions">
-      <button class="ib" id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
-      <button class="ib" id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
-      <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
-    </div>
+    <nav id="tabs" role="tablist" aria-label="Open drawings"></nav>
+    <button class="ib" id="btnMenuHome" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
   </header>
-  <nav id="tabs" role="tablist" aria-label="Open drawings"></nav>
   <main id="stage">
     <canvas id="cv"></canvas>
     <div id="prompt" hidden>
@@ -361,7 +353,7 @@ body.fs #tabs{display:none}
     </div>
     <div id="welcome">
       <div class="card">
-        <div class="brandhead"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Studio | Infra"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Studio | Infra"><div class="prod">CAD Tools</div></div>
+        <div class="brandhead"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Design | Build"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Design | Build"><div class="prod">CAD Tools</div></div>
         <h1>Open a drawing</h1>
         <p>DWG (any version up to 2018) or DXF. Files are read on this device and never uploaded.</p>
         <button class="btn primary big" id="btnOpen2">Open DWG / DXF</button>
@@ -416,7 +408,7 @@ body.fs #tabs{display:none}
         <div class="menu-item doc-only" id="miInfo"><small id="infoText">No drawing loaded.</small></div>
         <div class="menu-item"><span>Theme</span><div class="seg" id="segSkin"><button data-v="light">Light</button><button data-v="dark" aria-pressed="true">Dark</button><button data-v="mono">B&amp;W</button></div></div>
         <button class="menu-item doc-only" id="miClose"><span>Close this drawing <small>asks to save if you made changes</small></span></button>
-        <div class="about"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Studio | Infra"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Studio | Infra"><span>Tesseract CAD Tools · developed by Tesseract Studio</span><span>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></span></div>
+        <div class="about"><img class="brandlogo ink-dark" src="logo-ink-dark.png" alt="Tesseract · Design | Build"><img class="brandlogo ink-light" src="logo-ink-light.png" alt="Tesseract · Design | Build"><span>Tesseract CAD Tools · developed by Tesseract Studio</span><span>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></span></div>
       </div>
     </section>
     <section class="sheet" id="snapPanel" aria-label="Snap points">
@@ -549,6 +541,14 @@ body.fs #tabs{display:none}
     <div id="toast" role="status"></div>
   </main>
   <footer id="tools">
+    <div id="spaceBar">
+      <div id="spaceTabs" role="tablist" aria-label="Model and layouts"></div>
+      <div class="sb-act">
+        <button class="ib" id="btnUndo" title="Undo" aria-label="Undo" hidden><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+        <button class="ib" id="btnRedo" title="Redo" aria-label="Redo" hidden><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+        <button class="ib" id="btnMenu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg></button>
+      </div>
+    </div>
     <div id="catBar" role="toolbar" aria-label="Tools"></div>
   </footer>
   <input type="file" id="file" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" tabindex="-1" aria-hidden="true">
@@ -2473,13 +2473,12 @@ function confirmUnsaved(then) {
   $('saveDiscard').onclick = () => { done(); state.dirty = false; then(); };
   $('saveCancel').onclick = () => { done(); };
 }
-function showHomeTitle() { $('fileName').textContent = 'Tesseract Studio'; $('spaceName').textContent = 'CAD Tools'; }
 function closeDrawing() {
   const i = docs.indexOf(activeDoc); if (i >= 0) docs.splice(i, 1);
   activeDoc = null; const back = returnTo && docs.includes(returnTo) ? returnTo : null; returnTo = null;
   if (docs.length) { restoreDoc(back || docs[Math.max(0, i - 1)]); refreshDocUI(); return; }
   state.drawing = null; state.scenes = new Map(); blockCache = new Map(); state.undo = []; state.redo = []; state.dirty = false; state.selection = new Set(); state.fileName = ''; state.fileBytes = null;
-  showHomeTitle(); setHome(true); $('spaces').innerHTML = ''; setResult(null); renderTabs(); renderRecent(); requestFull();
+  setHome(true); $('spaces').innerHTML = ''; setResult(null); renderTabs(); renderRecent(); requestFull();
 }
 // Home screen on/off. At home there is no drawing on screen, so the drawing-only controls are hidden (CSS on #app.home).
 const atHome = () => $('welcome').style.display !== 'none';
@@ -2568,19 +2567,19 @@ function loadDrawing(D, name, meta) {
   state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null; state.ltMult = 1; state.cur = { c: 256, lw: -1, lt: '' };
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
   state.curLayer = state.layerMap.has(D.header.clayer) ? D.header.clayer : '0';
-  $('fileName').textContent = name; setHome(false);
+  setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs();
   startTool('select', true); syncCanvasSize(); zoomExtents();
 }
 function refreshDocUI() {
-  $('fileName').textContent = docTitle(activeDoc); setHome(false);
+  setHome(false);
   renderSpaces(); renderLayers(); updateUndoBtns(); updateInfo(); renderTabs(); startTool('select', true); requestFull();
 }
 function switchDoc(d) { if (!d || d === activeDoc) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } stashActive(); restoreDoc(d); closeSheets(); refreshDocUI(); }
 let returnTo = null;
 function closeTab(d) { const wasHome = atHome(); const back = d !== activeDoc ? activeDoc : null; if (back || wasHome) { if (d !== activeDoc) switchDoc(d); else refreshDocUI(); } returnTo = back; confirmUnsaved(() => { closeDrawing(); if (wasHome && docs.length) goHome(); }); }
 // Home tab: the home page while the drawings stay open in their tabs; a drawing tab brings it back
-function goHome() { if (atHome()) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } closeSheets(); if (activeDoc) stashActive(); showHomeTitle(); setHome(true); renderRecent(); renderTabs(); }
+function goHome() { if (atHome()) return; if (state.tool && state.tool.onCancel) try { state.tool.onCancel(); } catch (e) { } closeSheets(); if (activeDoc) stashActive(); setHome(true); renderRecent(); renderTabs(); }
 function openTab(d) { if (d === activeDoc) { if (atHome()) refreshDocUI(); return; } switchDoc(d); }
 function renderTabs() {
   const bar = $('tabs'); bar.hidden = false; bar.innerHTML = ''; const home = atHome();
@@ -2597,10 +2596,21 @@ function renderTabs() {
 }
 function updateInfo() { const D = state.drawing; if (!D) return; const nM = D.spaces[0].ents.length; const sk = Object.entries(D.skipped || {}).map(([k, v]) => k + ' ×' + v).join(', '); $('infoText').textContent = (D.sample ? 'Sample drawing' : state.fileName) + ' · ' + nM + ' objects in model · ' + (D.spaces.length - 1) + ' layout' + (D.spaces.length === 2 ? '' : 's') + ' · ' + D.layers.length + ' layers · units: ' + (UNIT_NAME[D.header.units] || 'unitless') + (D.parseMs ? ' · parsed in ' + (D.parseMs / 1000).toFixed(1) + ' s' : '') + (sk ? ' · not shown: ' + sk : ''); }
 function renderSpaces() {
-  const nav = $('spaces'); nav.innerHTML = '';
-  const setChip = () => { const sp = state.drawing.spaces[state.spaceIdx]; $('spaceName').innerHTML = ''; $('spaceName').append(document.createTextNode(sp.name + ' ')); const t = document.createElement('span'); t.className = 'tag'; t.textContent = sp.paper ? 'LAYOUT' : (state.drawing.spaces.length > 1 ? '· ' + (state.drawing.spaces.length - 1) + ' LAYOUTS' : ''); $('spaceName').append(t); };
-  state.drawing.spaces.forEach((sp, i) => { const b = document.createElement('button'); b.append(document.createTextNode(sp.name)); const t = document.createElement('span'); t.className = 'paper-tag'; t.textContent = sp.paper ? 'LAYOUT' : 'MODEL'; b.appendChild(t); b.setAttribute('aria-selected', i === state.spaceIdx ? 'true' : 'false'); b.addEventListener('click', () => { closeSheets(); if (state.spaceIdx === i) return; state.spaceIdx = i; state.selection.clear(); lastFull = null; for (const x of nav.children) x.setAttribute('aria-selected', 'false'); b.setAttribute('aria-selected', 'true'); setChip(); showLoading(true, 'Opening ' + sp.name, 50); setTimeout(() => { zoomExtents(); showLoading(false); }, 20); }); nav.appendChild(b); });
-  setChip();
+  const nav = $('spaces'); nav.innerHTML = ''; if (!state.drawing) return;
+  state.drawing.spaces.forEach((sp, i) => { const b = document.createElement('button'); b.append(document.createTextNode(sp.name)); const t = document.createElement('span'); t.className = 'paper-tag'; t.textContent = sp.paper ? 'LAYOUT' : 'MODEL'; b.appendChild(t); b.setAttribute('aria-selected', i === state.spaceIdx ? 'true' : 'false'); b.addEventListener('click', () => { closeSheets(); switchSpace(i); }); nav.appendChild(b); });
+  renderSpaceTabs();
+}
+// Layout strip above the tools: Model first, then every layout in drawing order; the current one is highlighted and kept in view.
+function renderSpaceTabs() {
+  const bar = $('spaceTabs'); bar.innerHTML = ''; const D = state.drawing; if (!D) return;
+  D.spaces.forEach((sp, i) => { const b = document.createElement('button'); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', i === state.spaceIdx ? 'true' : 'false'); b.textContent = sp.name; b.title = sp.paper ? 'Layout: ' + sp.name : 'Model space'; b.dataset.i = i; b.addEventListener('click', () => switchSpace(i)); bar.append(b); });
+  const act = bar.children[state.spaceIdx]; if (act) requestAnimationFrame(() => { const l = act.offsetLeft - 6, r = act.offsetLeft + act.offsetWidth - bar.clientWidth + 22; if (bar.scrollLeft > l) bar.scrollLeft = l; else if (bar.scrollLeft < r) bar.scrollLeft = r; });
+}
+function switchSpace(i) {
+  const D = state.drawing; if (!D || !D.spaces[i] || state.spaceIdx === i) return;
+  if ((state.tool && state.tool.name !== 'select') || state.selection.size) exitToSelect(); // a half-drawn line or a selection belongs to the old sheet
+  state.spaceIdx = i; state.selection.clear(); lastFull = null; renderSpaces();
+  showLoading(true, 'Opening ' + D.spaces[i].name, 50); setTimeout(() => { zoomExtents(); showLoading(false); }, 20);
 }
 function renderLayers() {
   const list = $('layerList'); list.innerHTML = ''; const D = state.drawing; if (!D) return;
@@ -2650,7 +2660,6 @@ $('btnOpen').addEventListener('click', () => { closeSheets(); if (canOpenAnother
 $('file').addEventListener('change', async (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return; if (f.size > 120 * 1024 * 1024) { toast('That file is over 120 MB; try a smaller DWG.', 4000); return; } const open = findOpenDoc(f.name); if (open) { switchDoc(open); toast('Already open · switched to its tab'); return; } if (!canOpenAnother()) return; const buf = await f.arrayBuffer(); parseFile(buf, f.name); });
 $('btnSample').addEventListener('click', () => { const open = docs.find(isSampleDoc); if (open) { if (open !== activeDoc) switchDoc(open); else refreshDocUI(); return; } if (!canOpenAnother()) return; loadDrawing(sampleDrawing(), 'Sample plan (built in)', { fileName: 'Sample plan' }); });
 $('btnFit').addEventListener('click', zoomExtents);
-$('btnSpace').addEventListener('click', () => { if (!state.drawing || atHome()) return; renderSpaces(); openSheet('spacesPanel'); });
 // Full screen: hide the top bar and toolbar; also ask the browser to hide its own bars where it can.
 function setFull(on) { document.body.classList.toggle('fs', on); $('btnFull').innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M14 3h7v7M10 21H3v-7M21 3l-7 7M3 21l7-7"/></svg>'; $('btnFull').title = on ? 'Exit full screen' : 'Full screen'; }
 $('btnFull').addEventListener('click', () => { const on = !document.body.classList.contains('fs'); setFull(on); try { if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } }); // the app's own full screen only: the browser's full-screen mode shows a confusing exit message
@@ -2660,11 +2669,11 @@ $('btnUndo').addEventListener('click', undo); $('btnRedo').addEventListener('cli
 $('btnDone').addEventListener('click', doneTool); $('btnCancel').addEventListener('click', exitToSelect); $('btnBack').addEventListener('click', backPoint);
 function openSheet(id) { $(id).classList.add('open'); $('scrim').classList.add('on'); if (id === 'layersPanel') renderLayers(); }
 function closeSheets() { for (const s of document.querySelectorAll('.sheet')) s.classList.remove('open'); closePop(); $('scrim').classList.remove('on'); }
-$('btnMenu').addEventListener('click', () => openSheet('menuPanel'));
+$('btnMenu').addEventListener('click', () => openSheet('menuPanel')); $('btnMenuHome').addEventListener('click', () => openSheet('menuPanel'));
 $('scrim').addEventListener('click', closeSheets); for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', closeSheets);
 $('layersAll').addEventListener('click', () => setAllLayers(() => true)); $('layersNone').addEventListener('click', () => setAllLayers(() => false)); $('layersInvert').addEventListener('click', () => setAllLayers(v => !v));
 $('miShare').addEventListener('click', () => { closeSheets(); openShare(); }); $('miSnaps').addEventListener('click', () => { closeSheets(); renderSnapList(); openSheet('snapPanel'); });
-$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = state.kind === 'new' ? baseName(state.fileName) : baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; $('fileName').textContent = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
+$('miSave').addEventListener('click', async () => { if (!state.drawing) return; if (state.drawing.sample) { toast('The sample cannot be saved'); return; } await saveRecent(true); state.dirty = false; state.fileName = state.kind === 'new' ? baseName(state.fileName) : baseName(state.fileName) + EDIT_SUFFIX; activeDoc.title = state.fileName; renderTabs(); closeSheets(); toast('Saved on this phone · see Recent: ' + state.fileName, 3500); });
 $('miClose').addEventListener('click', () => { closeSheets(); confirmUnsaved(closeDrawing); });
 $('segCanvas').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.canvasLight = b.dataset.v === 'light'; stage.classList.toggle('light', state.canvasLight); try { localStorage.setItem('tct-canvas', b.dataset.v); } catch (e) { } requestFull(); });
 $('segUnits').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; for (const x of $('segUnits').children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); state.unitMode = b.dataset.v; try { localStorage.setItem('tct-units', b.dataset.v); } catch (e) { } if (state.tool && state.tool.update) state.tool.update(); requestFull(); });
@@ -4199,7 +4208,7 @@ async function takeSharedFiles() {
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();
 // Start on the Home tab with nothing open; drawings open in their own tabs.
-showHomeTitle(); setHome(true); renderTabs(); updateChrome();
+setHome(true); renderTabs(); updateChrome();
 takeSharedFiles();
 </script>
 <script>
@@ -4212,7 +4221,7 @@ takeSharedFiles();
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
   var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610081628' + (standalone ? ' · running as installed app' : '');
+  ver.textContent = 'Version 202610081903' + (standalone ? ' · running as installed app' : '');
   card.appendChild(ver);
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }
