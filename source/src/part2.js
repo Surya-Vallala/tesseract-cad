@@ -55,9 +55,11 @@ function mMirror(p1, p2) { // reflection about line p1-p2
 }
 
 // ===================== Geometry =====================
+const BULGE_MIN = 1e-6; // below this the arc's bow is under a millionth of the segment length
+const BIG_ARC_R = 1e6; // canvas arcs lose precision at huge radii (they turn into stray long lines), so those are drawn as short straight steps
 function bulgeArc(p1, p2, b) {
   const dx = p2[0] - p1[0], dy = p2[1] - p1[1]; const d = Math.hypot(dx, dy);
-  if (d < 1e-12 || Math.abs(b) < 1e-12) return null;
+  if (d < 1e-12 || Math.abs(b) < BULGE_MIN) return null; // a near-zero bulge is a straight segment (as AutoCAD draws it); as an arc its radius runs to millions
   const th = 4 * Math.atan(Math.abs(b));
   const r = d / (2 * Math.sin(th / 2));
   const s = Math.abs(b) * d / 2;

@@ -443,7 +443,7 @@ function parseFile(buf, name, retried) {
 // Each open drawing keeps its own view, layers, selection, undo history and caches. The active one is
 // swapped into `state`; switching tabs stores it back and restores the other.
 const MAX_DOCS = 5;
-const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind', 'results', 'mscale', 'layerHist', 'lastDim', 'ltMult', 'cur'];
+const DOC_KEYS = ['drawing', 'scenes', 'spaceIdx', 'view', 'layerVis', 'layerMap', 'curLayer', 'selection', 'undo', 'redo', 'dirty', 'fileBytes', 'fileName', 'kind', 'results', 'mscale', 'layerHist', 'lastDim', 'ltMult', 'cur', 'frzSig'];
 const docs = []; let activeDoc = null, docSeq = 0;
 function stashActive() { if (!activeDoc) return; for (const k of DOC_KEYS) activeDoc[k] = state[k]; activeDoc.view = { ...state.view }; activeDoc.blockCache = blockCache; }
 function restoreDoc(d) { for (const k of DOC_KEYS) state[k] = d[k]; state.view = { ...d.view }; blockCache = d.blockCache || new Map(); activeDoc = d; lastFull = null; state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.loupe = null; }
@@ -460,7 +460,7 @@ function loadDrawing(D, name, meta) {
   stashActive();
   let d = reuse ? activeDoc : null; if (!d) { d = { id: ++docSeq }; docs.push(d); }
   activeDoc = d; d.title = name;
-  state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
+  state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.frzSig = null; state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
   state.fileBytes = meta.bytes || null; state.fileName = meta.fileName || name; state.kind = meta.kind || (/\.dxf$/i.test(name) ? 'dxf' : 'dwg');
   state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null; state.ltMult = 1; state.cur = { c: 256, lw: -1, lt: '' };
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));

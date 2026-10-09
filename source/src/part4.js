@@ -289,7 +289,7 @@ function drawPolyScreen(ctx, pts, V, close) { if (pts.length < 1) return; ctx.be
 function drawDots(ctx, pts, V, col) { ctx.fillStyle = col; for (const p of pts) { const q = toScreen(p[0], p[1], V); ctx.beginPath(); ctx.arc(q[0], q[1], 3.5, 0, TAU); ctx.fill(); } }
 
 // ===================== View control =====================
-function getScene(idx) { let S = state.scenes.get(idx); if (!S) { S = buildScene(state.drawing.spaces[idx]); state.scenes.set(idx, S); } return S; }
+function getScene(idx) { const fz = frozenSig(); if (fz !== state.frzSig) { if (state.frzSig != null) { state.scenes.clear(); blockCache = new Map(); lastFull = null; } state.frzSig = fz; } let S = state.scenes.get(idx); if (!S) { S = buildScene(state.drawing.spaces[idx]); state.scenes.set(idx, S); } return S; }
 function invalidateScene(idx) { state.scenes.delete(idx); lastFull = null; }
 function zoomExtents() {
   const sp = curSpace(); if (!sp) return; const S = getScene(state.spaceIdx);

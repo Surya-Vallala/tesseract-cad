@@ -10,6 +10,12 @@ const state = {
 };
 const curSpace = () => state.drawing ? state.drawing.spaces[state.spaceIdx] : null;
 function layerOn(name) { const v = state.layerVis.get(name); return v === undefined ? true : v; }
+// Frozen layers work as in AutoCAD: a block reference on a frozen layer is not drawn at all, including the parts of the block
+// that sit on other layers (a layer that is only off hides just its own objects and the block's layer-0 objects).
+// A layer frozen in the file counts as frozen until it is turned on here; the scenes are rebuilt when that set changes.
+function frozenNames(D) { if (!D) return []; if (!D._frz) Object.defineProperty(D, '_frz', { value: D.layers.filter(l => l.frozen).map(l => l.name), writable: true, configurable: true, enumerable: false }); return D._frz; }
+function layerFrozen(name) { const l = state.layerMap && state.layerMap.get(name); return !!(l && l.frozen) && !layerOn(name); }
+function frozenSig() { let s = ''; for (const n of frozenNames(state.drawing)) if (!layerOn(n)) s += n + '\u0001'; return s; }
 function layerAci(name) { const l = state.layerMap.get(name); return l ? l.aci : 7; }
 function layerCol(name) { const l = state.layerMap.get(name); return l ? (l.rgb || l.aci) : 7; }
 
@@ -58,7 +64,7 @@ function buildScene(space) {
   for (const e of space.ents) {
     const item = { ent: e, polys: [], bbox: emptyBox(), fillPoly: null, closed: false, kind: e.t, paths: [], pathMap: new Map(), fills: [], wipes: [], texts: [], diag: 0 };
     try { emitEntity(e, IDM, { layer: null, color: null, lt: '' }, S, item, 0); } catch (err) { console.warn('emit failed', e.t, err); }
-    if (item.polys.length || item.fillPoly || (item.inst && item.inst.length)) { item.pathMap = null; item.diag = boxOk(item.bbox) ? Math.hypot(item.bbox[2] - item.bbox[0], item.bbox[3] - item.bbox[1]) : 0; S.items.push(item); S.nFills += item.fills.length; S.nTexts += item.texts.length; if (boxOk(item.bbox) && e.t !== 'VIEWPORT') { bboxAdd(S.bbox, item.bbox[0], item.bbox[1]); bboxAdd(S.bbox, item.bbox[2], item.bbox[3]); } }
+    if (!item.frozen && (item.polys.length || item.fillPoly || (item.inst && item.inst.length))) { item.pathMap = null; item.diag = boxOk(item.bbox) ? Math.hypot(item.bbox[2] - item.bbox[0], item.bbox[3] - item.bbox[1]) : 0; S.items.push(item); S.nFills += item.fills.length; S.nTexts += item.texts.length; if (boxOk(item.bbox) && e.t !== 'VIEWPORT') { bboxAdd(S.bbox, item.bbox[0], item.bbox[1]); bboxAdd(S.bbox, item.bbox[2], item.bbox[3]); } }
   }
   if (!boxOk(S.bbox) && boxOk(S.textBox)) S.bbox = S.textBox.slice();
   S.snap.build();
@@ -82,10 +88,11 @@ function emitArc(S, item, key, c, r, a0, a1, ccw, M, isFull) {
     const d0 = mVec(M, [Math.cos(a0), Math.sin(a0)]), d1 = mVec(M, [Math.cos(a1), Math.sin(a1)]);
     const b0 = Math.atan2(d0[1], d0[0]), b1 = Math.atan2(d1[1], d1[0]); const ccw2 = det < 0 ? !ccw : ccw;
     const p = key.path;
-    if (isFull) { p.moveTo(cc[0] + rr, cc[1]); p.arc(cc[0], cc[1], rr, 0, TAU); }
+    arcPoints(cc, rr, isFull ? 0 : b0, isFull ? TAU : b1, isFull ? true : ccw2, flat, null, rr > BIG_ARC_R ? Math.PI / 180 : Math.PI / 12);
+    if (rr > BIG_ARC_R) { p.moveTo(flat[0], flat[1]); for (let j = 2; j < flat.length; j += 2) p.lineTo(flat[j], flat[j + 1]); } // huge radius: short straight steps (see BIG_ARC_R)
+    else if (isFull) { p.moveTo(cc[0] + rr, cc[1]); p.arc(cc[0], cc[1], rr, 0, TAU); }
     else { p.moveTo(cc[0] + rr * Math.cos(b0), cc[1] + rr * Math.sin(b0)); p.arc(cc[0], cc[1], rr, b0, b1, !ccw2); }
     key.n++;
-    arcPoints(cc, rr, isFull ? 0 : b0, isFull ? TAU : b1, isFull ? true : ccw2, flat, null, Math.PI / 12);
     S.snap.add(cc[0], cc[1], 3);
     for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2; if (isFull || angInArc(a, b0, b1, ccw2)) S.snap.add(cc[0] + rr * Math.cos(a), cc[1] + rr * Math.sin(a), 7); }
     if (!isFull) { S.snap.add(flat[0], flat[1], 1); S.snap.add(flat[flat.length - 2], flat[flat.length - 1], 1); const mid = (b0 + arcSweep(b0, b1, ccw2) / 2); S.snap.add(cc[0] + rr * Math.cos(mid), cc[1] + rr * Math.sin(mid), 2); }
@@ -125,13 +132,13 @@ function emitPline(S, item, key, v, closed, M) {
     if (arc) {
       if (mIsSimilar(M)) {
         const sc = mScaleOf(M), det = mDet(M); const cc = mApply(M, arc.c); const rr = arc.r * sc; const d0 = mVec(M, [Math.cos(arc.a0), Math.sin(arc.a0)]), d1 = mVec(M, [Math.cos(arc.a1), Math.sin(arc.a1)]); const b0 = Math.atan2(d0[1], d0[0]), b1 = Math.atan2(d1[1], d1[0]); const ccw = det < 0 ? !arc.ccw : arc.ccw;
-        p.arc(cc[0], cc[1], rr, b0, b1, !ccw); const q = []; arcPoints(cc, rr, b0, b1, ccw, q, null, Math.PI / 12); for (let j = 2; j < q.length; j++) flat.push(q[j]); S.snap.add(cc[0], cc[1], 3); addCurve(item, cc, rr, b0, b1, ccw, false);
+        const q = []; arcPoints(cc, rr, b0, b1, ccw, q, null, rr > BIG_ARC_R ? Math.PI / 180 : Math.PI / 12); if (rr > BIG_ARC_R) for (let j = 2; j < q.length; j += 2) p.lineTo(q[j], q[j + 1]); else p.arc(cc[0], cc[1], rr, b0, b1, !ccw); for (let j = 2; j < q.length; j++) flat.push(q[j]); S.snap.add(cc[0], cc[1], 3); addCurve(item, cc, rr, b0, b1, ccw, false);
       } else { const q = []; arcPoints(arc.c, arc.r, arc.a0, arc.a1, arc.ccw, q, M, Math.PI / 12); for (let j = 2; j < q.length; j += 2) { p.lineTo(q[j], q[j + 1]); flat.push(q[j], q[j + 1]); } }
     } else { const q = mApply(M, b); p.lineTo(q[0], q[1]); flat.push(q[0], q[1]); }
   }
   if (closed) p.closePath(); key.n++;
   item.polys.push(flat); bboxPoly(item.bbox, flat);
-  for (let i = 0; i < n; i++) { const q = mApply(M, v[i]); S.snap.add(q[0], q[1], 1); const b = v[(i + 1) % n]; if ((i < n - 1 || closed) && !(v[i][2])) { const qb = mApply(M, b); S.snap.add((q[0] + qb[0]) / 2, (q[1] + qb[1]) / 2, 2); } }
+  for (let i = 0; i < n; i++) { const q = mApply(M, v[i]); S.snap.add(q[0], q[1], 1); const b = v[(i + 1) % n]; if ((i < n - 1 || closed) && !(Math.abs(v[i][2] || 0) >= BULGE_MIN)) { const qb = mApply(M, b); S.snap.add((q[0] + qb[0]) / 2, (q[1] + qb[1]) / 2, 2); } }
   return flat;
 }
 function hatchLoopToPath(S, path, loop, M, flatOut) { // returns flat polygon
@@ -181,6 +188,7 @@ function emitEntity(e, M, ctx, S, item, depth) {
     case 'MTEXT': { const sc = mScaleOf(M); const p = mApply(M, e.p); const dir = mVec(M, [Math.cos(e.rot || 0), Math.sin(e.rot || 0)]); const rot = Math.atan2(dir[1], dir[0]); const h = e.h * sc; const w = (e.w || 0) * sc; let lines = mtextPlain(e.s); if (!lines.join('').trim()) break; lines = wrapLines(lines, h, w); const t = { layer, aci, al, x: p[0], y: p[1], h, rot, lines, at: e.at || 1, ls: e.ls || 1, mt: true, w, id: e.id }; item.texts.push(t); let mw = 0; for (const ln of lines) mw = Math.max(mw, textWidthUnits(ln, h)); textItemBox(item, t, Math.max(mw, w * 0.5), h + (lines.length - 1) * h * 1.667 * t.ls, S); S.snap.add(p[0], p[1], 4); break; }
     case 'INSERT': {
       if (depth > 12) break; const blk = state.drawing.blocks[e.n]; if (!blk) break;
+      if (layerFrozen(layer)) { if (!depth) item.frozen = true; break; } // on a frozen layer: nothing of the block shows, and it can't be picked
       const cols = e.cols || 1, rows = e.rows || 1; const ctx2 = { layer, color: aci, lt: resolveLt(e, ctx, layer), al, lts: curLts, lw: curLw };
       const g = getBlockGeom(e.n, ctx2, depth);
       if (!item.inst) item.inst = [];
