@@ -12,9 +12,12 @@ link() { "$BT/aapt2" link -o "$1" -I "$JAR" --manifest android/AndroidManifest.x
   --min-sdk-version 26 --target-sdk-version 36 --version-code "$VCODE" --version-name "$VNAME" ${2:-}; }
 link build/release-base.apk
 link build/test-base.apk --debug-mode
+# a second test build with a higher version, used as the "update" in the emulator test
+"$BT/aapt2" link -o build/upd-base.apk -I "$JAR" --manifest android/AndroidManifest.xml -A assets build/res.zip \
+  --min-sdk-version 26 --target-sdk-version 36 --version-code $((VCODE + 1)) --version-name "$VNAME-ci" --debug-mode
 javac -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "$JAR:$BT/core-lambda-stubs.jar" -d build/classes $(find android/src -name '*.java')
 "$BT/d8" --release --min-api 26 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
-for v in release test; do
+for v in release test upd; do
   cp build/$v-base.apk build/$v-unaligned.apk
   (cd build/dex && zip -q -j ../$v-unaligned.apk classes.dex)
   "$BT/zipalign" -p -f 4 build/$v-unaligned.apk out/$v-unsigned.apk
@@ -25,5 +28,6 @@ unzip -v out/release-unsigned.apk > out/release-contents.txt
 keytool -genkeypair -keystore build/ci-test.p12 -storetype PKCS12 -storepass citest -keypass citest -alias t \
   -keyalg RSA -keysize 2048 -validity 2 -dname CN=ci-test >/dev/null 2>&1
 "$BT/apksigner" sign --ks build/ci-test.p12 --ks-pass pass:citest --out out/test.apk out/test-unsigned.apk
-rm out/test-unsigned.apk
+"$BT/apksigner" sign --ks build/ci-test.p12 --ks-pass pass:citest --out out/test-update.apk out/upd-unsigned.apk
+rm -f out/test-unsigned.apk out/upd-unsigned.apk out/*.idsig
 ls -la out

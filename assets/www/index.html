@@ -4287,6 +4287,8 @@ window.tcNativeBack = () => {
 // a small version file. The APK downloads the new APK and hands it to Android's installer; the web version reloads.
 const UPDATE_HOST = 'surya-vallala.github.io';
 const UPDATE_INFO_URL = 'https://' + UPDATE_HOST + '/tesseract-cad/android/version.json';
+// Debuggable test builds (the emulator test on GitHub) may point at a test update channel; release builds never do.
+function updateInfoUrl() { try { if (NATIVE && JSON.parse(NATIVE.appInfo()).debug && localStorage.getItem('tct-upd-url')) return localStorage.getItem('tct-upd-url'); } catch (e) { } return UPDATE_INFO_URL; }
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtDay = (iso) => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(iso || ''); return m ? (+m[3]) + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : (iso || ''); };
 const UPD_IC = {
@@ -4315,7 +4317,7 @@ function askNetwork() {
 async function runUpdateCheck() {
   updBusy = true; updOpen('<div class="ic">' + UPD_IC.refresh + '</div><h2 id="updTitle">Checking for updates…</h2><div class="bar"><i style="width:40%"></i></div>');
   let info = null;
-  try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000); const r = await fetch(UPDATE_INFO_URL + '?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) throw new Error('the server answered ' + r.status); info = await r.json(); }
+  try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000); const r = await fetch(updateInfoUrl() + '?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) throw new Error('the server answered ' + r.status); info = await r.json(); }
   catch (e) { updBusy = false; updMessage('warn', 'Couldn\'t check for updates', 'The update server couldn\'t be reached. Check that the phone is online, then try again.', '<button id="updOk">Close</button><button class="pri" id="updRetry">Try again</button>'); $('updRetry').onclick = runUpdateCheck; return; }
   updBusy = false;
   const newer = NATIVE ? (+info.code > APP.code && info.apk && info.apk.url) : !!(info.web && window.TC_WEB_BUILD && String(info.web.build) > String(window.TC_WEB_BUILD));
@@ -4354,6 +4356,8 @@ renderRecent(); resizeCanvas();
 setHome(true); renderTabs(); updateChrome();
 takeSharedFiles();
 renderVersionRow(); takeNativeFiles();
+// Load the drawing-text and number fonts up front (they are bundled), then redraw with them
+try { Promise.all(["400 16px 'IBM Plex Sans'", "400 16px 'IBM Plex Mono'", "500 16px 'IBM Plex Mono'"].map(f => document.fonts.load(f))).then(() => { if (state.drawing) { lastFull = null; requestFull(); } }); } catch (e) { }
 </script>
 </body>
 </html>

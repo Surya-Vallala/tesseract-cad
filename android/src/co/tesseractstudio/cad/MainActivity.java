@@ -3,6 +3,7 @@ package co.tesseractstudio.cad;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
@@ -249,6 +250,7 @@ public class MainActivity extends Activity {
                 o.put("versionName", p.versionName);
                 o.put("versionCode", Build.VERSION.SDK_INT >= 28 ? p.getLongVersionCode() : p.versionCode);
                 o.put("android", Build.VERSION.SDK_INT);
+                o.put("debug", (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0);
             } catch (Exception ignored) { }
             return o.toString();
         }
@@ -285,6 +287,7 @@ public class MainActivity extends Activity {
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 Intent chooser = Intent.createChooser(i, "Share " + safe);
                 chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                chooser.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, new ComponentName[]{new ComponentName(MainActivity.this, MainActivity.class)}); // not back to ourselves
                 ui.post(() -> {
                     try { startActivity(chooser); cb(id, "ok", ""); } catch (Exception e) { cb(id, "error", "no app can receive this file"); }
                 });

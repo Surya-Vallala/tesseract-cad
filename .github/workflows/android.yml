@@ -20,6 +20,17 @@ jobs:
         run: |
           set -o pipefail
           bash ci/build.sh 2>&1 | tee out-build.log
+      - name: Publish a test update channel (branch apk-channel) for the emulator test
+        run: |
+          mkdir -p channel && cp out/test-update.apk channel/
+          VNAME=$(sed -n 1p version.txt); VCODE=$(sed -n 2p version.txt)
+          SIZE=$(stat -c %s channel/test-update.apk); SHA=$(sha256sum channel/test-update.apk | cut -d' ' -f1)
+          RAW="https://raw.githubusercontent.com/${{ github.repository }}/apk-channel"
+          printf '{"name":"%s-ci","code":%d,"date":"2026-10-14","notes":["Emulator test update"],"apk":{"url":"%s/test-update.apk","size":%d,"sha256":"%s"}}' "$VNAME" $((VCODE + 1)) "$RAW" "$SIZE" "$SHA" > channel/version.json
+          cat channel/version.json
+          cd channel && git init -q -b apk-channel && git config user.name apk-ci && git config user.email apk-ci@users.noreply.github.com
+          git add -A && git commit -q -m "test channel $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk-channel
       - name: Check the signed release APK
         if: hashFiles('signed/*.apk') != ''
         run: bash ci/verify.sh

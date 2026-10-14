@@ -47,9 +47,43 @@ try {
   log('share', await ev("(async () => { const f = new File([buildDxf(state.drawing).text], 'ci-share.dxf', { type: 'application/dxf' }); return await nativeShare(f) ? 'share sheet opened' : 'share failed'; })()"));
   await sleep(2000); shot('share');
   execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1000);
-  // back button in a drawing goes home; at home the app goes to the background
-  execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1200);
+  // back button in a drawing (after a real tap, as a person would) closes it and goes home
+  execSync('adb shell input tap 160 300'); await sleep(800);
+  execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1500);
   log('backInDrawing', await ev("atHome() ? 'home' : 'still in drawing'"));
+  log('fontsLater', await ev("['IBM Plex Mono','IBM Plex Sans'].map(f => f + ':' + document.fonts.check('16px \\"' + f + '\\"')).join(' ')"));
+  // the whole update path against a test channel: question skipped (remembered), download, Android's permission, installer
+  const repo = process.env.GITHUB_REPOSITORY || 'Surya-Vallala/tesseract-cad';
+  await ev(`localStorage.setItem('tct-net-ok','1'); localStorage.setItem('tct-upd-url','https://raw.githubusercontent.com/${repo}/apk-channel/version.json'); location.reload()`);
+  await sleep(6000);
+  await ev("document.getElementById('btnUpd').click()");
+  for (let i = 0; i < 30; i++) { await sleep(1000); const t = await ev("(document.getElementById('updTitle') || {}).textContent || ''"); if (!/Checking/.test(t)) break; }
+  log('updOffer', await ev("document.getElementById('updTitle').textContent + ' · ' + document.querySelector('#updSheet .meta').textContent"));
+  shot('update-offer');
+  await ev("document.getElementById('updNow').click()");
+  let st = '';
+  for (let i = 0; i < 60; i++) { await sleep(1000); st = await ev("(document.getElementById('updMsg') || {}).textContent || ''"); if (/Allow from this source|Android window|didn't finish/i.test(st)) break; }
+  log('updAfterDownload', st);
+  shot('update-permission');
+  const fg = () => { try { return execSync("adb shell dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity'").toString().trim(); } catch (e) { return ''; } };
+  log('foregroundAfterDownload', fg());
+  if (/Allow from this source/.test(st)) {
+    execSync('adb shell appops set co.tesseractstudio.cad REQUEST_INSTALL_PACKAGES allow'); await sleep(800);
+    execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(3000);
+  }
+  log('updMsgAfterPermission', await ev("(document.getElementById('updMsg') || {}).textContent || ''"));
+  // the system installer asks "Do you want to update this app?": find its Update button and tap it
+  let tapped = 'no installer button found';
+  for (let i = 0; i < 15; i++) {
+    await sleep(1500);
+    let xml = ''; try { execSync('adb shell uiautomator dump /sdcard/ui.xml'); xml = execSync('adb shell cat /sdcard/ui.xml').toString(); } catch (e) { }
+    const m = /text="(Update|UPDATE|Install|INSTALL)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(xml);
+    if (m) { const x = (+m[2] + +m[4]) >> 1, y = (+m[3] + +m[5]) >> 1; shot('installer'); execSync(`adb shell input tap ${x} ${y}`); tapped = 'tapped ' + m[1] + ' at ' + x + ',' + y; break; }
+    if (i === 14) { out.installerScreen = xml.slice(0, 3000); shot('installer-missing'); }
+  }
+  log('installer', tapped);
+  await sleep(15000);
+  try { log('installedVersion', execSync("adb shell dumpsys package co.tesseractstudio.cad | grep -E 'versionCode|versionName' | head -2").toString().trim()); } catch (e) { log('installedVersion', 'dumpsys failed'); }
   log('errors', await ev("(window.__errs || []).join(' | ')"));
 } catch (e) { out.error = String(e && e.stack || e); }
 console.log(JSON.stringify(out, null, 1));
