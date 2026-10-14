@@ -12,7 +12,7 @@ link() { "$BT/aapt2" link -o "$1" -I "$JAR" --manifest android/AndroidManifest.x
   --min-sdk-version 26 --target-sdk-version 36 --version-code "$VCODE" --version-name "$VNAME" ${2:-}; }
 link build/release-base.apk
 link build/test-base.apk --debug-mode
-javac -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "$JAR" -d build/classes $(find android/src -name '*.java')
+javac -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "$JAR:$BT/core-lambda-stubs.jar" -d build/classes $(find android/src -name '*.java')
 "$BT/d8" --release --min-api 26 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
 for v in release test; do
   cp build/$v-base.apk build/$v-unaligned.apk

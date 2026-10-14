@@ -8,6 +8,7 @@ let list = [];
 for (let i = 0; i < 20 && !list.length; i++) { try { list = (await (await fetch('http://127.0.0.1:9222/json')).json()).filter((p) => p.type === 'page'); } catch (e) { } if (!list.length) await sleep(1000); }
 log('pages', list.map((p) => p.url));
 const page = list.find((p) => /appassets/.test(p.url)) || list[0];
+if (!page) { console.log(JSON.stringify({ error: 'no WebView page to attach to', pages: list })); process.exit(0); }
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
 let seq = 0; const waits = new Map();

@@ -17,7 +17,9 @@ jobs:
         with:
           node-version: 22
       - name: Build
-        run: bash ci/build.sh 2>&1 | tee out-build.log
+        run: |
+          set -o pipefail
+          bash ci/build.sh 2>&1 | tee out-build.log
       - name: Check the signed release APK
         if: hashFiles('signed/*.apk') != ''
         run: bash ci/verify.sh
