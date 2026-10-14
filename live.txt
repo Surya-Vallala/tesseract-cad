@@ -1,0 +1,35 @@
+== headers version.json
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+access-control-allow-origin: *
+cache-control: max-age=600
+== version.json
+{
+  "name": "20.0",
+  "code": 2000,
+  "date": "2026-10-14",
+  "notes": [
+    "Android app that works fully offline",
+    "Check for updates button on the home screen",
+    "Open DWG/DXF from WhatsApp, Files or Gmail straight into the app",
+    "Share DWG, DXF and PDF straight to WhatsApp"
+  ],
+  "web": {
+    "build": "202610140548"
+  },
+  "apk": {
+    "url": "https://surya-vallala.github.io/tesseract-cad/android/TesseractCAD-20.0.apk",
+    "size": 2570336,
+    "sha256": "f05f58f832ef4a77f9b2584281f87812abef24fb4db2a81052d53f6d73ec0430"
+  }
+}
+
+== apk  want: f05f58f832ef4a77f9b2584281f87812abef24fb4db2a81052d53f6d73ec0430 2570336
+== apk  got:  f05f58f832ef4a77f9b2584281f87812abef24fb4db2a81052d53f6d73ec0430 2570336
+APK MATCHES
+Signer #1 certificate DN: CN=Tesseract Studio, O=Tesseract Studio, L=Hyderabad, ST=Telangana, C=IN
+Signer #1 certificate SHA-256 digest: 7f18972b07b1936d4fd6eddb25975c252ea70dd870390b24e2c667637d96cbbb
+Signer #1 certificate SHA-1 digest: d2a520f8639cbc835d795e8dbcec3742453dea71
+== download page
+<h1>Tesseract CAD for Android</h1>
+Download the app (APK)

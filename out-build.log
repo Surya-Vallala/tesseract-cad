@@ -1,0 +1,10 @@
+Note: android/src/co/tesseractstudio/cad/MainActivity.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+total 7564
+drwxr-xr-x  2 runner runner    4096 Oct 14 05:58 .
+drwxr-xr-x 10 runner runner    4096 Oct 14 05:58 ..
+-rw-r--r--  1 runner runner    1250 Oct 14 05:58 build-report.txt
+-rw-r--r--  1 runner runner    3160 Oct 14 05:58 release-contents.txt
+-rw-r--r--  1 runner runner 2567731 Oct 14 05:58 release-unsigned.apk
+-rw-r--r--  1 runner runner 2579091 Oct 14 05:58 test-update.apk
+-rw-r--r--  1 runner runner 2579091 Oct 14 05:58 test.apk
