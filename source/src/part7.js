@@ -39,7 +39,7 @@ function openShare() {
 let readyFile = null;
 function showFileReady(name, blob, type, note, detail) {
   const file = new File([blob], name, { type }); readyFile = file;
-  let canShare = false; try { canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { canShare = false; }
+  let canShare = !!NATIVE; if (!canShare) try { canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { canShare = false; } // the Android app shares any file type
   $('fileTitle').textContent = name;
   $('fileMsg').textContent = (detail ? detail + ' · ' : '') + fmtSize(blob.size);
   $('fileNote').textContent = note || (canShare ? '' : 'Android lets web apps share only PDFs and pictures directly. Save this file, then share it from Files, WhatsApp or Gmail (attach it as a document).');
@@ -51,6 +51,7 @@ $('fileClose').addEventListener('click', closeFileDlg);
 $('fileSave').addEventListener('click', async () => { const f = readyFile; if (!f) return; if (await saveFile(f.name, f)) closeFileDlg(); });
 $('fileShare').addEventListener('click', async () => {
   const f = readyFile; if (!f) return;
+  if (NATIVE) { if (await nativeShare(f)) closeFileDlg(); return; }
   try { await navigator.share({ files: [f], title: f.name }); closeFileDlg(); }
   catch (e) { if (e && e.name === 'AbortError') return; toast('Could not share (' + (e && e.message || e) + '). Use Save to phone instead.', 5000); }
 });

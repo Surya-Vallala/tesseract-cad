@@ -1,0 +1,11 @@
+{
+  "name": "20.0",
+  "code": 2000,
+  "date": "2026-10-14",
+  "notes": [
+    "Android app that works fully offline",
+    "Check for updates button on the home screen",
+    "Open DWG/DXF from WhatsApp, Files or Gmail straight into the app",
+    "Share DWG, DXF and PDF straight to WhatsApp"
+  ]
+}

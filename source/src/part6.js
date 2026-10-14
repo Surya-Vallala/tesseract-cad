@@ -310,6 +310,7 @@ function makeZip(name, u8) {
 }
 let downloadsNs = null; (async () => { try { if (window.claude && window.claude.use) downloadsNs = await window.claude.use('downloads'); } catch (e) { downloadsNs = null; } })();
 async function saveFile(filename, data) {
+  if (NATIVE) return nativeSave(filename, data); // Android app: the system's save-as picker
   if (downloadsNs) { try { await downloadsNs.save({ filename, data }); toast('Saved ' + filename); return true; } catch (err) { if (err && err.code === 'declined') { toast('Save cancelled'); return false; } toast('Could not save: ' + (err && err.message ? err.message : err)); return false; } }
   try { const a = document.createElement('a'); a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data])); a.download = filename; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); toast('Download started'); return true; } catch (e) { toast('Saving is not available in this view'); return false; }
 }
@@ -584,6 +585,7 @@ function applySkin(v, persist) {
   let canvasPref = null; try { canvasPref = localStorage.getItem('tct-canvas'); } catch (e) { }
   if (!canvasPref) { state.canvasLight = v !== 'dark'; stage.classList.toggle('light', state.canvasLight); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === (state.canvasLight ? 'light' : 'dark') ? 'true' : 'false'); }
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#ffffff');
+  if (window.TCNative && window.TCNative.setBars) try { const bar = getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#161618'; const m = /^#?([0-9a-f]{6})$/i.exec(bar); const n = m ? parseInt(m[1], 16) : 0x161618; const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); window.TCNative.setBars(m ? '#' + m[1] : '#161618', lum > 140); } catch (e) { } // Android app: status/navigation bar areas follow the theme
   if (persist) try { localStorage.setItem('tct-skin', v); } catch (e) { }
   lastFull = null; requestFull();
 }

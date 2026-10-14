@@ -14,7 +14,7 @@
 </head>
 <body>
 <title>Tesseract CAD Tools</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="fonts/fonts.css"> <!-- bundled fonts: the app never needs the internet -->
 <style>
 /* Layout: one-screen app. Top bar + space tabs over a full-bleed drawing canvas; prompt line and tool strip pinned at the bottom; layers/menu slide up as sheets. */
 :root{ /* Studio Light (brand: black, white, red #FF0000) */
@@ -112,6 +112,32 @@ input{font:inherit;color:inherit}
 #stage.light #vbtns button{background:rgba(250,250,247,.9);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
 #vbtns button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #vbtns button:disabled{opacity:.35}
+/* home screen: version and Check for updates; the update sheet (asks before going online, then shows the result) */
+.updrow{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
+.updrow .v{font-size:12px;color:var(--muted);line-height:1.35;min-width:0}
+.updrow .v b{color:var(--fg);font-weight:600;font-size:13px}
+.updrow button{display:flex;align-items:center;gap:7px;padding:9px 13px;border-radius:9px;background:var(--chip);color:var(--fg);font-size:13px;font-weight:600;white-space:nowrap;flex:0 0 auto}
+.updrow button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#updScrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60}
+#updSheet{position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:520px;margin:0 auto;background:var(--panel);color:var(--fg);border-radius:18px 18px 0 0;padding:20px 20px calc(22px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:12px}
+#updSheet[hidden],#updScrim[hidden]{display:none}
+#updSheet .grab{width:38px;height:4px;border-radius:2px;background:var(--line);align-self:center;margin:-8px 0 2px}
+#updSheet .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+#updSheet .ic.ok{background:rgba(46,160,67,.16);color:#3fb950}
+#updSheet .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#updSheet h2{margin:0;font-size:18px;font-weight:600}
+#updSheet p{margin:0;font-size:13.5px;line-height:1.45;color:var(--muted)}
+#updSheet p b{color:var(--fg);font-weight:600}
+#updSheet .chk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--fg)}
+#updSheet .chk input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+#updSheet .btns{display:flex;gap:10px;margin-top:4px}
+#updSheet .btns button{flex:1;padding:13px 10px;border-radius:11px;font-size:14.5px;font-weight:600;background:var(--chip);color:var(--fg)}
+#updSheet .btns button.pri{background:var(--accent);color:var(--accent-fg)}
+#updSheet .btns button:disabled{opacity:.5}
+#updSheet ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.5;color:var(--fg)}
+#updSheet .meta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+#updSheet .bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden}
+#updSheet .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
 /* layout strip above the tools: Model + every layout as a tab (swipe for more), then undo, redo and the menu */
 #spaceBar{display:flex;align-items:center;gap:4px;height:42px;flex:0 0 auto;padding:0 2px 0 6px;border-bottom:1px solid var(--bar-line)}
 #spaceTabs{display:flex;gap:4px;align-items:center;flex:1 1 auto;min-width:0;height:100%;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);padding-right:14px}
@@ -362,6 +388,7 @@ body.fs #tabs{display:none}
         <button class="btn quiet" id="btnSample">Try the sample plan instead</button>
         <p id="engineStatus" style="font-size:11.5px">Loading the DWG engine (about 9 MB, cached after the first visit)…</p>
         <div class="credit">Developed by <b>Tesseract Studio</b><br>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></div>
+        <div class="updrow" id="updRow"><div class="v"><b id="verName">Version</b><br><span id="verSub"></span></div><button id="btnUpd" type="button"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Check for updates</button></div>
       </div>
     </div>
     <div id="loading"><div class="box"><div class="stage" id="loadStage">Reading file</div><div class="bar"><i id="loadBar"></i></div><div class="hint">Large drawings can take a few seconds on a phone.</div></div></div>
@@ -540,6 +567,8 @@ body.fs #tabs{display:none}
     </div></div>
     <div id="toast" role="status"></div>
   </main>
+  <div id="updScrim" hidden></div>
+  <section id="updSheet" role="dialog" aria-modal="true" aria-labelledby="updTitle" hidden></section>
   <footer id="tools">
     <div id="spaceBar">
       <div id="spaceTabs" role="tablist" aria-label="Model and layouts"></div>
@@ -554,6 +583,7 @@ body.fs #tabs{display:none}
   <input type="file" id="file" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" tabindex="-1" aria-hidden="true">
 </div>
 <script>
+const APP = {"name": "20.0", "code": 2000, "date": "2026-10-14"}; // app version (app-version.json)
 'use strict';
 // ===================== Constants & small helpers =====================
 const ACI_HEX = '000000ff0000ffff0000ff0000ffff0000ffff00ffffffff808080c0c0c0ff0000ff7f7fa50000a552527f00007f3f3f4c00004c2626260000261313ff3f00ff9f7fa52900a567527f1f007f4f3f4c13004c2f26260900261713ff7f00ffbf7fa55200a57c527f3f007f5f3f4c26004c3926261300261c13ffbf00ffdf7fa57c00a591527f5f007f6f3f4c39004c4226261c00262113ffff00ffff7fa5a500a5a5527f7f007f7f3f4c4c004c4c26262600262613bfff00dfff7f7ca50091a5525f7f006f7f3f394c00424c261c26002126137fff00bfff7f52a5007ca5523f7f005f7f3f264c00394c261326001c26133fff009fff7f29a50067a5521f7f004f7f3f134c002f4c2609260017261300ff007fff7f00a50052a552007f003f7f3f004c00264c2600260013261300ff3f7fff9f00a52952a567007f1f3f7f4f004c13264c2f00260913581700ff7f7fffbf00a55252a57c007f3f3f7f5f004c26264c3900261313581c00ffbf7fffdf00a57c52a591007f5f3f7f6f004c39264c4200261c13585800ffff7fffff00a5a552a5a5007f7f3f7f7f004c4c264c4c00262613585800bfff7fdfff007ca55291a5005f7f3f6f7f00394c26427e001c26135858007fff7fbfff0052a5527ca5003f7f3f5f7f00264c26397e001326131c58003fff7f9fff0029a55267a5001f7f3f4f7f00134c262f7e0009261317580000ff7f7fff0000a55252a500007f3f3f7f00004c26267e0000261313583f00ff9f7fff2900a56752a51f007f4f3f7f13004c2f267e0900261713587f00ffbf7fff5200a57c52a53f007f5f3f7f26004c39267e1300261c1358bf00ffdf7fff7c00a59152a55f007f6f3f7f39004c42264c1c0026581358ff00ffff7fffa500a5a552a57f007f7f3f7f4c004c4c264c260026581358ff00bfff7fdfa5007ca552917f005f7f3f6f4c00394c264226001c581358ff007fff7fbfa50052a5527c7f003f7f3f5f4c00264c263926001358131cff003fff7f9fa50029a552677f001f7f3f4f4c00134c262f260009581317000000656565666666999999ccccccffffff';
@@ -2422,6 +2452,7 @@ function makeZip(name, u8) {
 }
 let downloadsNs = null; (async () => { try { if (window.claude && window.claude.use) downloadsNs = await window.claude.use('downloads'); } catch (e) { downloadsNs = null; } })();
 async function saveFile(filename, data) {
+  if (NATIVE) return nativeSave(filename, data); // Android app: the system's save-as picker
   if (downloadsNs) { try { await downloadsNs.save({ filename, data }); toast('Saved ' + filename); return true; } catch (err) { if (err && err.code === 'declined') { toast('Save cancelled'); return false; } toast('Could not save: ' + (err && err.message ? err.message : err)); return false; } }
   try { const a = document.createElement('a'); a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data])); a.download = filename; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); toast('Download started'); return true; } catch (e) { toast('Saving is not available in this view'); return false; }
 }
@@ -2696,6 +2727,7 @@ function applySkin(v, persist) {
   let canvasPref = null; try { canvasPref = localStorage.getItem('tct-canvas'); } catch (e) { }
   if (!canvasPref) { state.canvasLight = v !== 'dark'; stage.classList.toggle('light', state.canvasLight); for (const x of $('segCanvas').children) x.setAttribute('aria-pressed', x.dataset.v === (state.canvasLight ? 'light' : 'dark') ? 'true' : 'false'); }
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#ffffff');
+  if (window.TCNative && window.TCNative.setBars) try { const bar = getComputedStyle(document.documentElement).getPropertyValue('--bar-bg').trim() || '#161618'; const m = /^#?([0-9a-f]{6})$/i.exec(bar); const n = m ? parseInt(m[1], 16) : 0x161618; const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); window.TCNative.setBars(m ? '#' + m[1] : '#161618', lum > 140); } catch (e) { } // Android app: status/navigation bar areas follow the theme
   if (persist) try { localStorage.setItem('tct-skin', v); } catch (e) { }
   lastFull = null; requestFull();
 }
@@ -2788,7 +2820,7 @@ function openShare() {
 let readyFile = null;
 function showFileReady(name, blob, type, note, detail) {
   const file = new File([blob], name, { type }); readyFile = file;
-  let canShare = false; try { canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { canShare = false; }
+  let canShare = !!NATIVE; if (!canShare) try { canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { canShare = false; } // the Android app shares any file type
   $('fileTitle').textContent = name;
   $('fileMsg').textContent = (detail ? detail + ' · ' : '') + fmtSize(blob.size);
   $('fileNote').textContent = note || (canShare ? '' : 'Android lets web apps share only PDFs and pictures directly. Save this file, then share it from Files, WhatsApp or Gmail (attach it as a document).');
@@ -2800,6 +2832,7 @@ $('fileClose').addEventListener('click', closeFileDlg);
 $('fileSave').addEventListener('click', async () => { const f = readyFile; if (!f) return; if (await saveFile(f.name, f)) closeFileDlg(); });
 $('fileShare').addEventListener('click', async () => {
   const f = readyFile; if (!f) return;
+  if (NATIVE) { if (await nativeShare(f)) closeFileDlg(); return; }
   try { await navigator.share({ files: [f], title: f.name }); closeFileDlg(); }
   catch (e) { if (e && e.name === 'AbortError') return; toast('Could not share (' + (e && e.message || e) + '). Use Save to phone instead.', 5000); }
 });
@@ -4205,7 +4238,10 @@ async function takeSharedFiles() {
   let c, keys; try { c = await caches.open('share-inbox'); keys = await c.keys(); } catch (e) { return; }
   keys.sort((a, b) => a.url.localeCompare(b.url, undefined, { numeric: true }));
   const got = []; for (const k of keys) { try { const r = await c.match(k); if (r) got.push({ name: decodeURIComponent(r.headers.get('X-Name') || ''), buf: await r.arrayBuffer() }); } catch (e) { } try { await c.delete(k); } catch (e) { } }
-  if (!got.length) return;
+  if (got.length) openIncoming(got);
+}
+// Files handed to the app from outside ({ name, buf } each): open the first DWG/DXF in its own tab.
+function openIncoming(got) {
   let pick = null, skipped = 0;
   for (const g of got) { const kind = /\.dxf$/i.test(g.name) ? 'dxf' : /\.dwg$/i.test(g.name) ? 'dwg' : sniffCad(g.buf); if (!kind) { skipped++; continue; } if (!pick) { pick = g; if (!/\.(dwg|dxf)$/i.test(g.name)) g.name = (g.name || 'Shared drawing').replace(/\.[^.]*$/, '') + '.' + kind; } else skipped++; }
   if (!pick) { toast('That file is not a DWG or DXF drawing' + (got[0].name ? ' (' + got[0].name + ')' : '') + '.', 5000); return; }
@@ -4215,11 +4251,123 @@ async function takeSharedFiles() {
   parseFile(pick.buf, pick.name);
 }
 
+// ===================== Android app: native bridge (TCNative), files in and out =====================
+// In the APK the app runs from files inside the app and talks to Android through window.TCNative.
+// Calls that finish later answer through tcNativeCb(id, state, msg); state 'ok' | 'error' | 'cancel' ends a call,
+// anything else ('progress', 'need-permission', 'installing') is an update along the way.
+const NATIVE = (typeof window.TCNative === 'object' && window.TCNative) ? window.TCNative : null;
+const nativeWaits = new Map(); let nativeSeq = 0;
+window.tcNativeCb = (id, st, msg) => { const h = nativeWaits.get(id); if (!h) return; if (st === 'ok' || st === 'error' || st === 'cancel') nativeWaits.delete(id); try { h(st, msg); } catch (e) { console.warn(e); } };
+function nativeRun(method, args, onEvent) { const id = 'n' + (++nativeSeq); nativeWaits.set(id, onEvent); try { NATIVE[method](id, ...args); } catch (e) { nativeWaits.delete(id); onEvent('error', String(e && e.message || e)); } return id; }
+function nativeOnce(method, args) { return new Promise(res => nativeRun(method, args, (st, msg) => { if (st === 'ok' || st === 'error' || st === 'cancel') res({ st, msg }); })); }
+function blobToB64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(blob); }); }
+const mimeOf = (name) => /\.pdf$/i.test(name) ? 'application/pdf' : /\.dxf$/i.test(name) ? 'application/dxf' : /\.dwg$/i.test(name) ? 'application/acad' : /\.png$/i.test(name) ? 'image/png' : /\.zip$/i.test(name) ? 'application/zip' : /\.csv$/i.test(name) ? 'text/csv' : 'application/octet-stream';
+// Save: Android's own "save as" picker (Downloads, Drive, any folder)
+async function nativeSave(filename, data) {
+  const blob = data instanceof Blob ? data : new Blob([data]);
+  const r = await nativeOnce('saveFile', [filename, blob.type || mimeOf(filename), await blobToB64(blob)]);
+  if (r.st === 'ok') { toast('Saved ' + filename); return true; }
+  if (r.st === 'cancel') { toast('Save cancelled'); return false; }
+  toast('Could not save: ' + (r.msg || 'unknown error'), 5000); return false;
+}
+// Share: Android's share sheet, any file type (DWG and DXF go to WhatsApp as documents)
+async function nativeShare(file) { const r = await nativeOnce('shareFile', [file.name, file.type || mimeOf(file.name), await blobToB64(file)]); if (r.st === 'error') toast('Could not share: ' + (r.msg || ''), 5000); return r.st === 'ok'; }
+// Files opened with / shared to the app arrive as https://appassets…/shared/N, listed by pendingFiles()
+async function takeNativeFiles() {
+  if (!NATIVE) return; let list = []; try { list = JSON.parse(NATIVE.pendingFiles() || '[]'); } catch (e) { list = []; } if (!list.length) return;
+  const got = []; for (const f of list) { try { const r = await fetch(f.url); if (r.ok) got.push({ name: f.name || '', buf: await r.arrayBuffer() }); } catch (e) { } }
+  if (got.length) openIncoming(got); else toast('Could not read the file that was shared.', 4000);
+}
+window.tcNativeIncoming = () => { takeNativeFiles(); };
+// Android back button: close what's on top here first; false = let the page history (or Android) handle it
+window.tcNativeBack = () => {
+  if (!$('updSheet').hidden) { if (!updBusy) updClose(); return true; }
+  if (!$('curPop').hidden) { closeCurPop(); return true; }
+  if (!$('toolPop').hidden) { closePop(); return true; }
+  // In a drawing the app answers Back itself (panels, then tools, then the drawing → home), the same as the page's
+  // history guard does in a browser; Android's WebView skips history entries made without a recent tap, so it isn't relied on.
+  if (!atHome() && state.drawing) { handleBack(); return true; }
+  if (document.querySelector('.sheet.open')) { closeSheets(); return true; }
+  if ($('newDlg').classList.contains('on')) { $('ndCancel').click(); return true; }
+  return false; // home with nothing open: Android puts the app in the background
+};
+
+// ===================== Version and Check for updates =====================
+// The app never goes online by itself. "Check for updates" asks first (unless told not to ask again), then reads
+// a small version file. The APK downloads the new APK and hands it to Android's installer; the web version reloads.
+const UPDATE_HOST = 'surya-vallala.github.io';
+const UPDATE_INFO_URL = 'https://' + UPDATE_HOST + '/tesseract-cad/android/version.json';
+// Debuggable test builds (the emulator test on GitHub) may point at a test update channel; release builds never do.
+function updateInfoUrl() { try { if (NATIVE && JSON.parse(NATIVE.appInfo()).debug && localStorage.getItem('tct-upd-url')) return localStorage.getItem('tct-upd-url'); } catch (e) { } return UPDATE_INFO_URL; }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtDay = (iso) => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(iso || ''); return m ? (+m[3]) + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : (iso || ''); };
+const UPD_IC = {
+  globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+  dl: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  ok: '<svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>',
+  warn: '<svg viewBox="0 0 24 24"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>'
+};
+let updBusy = false;
+function renderVersionRow() { $('verName').textContent = 'Version ' + APP.name; $('verSub').textContent = fmtDay(APP.date) + (NATIVE ? ' · works offline' : ' · web version'); }
+function updOpen(html) { $('updSheet').innerHTML = '<div class="grab"></div>' + html; $('updSheet').hidden = false; $('updScrim').hidden = false; }
+function updClose() { $('updSheet').hidden = true; $('updScrim').hidden = true; updBusy = false; }
+$('updScrim').addEventListener('click', () => { if (!updBusy) updClose(); });
+function updMessage(kind, title, text, btn) { updOpen('<div class="ic' + (kind === 'ok' ? ' ok' : '') + '">' + UPD_IC[kind] + '</div><h2 id="updTitle">' + title + '</h2><p>' + text + '</p><div class="btns">' + (btn || '<button class="pri" id="updOk">OK</button>') + '</div>'); const b = $('updOk'); if (b) b.onclick = updClose; }
+$('btnUpd').addEventListener('click', () => { let ok = false; try { ok = localStorage.getItem('tct-net-ok') === '1'; } catch (e) { } if (ok) runUpdateCheck(); else askNetwork(); });
+function askNetwork() {
+  updOpen('<div class="ic">' + UPD_IC.globe + '</div><h2 id="updTitle">Connect to the internet?</h2>' +
+    '<p>' + (NATIVE ? 'Tesseract CAD works fully offline. To check for a newer version it needs to connect to ' : 'To check for a newer version the app connects to ') + '<b>' + UPDATE_HOST + '</b>, where Tesseract Studio publishes updates, for a moment.</p>' +
+    '<p>Only the version number is checked. <b>Your drawings never leave this phone.</b></p>' +
+    '<label class="chk"><input type="checkbox" id="updRemember">Don\'t ask again</label>' +
+    '<div class="btns"><button id="updNo">Not now</button><button class="pri" id="updGo">Connect &amp; check</button></div>');
+  $('updNo').onclick = updClose;
+  $('updGo').onclick = () => { if ($('updRemember').checked) try { localStorage.setItem('tct-net-ok', '1'); } catch (e) { } runUpdateCheck(); };
+}
+async function runUpdateCheck() {
+  updBusy = true; updOpen('<div class="ic">' + UPD_IC.refresh + '</div><h2 id="updTitle">Checking for updates…</h2><div class="bar"><i style="width:40%"></i></div>');
+  let info = null;
+  try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000); const r = await fetch(updateInfoUrl() + '?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) throw new Error('the server answered ' + r.status); info = await r.json(); }
+  catch (e) { updBusy = false; updMessage('warn', 'Couldn\'t check for updates', 'The update server couldn\'t be reached. Check that the phone is online, then try again.', '<button id="updOk">Close</button><button class="pri" id="updRetry">Try again</button>'); $('updRetry').onclick = runUpdateCheck; return; }
+  updBusy = false;
+  const newer = NATIVE ? (+info.code > APP.code && info.apk && info.apk.url) : !!(info.web && window.TC_WEB_BUILD && String(info.web.build) > String(window.TC_WEB_BUILD));
+  if (!newer) { updMessage('ok', 'You\'re up to date', 'Version ' + escapeHtml(APP.name) + ' is the latest. Checked just now.'); return; }
+  const dirty = docs.filter(docDirty).length;
+  updOpen('<div class="ic">' + UPD_IC.dl + '</div><h2 id="updTitle">Version ' + escapeHtml(info.name) + ' is available</h2>' +
+    '<div class="meta"><span>You have ' + escapeHtml(APP.name) + '</span><span>' + (NATIVE && info.apk.size ? 'Download ' + fmtSize(+info.apk.size) : '') + '</span></div>' +
+    (info.notes && info.notes.length ? '<ul>' + info.notes.map(n => '<li>' + escapeHtml(n) + '</li>').join('') + '</ul>' : '') +
+    '<p>The app restarts to finish, so save any edits first.' + (dirty ? ' <b>' + dirty + ' drawing' + (dirty === 1 ? ' has' : 's have') + ' unsaved edits.</b>' : '') + '</p>' +
+    '<div class="btns"><button id="updLater">Later</button><button class="pri" id="updNow">Update now</button></div>');
+  $('updLater').onclick = updClose; $('updNow').onclick = () => NATIVE ? nativeUpdate(info) : webUpdate();
+}
+function nativeUpdate(info) {
+  updBusy = true;
+  updOpen('<div class="ic">' + UPD_IC.dl + '</div><h2 id="updTitle">Downloading version ' + escapeHtml(info.name) + '</h2><div class="bar"><i id="updBar"></i></div>' +
+    '<div class="meta"><span id="updDone">Starting…</span><span>' + fmtSize(+info.apk.size || 0) + '</span></div><p id="updMsg">Keep the app open while it downloads.</p><div class="btns"><button id="updCancel">Cancel</button></div>');
+  const id = nativeRun('installUpdate', [info.apk.url, info.apk.sha256 || '', String(info.apk.size || 0)], (st, msg) => {
+    if (st === 'progress') { const [d, t] = String(msg).split('/').map(Number); if ($('updBar')) $('updBar').style.width = (t ? Math.round(d / t * 100) : 0) + '%'; if ($('updDone')) $('updDone').textContent = fmtSize(d || 0); }
+    else if (st === 'need-permission') { if ($('updBar')) $('updBar').style.width = '100%'; $('updMsg').innerHTML = '<b>Android needs your OK once:</b> turn on <b>Allow from this source</b> for Tesseract CAD, then come back here. The update continues by itself.'; }
+    else if (st === 'installing') { updBusy = false; $('updTitle').textContent = 'Installing version ' + info.name; $('updMsg').innerHTML = 'Tap <b>Update</b> in the Android window. When it finishes, Android closes the app: open Tesseract CAD again to use version ' + escapeHtml(info.name) + '.'; $('updCancel').textContent = 'Close'; $('updCancel').onclick = updClose; }
+    else if (st === 'error') { updBusy = false; updMessage('warn', 'The update didn\'t finish', escapeHtml(msg || 'Something went wrong.') + ' Your drawings are fine; try again later.'); }
+    else if (st === 'cancel') updClose();
+  });
+  $('updCancel').onclick = () => { try { NATIVE.cancelUpdate(id); } catch (e) { } updClose(); };
+}
+async function webUpdate() {
+  updBusy = true; updOpen('<div class="ic">' + UPD_IC.dl + '</div><h2 id="updTitle">Updating…</h2><div class="bar"><i style="width:70%"></i></div><p>The app reloads in a moment.</p>');
+  try { if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); } catch (e) { }
+  try { for (const k of await caches.keys()) if (k.startsWith('tct-')) await caches.delete(k); } catch (e) { }
+  location.reload();
+}
+
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();
 // Start on the Home tab with nothing open; drawings open in their own tabs.
 setHome(true); renderTabs(); updateChrome();
 takeSharedFiles();
+renderVersionRow(); takeNativeFiles();
+// Load the drawing-text and number fonts up front (they are bundled), then redraw with them
+try { Promise.all(["400 16px 'IBM Plex Sans'", "400 16px 'IBM Plex Mono'", "500 16px 'IBM Plex Mono'"].map(f => document.fonts.load(f))).then(() => { if (state.drawing) { lastFull = null; requestFull(); } }); } catch (e) { }
 </script>
 <script>
 // GitHub Pages build only: install button, version line, service worker.
@@ -4230,9 +4378,10 @@ takeSharedFiles();
   btn.textContent = 'Install as an app on this phone';
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
-  var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version 202610090715' + (standalone ? ' · running as installed app' : '');
-  card.appendChild(ver);
+  var apk = 'TesseractCAD-20.0.apk';
+  if (apk && /Android/i.test(navigator.userAgent)) { var a = document.createElement('a'); a.className = 'btn big'; a.href = 'android/' + apk; a.textContent = 'Get the Android app (works offline)'; a.style.textDecoration = 'none'; card.insertBefore(a, status); }
+  window.TC_WEB_BUILD = '202610140548'; // web build stamp, compared by Check for updates
+  var vs = document.getElementById('verSub'); if (vs && standalone) vs.textContent += ' · installed';
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; if (!standalone) btn.hidden = false; });

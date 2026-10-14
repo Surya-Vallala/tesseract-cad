@@ -1064,7 +1064,10 @@ async function takeSharedFiles() {
   let c, keys; try { c = await caches.open('share-inbox'); keys = await c.keys(); } catch (e) { return; }
   keys.sort((a, b) => a.url.localeCompare(b.url, undefined, { numeric: true }));
   const got = []; for (const k of keys) { try { const r = await c.match(k); if (r) got.push({ name: decodeURIComponent(r.headers.get('X-Name') || ''), buf: await r.arrayBuffer() }); } catch (e) { } try { await c.delete(k); } catch (e) { } }
-  if (!got.length) return;
+  if (got.length) openIncoming(got);
+}
+// Files handed to the app from outside ({ name, buf } each): open the first DWG/DXF in its own tab.
+function openIncoming(got) {
   let pick = null, skipped = 0;
   for (const g of got) { const kind = /\.dxf$/i.test(g.name) ? 'dxf' : /\.dwg$/i.test(g.name) ? 'dwg' : sniffCad(g.buf); if (!kind) { skipped++; continue; } if (!pick) { pick = g; if (!/\.(dwg|dxf)$/i.test(g.name)) g.name = (g.name || 'Shared drawing').replace(/\.[^.]*$/, '') + '.' + kind; } else skipped++; }
   if (!pick) { toast('That file is not a DWG or DXF drawing' + (got[0].name ? ' (' + got[0].name + ')' : '') + '.', 5000); return; }
@@ -1074,8 +1077,120 @@ async function takeSharedFiles() {
   parseFile(pick.buf, pick.name);
 }
 
+// ===================== Android app: native bridge (TCNative), files in and out =====================
+// In the APK the app runs from files inside the app and talks to Android through window.TCNative.
+// Calls that finish later answer through tcNativeCb(id, state, msg); state 'ok' | 'error' | 'cancel' ends a call,
+// anything else ('progress', 'need-permission', 'installing') is an update along the way.
+const NATIVE = (typeof window.TCNative === 'object' && window.TCNative) ? window.TCNative : null;
+const nativeWaits = new Map(); let nativeSeq = 0;
+window.tcNativeCb = (id, st, msg) => { const h = nativeWaits.get(id); if (!h) return; if (st === 'ok' || st === 'error' || st === 'cancel') nativeWaits.delete(id); try { h(st, msg); } catch (e) { console.warn(e); } };
+function nativeRun(method, args, onEvent) { const id = 'n' + (++nativeSeq); nativeWaits.set(id, onEvent); try { NATIVE[method](id, ...args); } catch (e) { nativeWaits.delete(id); onEvent('error', String(e && e.message || e)); } return id; }
+function nativeOnce(method, args) { return new Promise(res => nativeRun(method, args, (st, msg) => { if (st === 'ok' || st === 'error' || st === 'cancel') res({ st, msg }); })); }
+function blobToB64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(blob); }); }
+const mimeOf = (name) => /\.pdf$/i.test(name) ? 'application/pdf' : /\.dxf$/i.test(name) ? 'application/dxf' : /\.dwg$/i.test(name) ? 'application/acad' : /\.png$/i.test(name) ? 'image/png' : /\.zip$/i.test(name) ? 'application/zip' : /\.csv$/i.test(name) ? 'text/csv' : 'application/octet-stream';
+// Save: Android's own "save as" picker (Downloads, Drive, any folder)
+async function nativeSave(filename, data) {
+  const blob = data instanceof Blob ? data : new Blob([data]);
+  const r = await nativeOnce('saveFile', [filename, blob.type || mimeOf(filename), await blobToB64(blob)]);
+  if (r.st === 'ok') { toast('Saved ' + filename); return true; }
+  if (r.st === 'cancel') { toast('Save cancelled'); return false; }
+  toast('Could not save: ' + (r.msg || 'unknown error'), 5000); return false;
+}
+// Share: Android's share sheet, any file type (DWG and DXF go to WhatsApp as documents)
+async function nativeShare(file) { const r = await nativeOnce('shareFile', [file.name, file.type || mimeOf(file.name), await blobToB64(file)]); if (r.st === 'error') toast('Could not share: ' + (r.msg || ''), 5000); return r.st === 'ok'; }
+// Files opened with / shared to the app arrive as https://appassets…/shared/N, listed by pendingFiles()
+async function takeNativeFiles() {
+  if (!NATIVE) return; let list = []; try { list = JSON.parse(NATIVE.pendingFiles() || '[]'); } catch (e) { list = []; } if (!list.length) return;
+  const got = []; for (const f of list) { try { const r = await fetch(f.url); if (r.ok) got.push({ name: f.name || '', buf: await r.arrayBuffer() }); } catch (e) { } }
+  if (got.length) openIncoming(got); else toast('Could not read the file that was shared.', 4000);
+}
+window.tcNativeIncoming = () => { takeNativeFiles(); };
+// Android back button: close what's on top here first; false = let the page history (or Android) handle it
+window.tcNativeBack = () => {
+  if (!$('updSheet').hidden) { if (!updBusy) updClose(); return true; }
+  if (!$('curPop').hidden) { closeCurPop(); return true; }
+  if (!$('toolPop').hidden) { closePop(); return true; }
+  // In a drawing the app answers Back itself (panels, then tools, then the drawing → home), the same as the page's
+  // history guard does in a browser; Android's WebView skips history entries made without a recent tap, so it isn't relied on.
+  if (!atHome() && state.drawing) { handleBack(); return true; }
+  if (document.querySelector('.sheet.open')) { closeSheets(); return true; }
+  if ($('newDlg').classList.contains('on')) { $('ndCancel').click(); return true; }
+  return false; // home with nothing open: Android puts the app in the background
+};
+
+// ===================== Version and Check for updates =====================
+// The app never goes online by itself. "Check for updates" asks first (unless told not to ask again), then reads
+// a small version file. The APK downloads the new APK and hands it to Android's installer; the web version reloads.
+const UPDATE_HOST = 'surya-vallala.github.io';
+const UPDATE_INFO_URL = 'https://' + UPDATE_HOST + '/tesseract-cad/android/version.json';
+// Debuggable test builds (the emulator test on GitHub) may point at a test update channel; release builds never do.
+function updateInfoUrl() { try { if (NATIVE && JSON.parse(NATIVE.appInfo()).debug && localStorage.getItem('tct-upd-url')) return localStorage.getItem('tct-upd-url'); } catch (e) { } return UPDATE_INFO_URL; }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtDay = (iso) => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(iso || ''); return m ? (+m[3]) + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : (iso || ''); };
+const UPD_IC = {
+  globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+  dl: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  ok: '<svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>',
+  warn: '<svg viewBox="0 0 24 24"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>'
+};
+let updBusy = false;
+function renderVersionRow() { $('verName').textContent = 'Version ' + APP.name; $('verSub').textContent = fmtDay(APP.date) + (NATIVE ? ' · works offline' : ' · web version'); }
+function updOpen(html) { $('updSheet').innerHTML = '<div class="grab"></div>' + html; $('updSheet').hidden = false; $('updScrim').hidden = false; }
+function updClose() { $('updSheet').hidden = true; $('updScrim').hidden = true; updBusy = false; }
+$('updScrim').addEventListener('click', () => { if (!updBusy) updClose(); });
+function updMessage(kind, title, text, btn) { updOpen('<div class="ic' + (kind === 'ok' ? ' ok' : '') + '">' + UPD_IC[kind] + '</div><h2 id="updTitle">' + title + '</h2><p>' + text + '</p><div class="btns">' + (btn || '<button class="pri" id="updOk">OK</button>') + '</div>'); const b = $('updOk'); if (b) b.onclick = updClose; }
+$('btnUpd').addEventListener('click', () => { let ok = false; try { ok = localStorage.getItem('tct-net-ok') === '1'; } catch (e) { } if (ok) runUpdateCheck(); else askNetwork(); });
+function askNetwork() {
+  updOpen('<div class="ic">' + UPD_IC.globe + '</div><h2 id="updTitle">Connect to the internet?</h2>' +
+    '<p>' + (NATIVE ? 'Tesseract CAD works fully offline. To check for a newer version it needs to connect to ' : 'To check for a newer version the app connects to ') + '<b>' + UPDATE_HOST + '</b>, where Tesseract Studio publishes updates, for a moment.</p>' +
+    '<p>Only the version number is checked. <b>Your drawings never leave this phone.</b></p>' +
+    '<label class="chk"><input type="checkbox" id="updRemember">Don\'t ask again</label>' +
+    '<div class="btns"><button id="updNo">Not now</button><button class="pri" id="updGo">Connect &amp; check</button></div>');
+  $('updNo').onclick = updClose;
+  $('updGo').onclick = () => { if ($('updRemember').checked) try { localStorage.setItem('tct-net-ok', '1'); } catch (e) { } runUpdateCheck(); };
+}
+async function runUpdateCheck() {
+  updBusy = true; updOpen('<div class="ic">' + UPD_IC.refresh + '</div><h2 id="updTitle">Checking for updates…</h2><div class="bar"><i style="width:40%"></i></div>');
+  let info = null;
+  try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000); const r = await fetch(updateInfoUrl() + '?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) throw new Error('the server answered ' + r.status); info = await r.json(); }
+  catch (e) { updBusy = false; updMessage('warn', 'Couldn\'t check for updates', 'The update server couldn\'t be reached. Check that the phone is online, then try again.', '<button id="updOk">Close</button><button class="pri" id="updRetry">Try again</button>'); $('updRetry').onclick = runUpdateCheck; return; }
+  updBusy = false;
+  const newer = NATIVE ? (+info.code > APP.code && info.apk && info.apk.url) : !!(info.web && window.TC_WEB_BUILD && String(info.web.build) > String(window.TC_WEB_BUILD));
+  if (!newer) { updMessage('ok', 'You\'re up to date', 'Version ' + escapeHtml(APP.name) + ' is the latest. Checked just now.'); return; }
+  const dirty = docs.filter(docDirty).length;
+  updOpen('<div class="ic">' + UPD_IC.dl + '</div><h2 id="updTitle">Version ' + escapeHtml(info.name) + ' is available</h2>' +
+    '<div class="meta"><span>You have ' + escapeHtml(APP.name) + '</span><span>' + (NATIVE && info.apk.size ? 'Download ' + fmtSize(+info.apk.size) : '') + '</span></div>' +
+    (info.notes && info.notes.length ? '<ul>' + info.notes.map(n => '<li>' + escapeHtml(n) + '</li>').join('') + '</ul>' : '') +
+    '<p>The app restarts to finish, so save any edits first.' + (dirty ? ' <b>' + dirty + ' drawing' + (dirty === 1 ? ' has' : 's have') + ' unsaved edits.</b>' : '') + '</p>' +
+    '<div class="btns"><button id="updLater">Later</button><button class="pri" id="updNow">Update now</button></div>');
+  $('updLater').onclick = updClose; $('updNow').onclick = () => NATIVE ? nativeUpdate(info) : webUpdate();
+}
+function nativeUpdate(info) {
+  updBusy = true;
+  updOpen('<div class="ic">' + UPD_IC.dl + '</div><h2 id="updTitle">Downloading version ' + escapeHtml(info.name) + '</h2><div class="bar"><i id="updBar"></i></div>' +
+    '<div class="meta"><span id="updDone">Starting…</span><span>' + fmtSize(+info.apk.size || 0) + '</span></div><p id="updMsg">Keep the app open while it downloads.</p><div class="btns"><button id="updCancel">Cancel</button></div>');
+  const id = nativeRun('installUpdate', [info.apk.url, info.apk.sha256 || '', String(info.apk.size || 0)], (st, msg) => {
+    if (st === 'progress') { const [d, t] = String(msg).split('/').map(Number); if ($('updBar')) $('updBar').style.width = (t ? Math.round(d / t * 100) : 0) + '%'; if ($('updDone')) $('updDone').textContent = fmtSize(d || 0); }
+    else if (st === 'need-permission') { if ($('updBar')) $('updBar').style.width = '100%'; $('updMsg').innerHTML = '<b>Android needs your OK once:</b> turn on <b>Allow from this source</b> for Tesseract CAD, then come back here. The update continues by itself.'; }
+    else if (st === 'installing') { updBusy = false; $('updTitle').textContent = 'Installing version ' + info.name; $('updMsg').innerHTML = 'Tap <b>Update</b> in the Android window. When it finishes, Android closes the app: open Tesseract CAD again to use version ' + escapeHtml(info.name) + '.'; $('updCancel').textContent = 'Close'; $('updCancel').onclick = updClose; }
+    else if (st === 'error') { updBusy = false; updMessage('warn', 'The update didn\'t finish', escapeHtml(msg || 'Something went wrong.') + ' Your drawings are fine; try again later.'); }
+    else if (st === 'cancel') updClose();
+  });
+  $('updCancel').onclick = () => { try { NATIVE.cancelUpdate(id); } catch (e) { } updClose(); };
+}
+async function webUpdate() {
+  updBusy = true; updOpen('<div class="ic">' + UPD_IC.dl + '</div><h2 id="updTitle">Updating…</h2><div class="bar"><i style="width:70%"></i></div><p>The app reloads in a moment.</p>');
+  try { if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); } catch (e) { }
+  try { for (const k of await caches.keys()) if (k.startsWith('tct-')) await caches.delete(k); } catch (e) { }
+  location.reload();
+}
+
 // ===================== Start-up (runs once every part has loaded) =====================
 renderRecent(); resizeCanvas();
 // Start on the Home tab with nothing open; drawings open in their own tabs.
 setHome(true); renderTabs(); updateChrome();
 takeSharedFiles();
+renderVersionRow(); takeNativeFiles();
+// Load the drawing-text and number fonts up front (they are bundled), then redraw with them
+try { Promise.all(["400 16px 'IBM Plex Sans'", "400 16px 'IBM Plex Mono'", "500 16px 'IBM Plex Mono'"].map(f => document.fonts.load(f))).then(() => { if (state.drawing) { lastFull = null; requestFull(); } }); } catch (e) { }

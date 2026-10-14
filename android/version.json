@@ -1,0 +1,19 @@
+{
+  "name": "20.0",
+  "code": 2000,
+  "date": "2026-10-14",
+  "notes": [
+    "Android app that works fully offline",
+    "Check for updates button on the home screen",
+    "Open DWG/DXF from WhatsApp, Files or Gmail straight into the app",
+    "Share DWG, DXF and PDF straight to WhatsApp"
+  ],
+  "web": {
+    "build": "202610140548"
+  },
+  "apk": {
+    "url": "https://surya-vallala.github.io/tesseract-cad/android/TesseractCAD-20.0.apk",
+    "size": 2570336,
+    "sha256": "f05f58f832ef4a77f9b2584281f87812abef24fb4db2a81052d53f6d73ec0430"
+  }
+}

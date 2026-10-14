@@ -6,9 +6,10 @@
   btn.textContent = 'Install as an app on this phone';
   var note = document.createElement('p'); note.style.fontSize = '12px'; note.hidden = true;
   card.insertBefore(btn, status); card.insertBefore(note, status);
-  var ver = document.createElement('p'); ver.style.cssText = 'font-size:11px;opacity:.7';
-  ver.textContent = 'Version __VERSION__' + (standalone ? ' · running as installed app' : '');
-  card.appendChild(ver);
+  var apk = '__APK__';
+  if (apk && /Android/i.test(navigator.userAgent)) { var a = document.createElement('a'); a.className = 'btn big'; a.href = 'android/' + apk; a.textContent = 'Get the Android app (works offline)'; a.style.textDecoration = 'none'; card.insertBefore(a, status); }
+  window.TC_WEB_BUILD = '__VERSION__'; // web build stamp, compared by Check for updates
+  var vs = document.getElementById('verSub'); if (vs && standalone) vs.textContent += ' · installed';
   var deferred = null;
   function done() { btn.hidden = true; note.textContent = 'Installed. Open “Tesseract CAD” from your home screen or app drawer.'; note.hidden = false; }
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; if (!standalone) btn.hidden = false; });

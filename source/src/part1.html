@@ -1,5 +1,5 @@
 <title>Tesseract CAD Tools</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="fonts/fonts.css"> <!-- bundled fonts: the app never needs the internet -->
 <style>
 /* Layout: one-screen app. Top bar + space tabs over a full-bleed drawing canvas; prompt line and tool strip pinned at the bottom; layers/menu slide up as sheets. */
 :root{ /* Studio Light (brand: black, white, red #FF0000) */
@@ -97,6 +97,32 @@ input{font:inherit;color:inherit}
 #stage.light #vbtns button{background:rgba(250,250,247,.9);color:#1c1b18;border:1px solid rgba(0,0,0,.08)}
 #vbtns button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #vbtns button:disabled{opacity:.35}
+/* home screen: version and Check for updates; the update sheet (asks before going online, then shows the result) */
+.updrow{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
+.updrow .v{font-size:12px;color:var(--muted);line-height:1.35;min-width:0}
+.updrow .v b{color:var(--fg);font-weight:600;font-size:13px}
+.updrow button{display:flex;align-items:center;gap:7px;padding:9px 13px;border-radius:9px;background:var(--chip);color:var(--fg);font-size:13px;font-weight:600;white-space:nowrap;flex:0 0 auto}
+.updrow button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#updScrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60}
+#updSheet{position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:520px;margin:0 auto;background:var(--panel);color:var(--fg);border-radius:18px 18px 0 0;padding:20px 20px calc(22px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:12px}
+#updSheet[hidden],#updScrim[hidden]{display:none}
+#updSheet .grab{width:38px;height:4px;border-radius:2px;background:var(--line);align-self:center;margin:-8px 0 2px}
+#updSheet .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+#updSheet .ic.ok{background:rgba(46,160,67,.16);color:#3fb950}
+#updSheet .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#updSheet h2{margin:0;font-size:18px;font-weight:600}
+#updSheet p{margin:0;font-size:13.5px;line-height:1.45;color:var(--muted)}
+#updSheet p b{color:var(--fg);font-weight:600}
+#updSheet .chk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--fg)}
+#updSheet .chk input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+#updSheet .btns{display:flex;gap:10px;margin-top:4px}
+#updSheet .btns button{flex:1;padding:13px 10px;border-radius:11px;font-size:14.5px;font-weight:600;background:var(--chip);color:var(--fg)}
+#updSheet .btns button.pri{background:var(--accent);color:var(--accent-fg)}
+#updSheet .btns button:disabled{opacity:.5}
+#updSheet ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.5;color:var(--fg)}
+#updSheet .meta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+#updSheet .bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden}
+#updSheet .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
 /* layout strip above the tools: Model + every layout as a tab (swipe for more), then undo, redo and the menu */
 #spaceBar{display:flex;align-items:center;gap:4px;height:42px;flex:0 0 auto;padding:0 2px 0 6px;border-bottom:1px solid var(--bar-line)}
 #spaceTabs{display:flex;gap:4px;align-items:center;flex:1 1 auto;min-width:0;height:100%;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);padding-right:14px}
@@ -347,6 +373,7 @@ body.fs #tabs{display:none}
         <button class="btn quiet" id="btnSample">Try the sample plan instead</button>
         <p id="engineStatus" style="font-size:11.5px">Loading the DWG engine (about 9 MB, cached after the first visit)…</p>
         <div class="credit">Developed by <b>Tesseract Studio</b><br>Suggestions or questions: <a href="mailto:tools@tesseractstudio.co?subject=Tesseract%20CAD%20Tools">tools@tesseractstudio.co</a></div>
+        <div class="updrow" id="updRow"><div class="v"><b id="verName">Version</b><br><span id="verSub"></span></div><button id="btnUpd" type="button"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Check for updates</button></div>
       </div>
     </div>
     <div id="loading"><div class="box"><div class="stage" id="loadStage">Reading file</div><div class="bar"><i id="loadBar"></i></div><div class="hint">Large drawings can take a few seconds on a phone.</div></div></div>
@@ -525,6 +552,8 @@ body.fs #tabs{display:none}
     </div></div>
     <div id="toast" role="status"></div>
   </main>
+  <div id="updScrim" hidden></div>
+  <section id="updSheet" role="dialog" aria-modal="true" aria-labelledby="updTitle" hidden></section>
   <footer id="tools">
     <div id="spaceBar">
       <div id="spaceTabs" role="tablist" aria-label="Model and layouts"></div>

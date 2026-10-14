@@ -8,6 +8,8 @@ Suggestions or questions: [tools@tesseractstudio.co](mailto:tools@tesseractstudi
 
 In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **Install app**) to get an app icon. After the first visit the app works offline.
 
+**Android app (APK):** https://surya-vallala.github.io/tesseract-cad/android/ — download the `.apk` on the phone and open it (Android asks once to allow installing from your browser or Files app). The app carries everything inside it, so it works fully offline and never goes online by itself. **Check for updates** at the bottom of the home screen asks before connecting, then shows what's new and installs the update (Android asks once to "Allow from this source"). In the app you can also open DWG/DXF straight from WhatsApp, Files or Gmail ("Open with" or Share), and share DWG, DXF and PDF to WhatsApp as documents.
+
 ## What it does
 
 - Opens **.dwg** (including AutoCAD 2018 format) and **.dxf** files: Model space and all Layouts
@@ -45,6 +47,7 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 Drawings are read **on the phone itself**. Files are never uploaded anywhere.
 
 ## How it's built
+- **Android app:** a small native shell (`android/`, Java, no libraries) runs the same web app from files inside the APK through a WebView, at a private address that never touches the network. It adds file picking, Open with / Share to, saving through Android's save-as picker, sharing through the share sheet, the back button, and installing updates through Android's own installer. It is built by GitHub Actions with the official Android SDK (`android-ci/`), tested on an emulator, and signed with the Tesseract Studio release key outside GitHub. `android/version.json` on this site tells the app which version is the latest.
 
 - One HTML page (`index.html`) with a Canvas 2D renderer; the layout gives the drawing almost the whole screen (full-screen button hides the rest)
 - `cad-worker.js` parses files in a background thread. It uses

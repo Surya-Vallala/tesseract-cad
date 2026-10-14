@@ -1,9 +1,9 @@
 // Tesseract CAD Tools — offline cache.
 // Pages and scripts: network first (so updates show up), cache as fallback.
 // The 9 MB DWG engine (.wasm): cache first, refreshed whenever the version changes.
-const VERSION = '202610090715';
+const VERSION = '202610140548';
 const CACHE = 'tct-' + VERSION;
-const CORE = ['./', 'index.html', 'cad-worker.js', 'libredwg-web.wasm', 'manifest.webmanifest', 'icon-192.png', 'logo-ink-dark.png', 'logo-ink-light.png'];
+const CORE = ['./', 'index.html', 'cad-worker.js', 'libredwg-web.wasm', 'manifest.webmanifest', 'icon-192.png', 'logo-ink-dark.png', 'logo-ink-light.png', 'fonts/fonts.css', 'fonts/jost-latin-400-normal.woff2', 'fonts/jost-latin-500-normal.woff2', 'fonts/jost-latin-600-normal.woff2', 'fonts/ibm-plex-sans-latin-400-normal.woff2', 'fonts/ibm-plex-mono-latin-400-normal.woff2'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('tct-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 // Files shared from other apps (WhatsApp, Files, Gmail…) arrive as a POST to ./share-target (manifest share_target).
@@ -24,6 +24,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method === 'POST' && url.origin === location.origin && url.pathname.endsWith('/share-target')) { e.respondWith(receiveShare(req)); return; }
   if (req.method !== 'GET') return;
   if (url.origin !== location.origin) return; // fonts etc. go straight to the network
+  if (url.pathname.endsWith('/android/version.json')) return; // Check for updates always asks the server
   if (url.pathname.endsWith('.wasm')) {
     e.respondWith(caches.open(CACHE).then(async c => (await c.match(req)) || fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); return r; })));
     return;
