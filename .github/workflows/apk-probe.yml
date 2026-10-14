@@ -1,0 +1,22 @@
+name: apk-probe
+on:
+  push:
+    branches: [apk-ci]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look at the Android SDK on the runner
+        run: |
+          mkdir -p out
+          { echo "ANDROID_HOME=$ANDROID_HOME"; ls $ANDROID_HOME; ls $ANDROID_HOME/build-tools; ls $ANDROID_HOME/platforms; java -version 2>&1; } > out/probe.txt
+          cat out/probe.txt
+      - name: Publish result to branch apk-out
+        run: |
+          cd out
+          git init -q -b apk-out
+          git config user.name "apk-ci"; git config user.email "apk-ci@users.noreply.github.com"
+          git add -A; git commit -q -m "probe $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk-out
