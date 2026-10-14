@@ -3,7 +3,8 @@ import { execSync } from 'node:child_process';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const shot = (name) => { try { execSync(`adb exec-out screencap -p > out/shot-${name}.png`); } catch (e) { } };
 const out = { steps: [] };
-const log = (k, v) => { out[k] = v; out.steps.push(k); };
+import { writeFileSync } from 'node:fs';
+const log = (k, v) => { out[k] = v; out.steps.push(k); try { writeFileSync('out/cdp-test.json', JSON.stringify(out, null, 1)); } catch (e) { } };
 let list = [];
 for (let i = 0; i < 20 && !list.length; i++) { try { list = (await (await fetch('http://127.0.0.1:9222/json')).json()).filter((p) => p.type === 'page'); } catch (e) { } if (!list.length) await sleep(1000); }
 log('pages', list.map((p) => p.url));
@@ -14,7 +15,7 @@ await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
 let seq = 0; const waits = new Map();
 ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && waits.has(d.id)) { waits.get(d.id)(d); waits.delete(d.id); } };
 const send = (method, params = {}) => new Promise((r) => { const id = ++seq; waits.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
-const ev = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); return r.result && r.result.exceptionDetails ? 'EXCEPTION ' + JSON.stringify(r.result.exceptionDetails).slice(0, 400) : (r.result && r.result.result ? r.result.result.value : r); };
+const ev = async (expression) => { const r = await Promise.race([send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }), sleep(20000).then(() => ({ result: { result: { value: 'TIMEOUT (page gone)' } } }))]); return r.result && r.result.exceptionDetails ? 'EXCEPTION ' + JSON.stringify(r.result.exceptionDetails).slice(0, 400) : (r.result && r.result.result ? r.result.result.value : r); };
 try {
   for (let i = 0; i < 90; i++) { const s = await ev("document.getElementById('engineStatus').textContent"); out.engine = s; if (/ready|could not/i.test(s)) break; await sleep(1000); }
   log('engine', out.engine);
@@ -84,7 +85,6 @@ try {
   log('installer', tapped);
   await sleep(15000);
   try { log('installedVersion', execSync("adb shell dumpsys package co.tesseractstudio.cad | grep -E 'versionCode|versionName' | head -2").toString().trim()); } catch (e) { log('installedVersion', 'dumpsys failed'); }
-  log('errors', await ev("(window.__errs || []).join(' | ')"));
 } catch (e) { out.error = String(e && e.stack || e); }
-console.log(JSON.stringify(out, null, 1));
+try { writeFileSync('out/cdp-test.json', JSON.stringify(out, null, 1)); } catch (e) { }
 process.exit(0);

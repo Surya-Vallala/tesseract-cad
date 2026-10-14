@@ -4337,7 +4337,7 @@ function nativeUpdate(info) {
   const id = nativeRun('installUpdate', [info.apk.url, info.apk.sha256 || '', String(info.apk.size || 0)], (st, msg) => {
     if (st === 'progress') { const [d, t] = String(msg).split('/').map(Number); if ($('updBar')) $('updBar').style.width = (t ? Math.round(d / t * 100) : 0) + '%'; if ($('updDone')) $('updDone').textContent = fmtSize(d || 0); }
     else if (st === 'need-permission') { if ($('updBar')) $('updBar').style.width = '100%'; $('updMsg').innerHTML = '<b>Android needs your OK once:</b> turn on <b>Allow from this source</b> for Tesseract CAD, then come back here. The update continues by itself.'; }
-    else if (st === 'installing') { updBusy = false; $('updTitle').textContent = 'Installing version ' + info.name; $('updMsg').innerHTML = 'Tap <b>Update</b> in the Android window. The app closes and opens again as the new version.'; $('updCancel').textContent = 'Close'; $('updCancel').onclick = updClose; }
+    else if (st === 'installing') { updBusy = false; $('updTitle').textContent = 'Installing version ' + info.name; $('updMsg').innerHTML = 'Tap <b>Update</b> in the Android window. When it finishes, Android closes the app: open Tesseract CAD again to use version ' + escapeHtml(info.name) + '.'; $('updCancel').textContent = 'Close'; $('updCancel').onclick = updClose; }
     else if (st === 'error') { updBusy = false; updMessage('warn', 'The update didn\'t finish', escapeHtml(msg || 'Something went wrong.') + ' Your drawings are fine; try again later.'); }
     else if (st === 'cancel') updClose();
   });
