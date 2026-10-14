@@ -43,15 +43,18 @@ try {
   log('check', await ev("document.getElementById('updTitle').textContent + ' · ' + (document.querySelector('#updSheet p') || {}).textContent"));
   shot('update-result');
   await ev("updClose()");
+  // Back in a drawing: first closes an open panel, then the drawing (→ home)
+  await ev("document.getElementById('btnSample').click()"); await sleep(2500);
+  await ev("window.__back = 0; const f0 = window.tcNativeBack; window.tcNativeBack = () => { window.__back++; return f0(); }; openSheet('menuPanel')"); await sleep(500);
+  execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1500);
+  log('back1', await ev("'calls ' + __back + ' · menu open ' + !!document.querySelector('.sheet.open') + ' · ' + (atHome() ? 'home' : 'in drawing')"));
+  execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1500);
+  log('backInDrawing', await ev("'calls ' + __back + ' · ' + (atHome() ? 'home' : 'still in drawing') + ' · docs ' + docs.length"));
   // share sheet for an exported DXF (Android's chooser should open)
   await ev("document.getElementById('btnSample').click()"); await sleep(2500);
   log('share', await ev("(async () => { const f = new File([buildDxf(state.drawing).text], 'ci-share.dxf', { type: 'application/dxf' }); return await nativeShare(f) ? 'share sheet opened' : 'share failed'; })()"));
   await sleep(2000); shot('share');
   execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1000);
-  // back button in a drawing (after a real tap, as a person would) closes it and goes home
-  execSync('adb shell input tap 160 300'); await sleep(800);
-  execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1500);
-  log('backInDrawing', await ev("atHome() ? 'home' : 'still in drawing'"));
   log('fontsLater', await ev(`['IBM Plex Mono','IBM Plex Sans'].map(f => f + ':' + document.fonts.check('16px "' + f + '"')).join(' ')`));
   // the whole update path against a test channel: question skipped (remembered), download, Android's permission, installer
   const repo = process.env.GITHUB_REPOSITORY || 'Surya-Vallala/tesseract-cad';
