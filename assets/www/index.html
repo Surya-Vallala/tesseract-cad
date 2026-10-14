@@ -4278,8 +4278,12 @@ window.tcNativeBack = () => {
   if (!$('updSheet').hidden) { if (!updBusy) updClose(); return true; }
   if (!$('curPop').hidden) { closeCurPop(); return true; }
   if (!$('toolPop').hidden) { closePop(); return true; }
-  if (atHome() && document.querySelector('.sheet.open')) { closeSheets(); return true; }
-  return false;
+  // In a drawing the app answers Back itself (panels, then tools, then the drawing → home), the same as the page's
+  // history guard does in a browser; Android's WebView skips history entries made without a recent tap, so it isn't relied on.
+  if (!atHome() && state.drawing) { handleBack(); return true; }
+  if (document.querySelector('.sheet.open')) { closeSheets(); return true; }
+  if ($('newDlg').classList.contains('on')) { $('ndCancel').click(); return true; }
+  return false; // home with nothing open: Android puts the app in the background
 };
 
 // ===================== Version and Check for updates =====================

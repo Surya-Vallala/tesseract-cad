@@ -532,11 +532,9 @@ public class MainActivity extends Activity {
 
     // ---------- back button ----------
     void onBack() {
-        // The page closes its own panels first; then its history (drawing → home); at home the app goes to the background.
+        // The page handles Back (panels, tools, then the drawing → home); at home with nothing open the app goes to the background.
         web.evaluateJavascript("(window.tcNativeBack&&tcNativeBack())?1:0", v -> {
-            if ("1".equals(v)) return;
-            if (web.canGoBack()) web.goBack();
-            else moveTaskToBack(true);
+            if (!"1".equals(v)) moveTaskToBack(true);
         });
     }
 
