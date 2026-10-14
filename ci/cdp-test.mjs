@@ -51,7 +51,7 @@ try {
   execSync('adb shell input tap 160 300'); await sleep(800);
   execSync('adb shell input keyevent KEYCODE_BACK'); await sleep(1500);
   log('backInDrawing', await ev("atHome() ? 'home' : 'still in drawing'"));
-  log('fontsLater', await ev("['IBM Plex Mono','IBM Plex Sans'].map(f => f + ':' + document.fonts.check('16px \\"' + f + '\\"')).join(' ')"));
+  log('fontsLater', await ev(`['IBM Plex Mono','IBM Plex Sans'].map(f => f + ':' + document.fonts.check('16px "' + f + '"')).join(' ')`));
   // the whole update path against a test channel: question skipped (remembered), download, Android's permission, installer
   const repo = process.env.GITHUB_REPOSITORY || 'Surya-Vallala/tesseract-cad';
   await ev(`localStorage.setItem('tct-net-ok','1'); localStorage.setItem('tct-upd-url','https://raw.githubusercontent.com/${repo}/apk-channel/version.json'); location.reload()`);
