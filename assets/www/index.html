@@ -577,7 +577,7 @@ body.fs #tabs{display:none}
   <input type="file" id="file" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" tabindex="-1" aria-hidden="true">
 </div>
 <script>
-const APP = {"name": "20.0", "code": 2000, "date": "2026-10-14"}; // app version (app-version.json)
+const APP = {"name": "20.1", "code": 2001, "date": "2026-10-30"}; // app version (app-version.json)
 'use strict';
 // ===================== Constants & small helpers =====================
 const ACI_HEX = '000000ff0000ffff0000ff0000ffff0000ffff00ffffffff808080c0c0c0ff0000ff7f7fa50000a552527f00007f3f3f4c00004c2626260000261313ff3f00ff9f7fa52900a567527f1f007f4f3f4c13004c2f26260900261713ff7f00ffbf7fa55200a57c527f3f007f5f3f4c26004c3926261300261c13ffbf00ffdf7fa57c00a591527f5f007f6f3f4c39004c4226261c00262113ffff00ffff7fa5a500a5a5527f7f007f7f3f4c4c004c4c26262600262613bfff00dfff7f7ca50091a5525f7f006f7f3f394c00424c261c26002126137fff00bfff7f52a5007ca5523f7f005f7f3f264c00394c261326001c26133fff009fff7f29a50067a5521f7f004f7f3f134c002f4c2609260017261300ff007fff7f00a50052a552007f003f7f3f004c00264c2600260013261300ff3f7fff9f00a52952a567007f1f3f7f4f004c13264c2f00260913581700ff7f7fffbf00a55252a57c007f3f3f7f5f004c26264c3900261313581c00ffbf7fffdf00a57c52a591007f5f3f7f6f004c39264c4200261c13585800ffff7fffff00a5a552a5a5007f7f3f7f7f004c4c264c4c00262613585800bfff7fdfff007ca55291a5005f7f3f6f7f00394c26427e001c26135858007fff7fbfff0052a5527ca5003f7f3f5f7f00264c26397e001326131c58003fff7f9fff0029a55267a5001f7f3f4f7f00134c262f7e0009261317580000ff7f7fff0000a55252a500007f3f3f7f00004c26267e0000261313583f00ff9f7fff2900a56752a51f007f4f3f7f13004c2f267e0900261713587f00ffbf7fff5200a57c52a53f007f5f3f7f26004c39267e1300261c1358bf00ffdf7fff7c00a59152a55f007f6f3f7f39004c42264c1c0026581358ff00ffff7fffa500a5a552a57f007f7f3f7f4c004c4c264c260026581358ff00bfff7fdfa5007ca552917f005f7f3f6f4c00394c264226001c581358ff007fff7fbfa50052a5527c7f003f7f3f5f4c00264c263926001358131cff003fff7f9fa50029a552677f001f7f3f4f4c00134c262f260009581317000000656565666666999999ccccccffffff';
@@ -1637,7 +1637,7 @@ cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'c' && state.drawing && state.selection.size) { ev.preventDefault(); clipCopy(null); } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'v' && state.drawing && !atHome()) { ev.preventDefault(); startTool('paste'); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
 function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind, sn); if (picking) otrackFeed(sn); requestFast(); }
-function showCoord(x, y, kind, sn) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + (sn ? snapLabel(sn) : SNAP_NAMES[kind]) : ''); }
+function showCoord(x, y, kind, sn) { [x, y] = realXY(x, y); $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + (sn ? snapLabel(sn) : SNAP_NAMES[kind]) : ''); }
 
 function onTap(X, Y, ev) {
   if (!state.drawing) return;
@@ -1678,9 +1678,9 @@ function parseTyped(str, base) {
   str = str.trim(); if (!str) return null;
   const rel = str.startsWith('@'); if (rel) str = str.slice(1);
   let m = str.match(/^(-?[\d.]+)\s*<\s*(-?[\d.]+)$/); // polar
-  if (m) { const L = parseFloat(m[1]), A = rad(parseFloat(m[2])); const b = base || state.lastPt || [0, 0]; return { pt: [b[0] + L * Math.cos(A), b[1] + L * Math.sin(A)], len: L, ang: A }; }
+  if (m) { const L = parseFloat(m[1]), A = rad(parseFloat(m[2])); const b = base || state.lastPt || fromReal(0, 0); return { pt: [b[0] + L * Math.cos(A), b[1] + L * Math.sin(A)], len: L, ang: A }; }
   m = str.match(/^(-?[\d.]+)\s*,\s*(-?[\d.]+)$/);
-  if (m) { const x = parseFloat(m[1]), y = parseFloat(m[2]); if (rel) { const b = base || state.lastPt || [0, 0]; return { pt: [b[0] + x, b[1] + y] }; } return { pt: [x, y] }; }
+  if (m) { const x = parseFloat(m[1]), y = parseFloat(m[2]); if (rel) { const b = base || state.lastPt || fromReal(0, 0); return { pt: [b[0] + x, b[1] + y] }; } return { pt: fromReal(x, y) }; } // typed X,Y are real coordinates
   m = str.match(/^(-?[\d.]+)$/);
   if (m) return { num: parseFloat(m[1]) };
   return null;
@@ -1738,19 +1738,22 @@ function startTool(name, keepSel) {
 }
 // Anonymous *U blocks are dynamic blocks in a non-default state
 function blockLabel(n) { return /^\*U/i.test(n || '') ? 'Dynamic block' : /^TC_MK_/.test(n || '') ? 'Markup' : /^TC_DIM_/.test(n || '') ? 'Dimension' : 'Block · ' + n; }
+function fmtXY(p) { const r = realXY(p[0], p[1]); return fmtNum(r[0], 2) + ', ' + fmtNum(r[1], 2); }
+// The coordinate tool's reading: through a layout viewport it reads the model
+function coordReading(p) { const ms = measureSpace([p], true), sp = curSpace(); return realXY(ms.pts[0][0], ms.pts[0][1], !sp.paper || !!ms.vp); }
 function describeItem(it) {
   const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t], ['Layer', resolveLayer(e, { layer: null })]];
   const col = e.rgb ? 'RGB ' + e.rgb : (e.c === 256 || e.c == null) ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);
   rows.push(['Linetype', ltName(e.lt) + (e.lts && e.lts !== 1 ? ' ×' + fmtNum(e.lts, 3) : '')]); if (e.al != null) rows.push(['Transparency', alName(e.al)]);
   if (e.t === 'LINE') { const L = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]); rows.push(['Length', fmtLenAll(L)], ['Angle', fmtNum(deg(Math.atan2(e.b[1] - e.a[1], e.b[0] - e.a[0])), 2) + '°'], ['ΔX', fmtLen(e.b[0] - e.a[0])], ['ΔY', fmtLen(e.b[1] - e.a[1])]); }
   else if (e.t === 'PLINE' || e.t === 'SPLINE' || e.t === 'LEADER') { const poly = it.polys[0] || []; rows.push(['Length', fmtLenAll(polyLength(poly, false))]); if (it.closed && it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))]); rows.push(['Vertices', String(e.v ? e.v.length : (e.fit && e.fit.length) || (e.cp && e.cp.length) || poly.length / 2)]); }
-  else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]);
-  else if (e.t === 'ARC') { const sw = normAng(e.a1 - e.a0); rows.push(['Radius', fmtLenAll(e.r)], ['Arc length', fmtLen(e.r * sw)], ['Angle', fmtNum(deg(sw), 2) + '°'], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]); }
-  else if (e.t === 'POINT') rows.push(['X', fmtNum(e.p[0], 3)], ['Y', fmtNum(e.p[1], 3)]);
+  else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtXY(e.ce)]);
+  else if (e.t === 'ARC') { const sw = normAng(e.a1 - e.a0); rows.push(['Radius', fmtLenAll(e.r)], ['Arc length', fmtLen(e.r * sw)], ['Angle', fmtNum(deg(sw), 2) + '°'], ['Center', fmtXY(e.ce)]); }
+  else if (e.t === 'POINT') { const r = realXY(e.p[0], e.p[1]); rows.push(['X', fmtNum(r[0], 3)], ['Y', fmtNum(r[1], 3)]); }
   else if (e.t === 'ELLIPSE') { const a = Math.hypot(e.m[0], e.m[1]); rows.push(['Major radius', fmtLen(a)], ['Minor radius', fmtLen(a * e.k)]); }
   else if (e.t === 'TEXT' || e.t === 'MTEXT') rows.push(['Text', textPlain(e.s).slice(0, 120)], ['Height', fmtLen(e.h)]);
   else if (e.t === 'HATCH') { rows.push(['Pattern', e.solid ? 'Solid' : e.name]); if (it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))], ['Perimeter', fmtLen(polyLength(it.fillPoly, false))]); }
-  else if (e.t === 'INSERT') { rows.push(['Insert at', fmtNum(e.p[0], 2) + ', ' + fmtNum(e.p[1], 2)], ['Scale', fmtNum(e.sx, 3) + (e.sy !== e.sx ? ' × ' + fmtNum(e.sy, 3) : '')], ['Rotation', fmtNum(deg(e.rot), 2) + '°']); }
+  else if (e.t === 'INSERT') { rows.push(['Insert at', fmtXY(e.p)], ['Scale', fmtNum(e.sx, 3) + (e.sy !== e.sx ? ' × ' + fmtNum(e.sy, 3) : '')], ['Rotation', fmtNum(deg(e.rot), 2) + '°']); }
   return rows;
 }
 
@@ -1785,10 +1788,10 @@ function makeTool(name) {
       break;
     case 'coord':
       T.start = () => setPrompt('Tap a point to read its coordinates. Press and hold to magnify for an exact point.');
-      T.update = () => { const p = T.pts[0]; if (!p) { setResult(null); return; } const ms = measureSpace([p], true); const q = ms.pts[0]; saveResult(T, { kind: 'coord', pts: T.pts, text: 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2) }); const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)]]; if (T.snapKind != null) rows.push(['Snap', SNAP_NAMES[T.snapKind].toLowerCase()]); if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(p[0], 2) + ', ' + fmtNum(p[1], 2)]); setResult(rows); };
+      T.update = () => { const p = T.pts[0]; if (!p) { setResult(null); return; } const ms = measureSpace([p], true); const q = coordReading(p); saveResult(T, { kind: 'coord', pts: T.pts, text: 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2) }); const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)]]; if (T.snapKind != null) rows.push(['Snap', SNAP_NAMES[T.snapKind].toLowerCase()]); if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(p[0], 2) + ', ' + fmtNum(p[1], 2)]); setResult(rows); };
       T.onTap = (sn) => { T.pts = [[sn.x, sn.y]]; T.rec = null; state.lastPt = T.pts[0]; T.snapKind = sn.kind; T.update(); };
       T.onHandleMoved = (i, sn) => { T.snapKind = sn.kind; T.update(); };
-      T.draw = (c, V, acc) => { const p = T.pts[0]; if (!p) return; const q = measureSpace([p], true).pts[0]; const s2 = toScreen(p[0], p[1], V); drawChip(c, s2[0] + 12, s2[1] - 22, 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2), 0, null, 'left'); drawHandles(c, V, T.pts, acc); };
+      T.draw = (c, V, acc) => { const p = T.pts[0]; if (!p) return; const q = coordReading(p); const s2 = toScreen(p[0], p[1], V); drawChip(c, s2[0] + 12, s2[1] - 22, 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2), 0, null, 'left'); drawHandles(c, V, T.pts, acc); };
       break;
     case 'dist': case 'cont': {
       const chain = name === 'cont'; const first = chain ? 'Tap the first point. Keep tapping to add lengths; Done finishes.' : 'Tap the first point.';
@@ -2040,7 +2043,7 @@ function handleDragLabel() {
   if (T.name === 'facade') { let L = 0; for (let j = 1; j < P.length; j++) L += mLen(P[j - 1], P[j]); return 'Run ' + fmtLen(L); }
   if (T.name === 'area' && P.length >= 3) { const f = []; for (const p of measureSpace(P).pts) f.push(p[0], p[1]); return fmtAreaShort(Math.abs(polyArea(f))); }
   if (T.name === 'angle' && P.length >= 3) { const [v, a, b] = measureSpace(P.slice(0, 3)).pts; let d = Math.abs(deg(Math.atan2(b[1] - v[1], b[0] - v[0]) - Math.atan2(a[1] - v[1], a[0] - v[0]))) % 360; if (d > 180) d = 360 - d; return fmtAng(d); }
-  if (T.name === 'coord') { const q = measureSpace([P[0]], true).pts[0]; return fmtNum(q[0], 2) + ', ' + fmtNum(q[1], 2); }
+  if (T.name === 'coord') { const q = coordReading(P[0]); return fmtNum(q[0], 2) + ', ' + fmtNum(q[1], 2); }
   return '';
 }
 function endHandleDrag() { otrackFeed(null); state.handleDrag = null; state.loupe = null; state.snapMark = null; gesture = false; dragStart = null; requestFull(); }
@@ -2161,6 +2164,80 @@ function transformEntity(e, M) {
   }
   return e;
 }
+// ===================== Drawings far from 0,0 =====================
+// Survey drawings and site plans often sit at map coordinates (UTM: about 220 000 E, 1 910 000 N). The canvas keeps
+// paths and transforms in 32-bit floats, so at those numbers lines shake or vanish when zoomed in. Such drawings are
+// moved near 0,0 when they open: D.origin is the shift. Coordinates shown, typed, exported or pasted in place add it
+// back, so only real coordinates are ever seen.
+const REBASE_MIN = 1e4;
+function shiftEntity(e, dx, dy) { // a pure move; new point arrays, so shared arrays are never moved twice
+  const S = (p) => { if (!p) return p; const q = p.slice(); q[0] += dx; q[1] += dy; return q; };
+  switch (e.t) {
+    case 'LINE': e.a = S(e.a); e.b = S(e.b); break;
+    case 'PLINE': e.v = e.v.map(S); break;
+    case 'CIRCLE': case 'ARC': case 'ELLIPSE': e.ce = S(e.ce); break;
+    case 'SPLINE': if (e.cp) e.cp = e.cp.map(S); if (e.fit) e.fit = e.fit.map(S); break;
+    case 'TEXT': e.p = S(e.p); if (e.ap) e.ap = S(e.ap); break;
+    case 'MTEXT': case 'POINT': e.p = S(e.p); break;
+    case 'INSERT': e.p = S(e.p); if (e.att) for (const a of e.att) { a.p = S(a.p); if (a.ap) a.ap = S(a.ap); } break;
+    case 'HATCH':
+      for (const l of e.paths || []) { if (l.v) l.v = l.v.map(S); else for (const ed of l.e || []) { if (ed.t === 1) { ed.a = S(ed.a); ed.b = S(ed.b); } else if (ed.t === 2 || ed.t === 3) ed.c = S(ed.c); else if (ed.t === 4) { if (ed.cp) ed.cp = ed.cp.map(S); if (ed.fit) ed.fit = ed.fit.map(S); } } }
+      if (e.pat && e.pat.lines) e.pat.lines = e.pat.lines.map(ln => ({ ...ln, b: S(ln.b) })); break;
+    case 'VIEWPORT': break; // sheets are never moved
+    default: if (e.pts) e.pts = e.pts.map(S);
+  }
+  return e;
+}
+function rebaseDrawing(D) {
+  if (!D || D.sample || D.origin !== undefined) return; // a saved copy that was already moved keeps its shift
+  D.origin = null; const ms = D.spaces[0]; if (!ms || ms.paper || !ms.ents.length) return;
+  // where the drawing really is: the median of one point per object (stray objects at 0,0 don't pull it away)
+  const memo = new Map();
+  const anchor = (e, depth) => {
+    switch (e.t) {
+      case 'LINE': return e.a; case 'PLINE': return e.v && e.v[0];
+      case 'CIRCLE': case 'ARC': case 'ELLIPSE': return e.ce;
+      case 'SPLINE': return (e.cp && e.cp[0]) || (e.fit && e.fit[0]);
+      case 'TEXT': case 'MTEXT': case 'POINT': return e.p;
+      case 'HATCH': { const l = e.paths && e.paths[0]; if (!l) return null; if (l.v) return l.v[0]; const ed = l.e && l.e[0]; return ed ? (ed.a || ed.c || (ed.cp && ed.cp[0]) || (ed.fit && ed.fit[0])) : null; }
+      case 'INSERT': { const b = D.blocks[e.n]; const a = b && depth < 6 ? blockAnchor(e.n, depth + 1) : null; return a ? mApply(mInsert(e, b.base || [0, 0]), a) : e.p; } // dimensions: their block is drawn at map coordinates
+      case 'VIEWPORT': return null;
+      default: return e.pts && e.pts[0];
+    }
+  };
+  const ok = (a) => a && isFinite(a[0]) && isFinite(a[1]);
+  const blockAnchor = (n, depth) => { if (memo.has(n)) return memo.get(n); memo.set(n, null); let r = null; for (const e of D.blocks[n].ents) { const a = anchor(e, depth); if (ok(a)) { r = a; break; } } memo.set(n, r); return r; };
+  const xs = [], ys = []; for (const e of ms.ents) { const a = anchor(e, 0); if (ok(a)) { xs.push(a[0]); ys.push(a[1]); } }
+  if (!xs.length) return;
+  const X = Float64Array.from(xs).sort(), Y = Float64Array.from(ys).sort(); const q = (A, f) => A[Math.min(A.length - 1, Math.floor(f * A.length))];
+  const mx = q(X, 0.5), my = q(Y, 0.5), mag = Math.max(Math.abs(mx), Math.abs(my)), size = Math.max(q(X, 0.95) - q(X, 0.05), q(Y, 0.95) - q(Y, 0.05));
+  if (mag < REBASE_MIN || (mag < 1e6 && mag < 20 * size)) return; // near 0,0 for its size: nothing to gain
+  const O = [Math.round(mx / 1000) * 1000, Math.round(my / 1000) * 1000], dx = -O[0], dy = -O[1];
+  // blocks whose contents sit at map coordinates (dimension blocks, survey blocks inserted at 0,0) move with their base
+  // point, so every insert of them, in model, layouts or other blocks, draws exactly as before
+  const moved = [];
+  for (const n of Object.keys(D.blocks)) {
+    const a = blockAnchor(n, 1), b = D.blocks[n], base = b.base || [0, 0]; if (!ok(a)) continue;
+    const far = Math.max(Math.abs(a[0] - base[0]), Math.abs(a[1] - base[1])), near = Math.max(Math.abs(a[0] - O[0]), Math.abs(a[1] - O[1]));
+    if (far >= REBASE_MIN && near * 10 < far) moved.push(n);
+  }
+  for (const n of moved) { const b = D.blocks[n], base = b.base || [0, 0]; for (const e of b.ents) shiftEntity(e, dx, dy); b.base = [base[0] + dx, base[1] + dy]; }
+  for (const e of ms.ents) shiftEntity(e, dx, dy);
+  for (const sp of D.spaces) if (sp.paper) for (const e of sp.ents) if (e.t === 'VIEWPORT' && e.vid !== 1 && e.vc) e.vc = [e.vc[0] + dx, e.vc[1] + dy]; // what each layout viewport looks at
+  const H = D.header; for (const k of ['extmin', 'extmax']) if (H[k] && ok(H[k])) H[k] = [H[k][0] + dx, H[k][1] + dy].concat(H[k].slice(2));
+  D.origin = O; D.originBlocks = moved;
+}
+// The drawing at its real coordinates, for files written out (DXF)
+function atRealOrigin(D) {
+  const O = D.origin; if (!O) return D; const dx = O[0], dy = O[1];
+  const spaces = D.spaces.map((sp, i) => i === 0 && !sp.paper ? { ...sp, ents: sp.ents.map(e => shiftEntity(structuredClone(e), dx, dy)) } : sp.paper ? { ...sp, ents: sp.ents.map(e => e.t === 'VIEWPORT' && e.vid !== 1 && e.vc ? { ...e, vc: [e.vc[0] + dx, e.vc[1] + dy] } : e) } : sp);
+  const blocks = { ...D.blocks }; for (const n of D.originBlocks || []) { const b = blocks[n]; if (!b) continue; const base = b.base || [0, 0]; blocks[n] = { ...b, base: [base[0] + dx, base[1] + dy], ents: b.ents.map(e => shiftEntity(structuredClone(e), dx, dy)) }; }
+  const H = { ...D.header }; for (const k of ['extmin', 'extmax']) if (H[k] && isFinite(H[k][0])) H[k] = [H[k][0] + dx, H[k][1] + dy].concat(H[k].slice(2));
+  return { ...D, spaces, blocks, header: H, origin: null, originBlocks: [] };
+}
+// Real (file) coordinates of a point: model-space points add back the shift; sheets (layouts) are never shifted
+function realXY(x, y, model) { const D = state.drawing, o = D && D.origin; if (model === undefined) { const sp = curSpace(); model = !!sp && !sp.paper; } return o && model ? [x + o[0], y + o[1]] : [x, y]; }
+function fromReal(x, y) { const D = state.drawing, o = D && D.origin, sp = curSpace(); return o && sp && !sp.paper ? [x - o[0], y - o[1]] : [x, y]; }
 function cloneEnt(e) { return structuredClone(e); }
 function pushUndo(action) { const wasDirty = state.dirty; state.undo.push(action); if (state.undo.length > 100) state.undo.shift(); state.redo.length = 0; state.dirty = true; updateUndoBtns(); if (!wasDirty) renderTabs(); }
 function updateUndoBtns() { const show = !!(state.drawing && $('welcome').style.display === 'none'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; $('btnUndo').title = state.undo.length ? 'Undo (' + state.undo.length + ')' : 'Nothing to undo'; }
@@ -2257,7 +2334,7 @@ function openProps() {
     row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
     row('Scale X', numInput(same(e => +fmtFixed(e.sx || 1, 6)), 'sx', v => v || 1));
     row('Scale Y', numInput(same(e => +fmtFixed(e.sy || 1, 6)), 'sy', v => v || 1));
-    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'px')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'py')); }
+    if (one) { const r = realXY(one.p[0], one.p[1]); row('Position X', numInput(+fmtFixed(r[0], 4), 'px')); row('Position Y', numInput(+fmtFixed(r[1], 4), 'py')); }
   } else if (t1 === 'TEXT' || t1 === 'MTEXT') {
     head('Text');
     if (one) { const ta = document.createElement(one.t === 'MTEXT' ? 'textarea' : 'input'); const plain = one.t === 'MTEXT' ? mtextPlain(one.s).join('\n') : textPlain(one.s); ta.value = plain; ta.addEventListener('input', () => { if (ta.value !== plain) { ch.s = ta.value; mark(ta); } else delete ch.s; }); row('Contents', ta, one.t === 'MTEXT' ? 'Editing replaces any inline formatting' : null); }
@@ -2265,7 +2342,7 @@ function openProps() {
     row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
   } else if (t1 === 'POINT') {
     head(one ? 'Point' : 'Points');
-    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'ptx')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'pty')); }
+    if (one) { const r = realXY(one.p[0], one.p[1]); row('Position X', numInput(+fmtFixed(r[0], 4), 'ptx')); row('Position Y', numInput(+fmtFixed(r[1], 4), 'pty')); }
     const pb = document.createElement('button'); pb.type = 'button'; pb.className = 'btn'; pb.textContent = 'Point style (all points)…'; pb.addEventListener('click', () => { closeSheets(); openPointStyle(); }); row('Style', pb, 'Style and size are shared by every point in the drawing');
   } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
     head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
@@ -2295,6 +2372,8 @@ function reorderSelection(mode, refId) {
   toast({ front: 'Brought to front', back: 'Sent to back', above: 'Placed above', under: 'Placed under', hatchesBack: moved.length + ' hatches sent to back' }[mode]);
 }
 function fmtFixed(v, d) { return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
+// Position typed in the properties panel is in real coordinates; an unchanged X or Y keeps its value
+function posFromProps(p, x, y) { const r = realXY(p[0], p[1]); return fromReal(x === undefined ? r[0] : x, y === undefined ? r[1] : y); }
 function applyProps(ids, ch) {
   const sp = curSpace(); const idset = new Set(ids); const items = [];
   for (const e of sp.ents) {
@@ -2306,7 +2385,7 @@ function applyProps(ids, ch) {
     if ('al' in ch) { if (ch.al == null) delete n.al; else n.al = ch.al; }
     if (n.t === 'INSERT' && ('rot' in ch || 'sx' in ch || 'sy' in ch || 'px' in ch || 'py' in ch)) {
       const blk = state.drawing.blocks[n.n]; const base = blk ? blk.base : [0, 0];
-      const tgt = { ...n, rot: 'rot' in ch ? ch.rot : n.rot, sx: 'sx' in ch ? ch.sx : n.sx, sy: 'sy' in ch ? ch.sy : n.sy, p: ['px' in ch ? ch.px : n.p[0], 'py' in ch ? ch.py : n.p[1]] };
+      const tgt = { ...n, rot: 'rot' in ch ? ch.rot : n.rot, sx: 'sx' in ch ? ch.sx : n.sx, sy: 'sy' in ch ? ch.sy : n.sy, p: posFromProps(n.p, ch.px, ch.py) };
       const M = mMul(mInsert(tgt, base), mInverse(mInsert(n, base))); transformEntity(n, M); // moves attributes with the block
       n.rot = tgt.rot; n.sx = tgt.sx; n.sy = tgt.sy; n.p = tgt.p.slice();
     }
@@ -2316,7 +2395,7 @@ function applyProps(ids, ch) {
       if ('s' in ch) n.s = n.t === 'MTEXT' ? ch.s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\r?\n/g, '\\P') : ch.s.replace(/\r?\n/g, ' ');
     }
     if ((n.t === 'CIRCLE' || n.t === 'ARC') && 'r' in ch) n.r = ch.r;
-    if (n.t === 'POINT' && ('ptx' in ch || 'pty' in ch)) n.p = ['ptx' in ch ? ch.ptx : n.p[0], 'pty' in ch ? ch.pty : n.p[1]];
+    if (n.t === 'POINT' && ('ptx' in ch || 'pty' in ch)) n.p = posFromProps(n.p, ch.ptx, ch.pty);
     items.push({ id: e.id, prev: cloneEnt(e), next: n });
   }
   if (!items.length) return;
@@ -2362,6 +2441,7 @@ function defaultTextHeight() { const sp = curSpace(); const hs = []; for (const 
 // ===================== DXF export =====================
 function dxfString(s) { return (s || '').replace(/[^\x00-\x7f]/g, (c) => '\\U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')); }
 function buildDxf(D) {
+  D = atRealOrigin(D); // written at its real coordinates
   const out = []; let hs = 0x100; const H = () => (hs++).toString(16).toUpperCase();
   const w = (c, v) => { out.push(c, v); };
   const num = (v) => (Math.round(v * 1e8) / 1e8).toString();
@@ -2597,7 +2677,7 @@ function loadDrawing(D, name, meta) {
   stashActive();
   let d = reuse ? activeDoc : null; if (!d) { d = { id: ++docSeq }; docs.push(d); }
   activeDoc = d; d.title = name;
-  state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.frzSig = null; state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
+  rebaseDrawing(D); state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.frzSig = null; state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
   state.fileBytes = meta.bytes || null; state.fileName = meta.fileName || name; state.kind = meta.kind || (/\.dxf$/i.test(name) ? 'dxf' : 'dwg');
   state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null; state.ltMult = 1; state.cur = { c: 256, lw: -1, lt: '' };
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
@@ -3787,7 +3867,7 @@ function moreTool(T, name, addPt) {
       break;
     case 'point':
       T.start = () => setPrompt('Tap to place a point, or type x,y (or @dx,dy). × ends.');
-      T.onTap = (sn) => { addEntities([{ t: 'POINT', L: state.curLayer, c: 256, lt: '', p: [sn.x, sn.y] }]); state.lastPt = [sn.x, sn.y]; T.n = (T.n || 0) + 1; setResult([['Point', 'X ' + fmtNum(sn.x, 3) + ' · Y ' + fmtNum(sn.y, 3)], ['Placed', String(T.n)]]); };
+      T.onTap = (sn) => { addEntities([{ t: 'POINT', L: state.curLayer, c: 256, lt: '', p: [sn.x, sn.y] }]); state.lastPt = [sn.x, sn.y]; T.n = (T.n || 0) + 1; setResult([['Point', (r => 'X ' + fmtNum(r[0], 3) + ' · Y ' + fmtNum(r[1], 3))(realXY(sn.x, sn.y))], ['Placed', String(T.n)]]); };
       T.onBack = () => { if (T.n > 0) { undo(); T.n--; } };
       break;
     case 'mpen': case 'marrow': case 'mtext': case 'mcloud': case 'mline': case 'mrect': case 'mellipse': case 'mleader': case 'mnum': markupTool(T, name); break;
@@ -4187,7 +4267,7 @@ $('ndOk').addEventListener('click', () => {
 
 // ===================== Copy and paste between drawings (AutoCAD COPYCLIP / COPYBASE / PASTECLIP / PASTEORIG) =====================
 // The clipboard holds copies of the objects, the blocks, layers and linetypes they use, the source units and the base point.
-const clip = { ents: [], blocks: {}, layers: [], ltypes: {}, units: 0, base: [0, 0], src: '', preview: [] };
+const clip = { ents: [], blocks: {}, layers: [], ltypes: {}, units: 0, base: [0, 0], src: '', preview: [], origin: null, doc: 0 };
 function clipCopy(base) {
   const D = state.drawing; const sel = selectedEnts(); if (!D || !sel.length) { toast('Select objects first'); return; }
   const S = getScene(state.spaceIdx); const bb = emptyBox(); const preview = []; let npts = 0;
@@ -4199,7 +4279,7 @@ function clipCopy(base) {
   for (const n of names) for (const e of (D.blocks[n] ? D.blocks[n].ents : [])) { if (e.L && e.L !== '0') usedL.add(e.L); if (e.lt) usedT.add(e.lt); }
   const layers = D.layers.filter(l => usedL.has(l.name)).map(l => structuredClone(l)); for (const l of layers) if (l.lt) usedT.add(l.lt);
   const ltypes = {}; for (const t of usedT) if (D.ltypes[t]) ltypes[t] = D.ltypes[t].slice();
-  Object.assign(clip, { ents: sel.map(e => structuredClone(e)), blocks, layers, ltypes, units: D.header.units || 0, base: b.slice(), src: docTitle(activeDoc).replace(/\.(dwg|dxf)$/i, ''), preview: preview.map(p => { const q = []; for (let i = 0; i < p.length; i += 2) q.push(p[i] - b[0], p[i + 1] - b[1]); return q; }) });
+  Object.assign(clip, { ents: sel.map(e => structuredClone(e)), blocks, layers, ltypes, units: D.header.units || 0, base: b.slice(), origin: realXY(0, 0), doc: activeDoc ? activeDoc.id : 0, src: docTitle(activeDoc).replace(/\.(dwg|dxf)$/i, ''), preview: preview.map(p => { const q = []; for (let i = 0; i < p.length; i += 2) q.push(p[i] - b[0], p[i + 1] - b[1]); return q; }) });
   toast(sel.length + ' object' + (sel.length === 1 ? '' : 's') + ' copied · in another tab: Edit → Paste', 3200);
 }
 function clipScale() { const D = state.drawing; const a = clip.units, b = D.header.units; if (!a || !b || a === b || !UNIT_TO_M[a] || !UNIT_TO_M[b]) return 1; return UNIT_TO_M[a] / UNIT_TO_M[b]; }
@@ -4210,12 +4290,16 @@ function drawClipPreview(c, V, at, col) {
 }
 function clipPaste(at) {
   const D = state.drawing; if (!D || !clip.ents.length) return; const k = clipScale();
-  const M = at ? mMul(mTranslate(at[0], at[1]), mMul(mScale(k, k), mTranslate(-clip.base[0], -clip.base[1]))) : mScale(k, k);
+  const o0 = clip.origin || [0, 0], o1 = realXY(0, 0); // "at the same coordinates" means the same real coordinates
+  const M = at ? mMul(mTranslate(at[0], at[1]), mMul(mScale(k, k), mTranslate(-clip.base[0], -clip.base[1]))) : mMul(mTranslate(-o1[0], -o1[1]), mMul(mScale(k, k), mTranslate(o0[0], o0[1])));
   let kept = 0, addedL = 0;
-  for (const [n, b] of Object.entries(clip.blocks)) { if (D.blocks[n]) { if (!/^TC_(DIM|MK)_/.test(n)) kept++; continue; } const nb = structuredClone(b); for (const e of nb.ents) e.id = nextId(); D.blocks[n] = nb; }
+  // unnamed blocks (dimensions, dynamic-block states) from another drawing get a free name: their *D12 is not this one's
+  const ren = new Map(); if (clip.doc !== (activeDoc ? activeDoc.id : 0)) for (const n of Object.keys(clip.blocks)) if (n.startsWith('*') && D.blocks[n]) { let i = 2, m; do m = n + '_' + i++; while (D.blocks[m] || clip.blocks[m]); ren.set(n, m); }
+  const rn = (e) => { if (e.t === 'INSERT' && ren.has(e.n)) e.n = ren.get(e.n); return e; };
+  for (const [n0, b] of Object.entries(clip.blocks)) { const n = ren.get(n0) || n0; if (D.blocks[n]) { if (!/^TC_(DIM|MK)_/.test(n)) kept++; continue; } const nb = structuredClone(b); for (const e of nb.ents) { e.id = nextId(); rn(e); } D.blocks[n] = nb; }
   for (const l of clip.layers) if (!state.layerMap.has(l.name)) { const nl = structuredClone(l); D.layers.push(nl); state.layerMap.set(nl.name, nl); state.layerVis.set(nl.name, !(nl.off || nl.frozen)); addedL++; }
   for (const [t, pat] of Object.entries(clip.ltypes)) if (!D.ltypes[t]) D.ltypes[t] = pat.map(v => v * k);
-  const list = clip.ents.map(e => { const c = structuredClone(e); c.hd = ''; return transformEntity(c, M); });
+  const list = clip.ents.map(e => { const c = rn(structuredClone(e)); c.hd = ''; return transformEntity(c, M); });
   addEntities(list); state.selection.clear(); for (const e of list) state.selection.add(e.id); if (addedL) renderLayers();
   toast('Pasted ' + list.length + ' object' + (list.length === 1 ? '' : 's') + (at ? '' : ' at the same coordinates') + (k !== 1 ? ' · scaled from ' + (UNIT_NAME[clip.units] || '') + ' to ' + (UNIT_NAME[D.header.units] || '') : '') + (kept ? ' · kept this drawing’s version of ' + kept + ' block' + (kept === 1 ? '' : 's') : '') + (addedL ? ' · ' + addedL + ' layer' + (addedL === 1 ? '' : 's') + ' added' : ''), 3600);
   startTool('select', true); showSelection(); requestFull();
