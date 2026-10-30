@@ -1,0 +1,20 @@
+Note: android/src/co/tesseractstudio/cad/MainActivity.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by org.conscrypt.NativeLibraryUtil in an unnamed module (file:/usr/local/lib/android/sdk/build-tools/36.0.0/lib/apksigner.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by org.conscrypt.NativeLibraryUtil in an unnamed module (file:/usr/local/lib/android/sdk/build-tools/36.0.0/lib/apksigner.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+total 7568
+drwxr-xr-x  2 runner runner    4096 Oct 30 04:35 .
+drwxr-xr-x 10 runner runner    4096 Oct 30 04:35 ..
+-rw-r--r--  1 runner runner    1250 Oct 30 04:35 build-report.txt
+-rw-r--r--  1 runner runner    3160 Oct 30 04:35 release-contents.txt
+-rw-r--r--  1 runner runner 2570378 Oct 30 04:35 release-unsigned.apk
+-rw-r--r--  1 runner runner 2579091 Oct 30 04:35 test-update.apk
+-rw-r--r--  1 runner runner 2579091 Oct 30 04:35 test.apk

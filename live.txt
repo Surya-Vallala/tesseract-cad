@@ -1,0 +1,39 @@
+== headers version.json
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+access-control-allow-origin: *
+cache-control: max-age=600
+== version.json
+{
+  "name": "20.1",
+  "code": 2001,
+  "date": "2026-10-30",
+  "notes": [
+    "Survey drawings: 3D polylines such as plot boundaries now show",
+    "Drawings at map (UTM) coordinates no longer lose lines when zoomed in",
+    "Dimensions pasted into another drawing keep their own values"
+  ],
+  "web": {
+    "build": "202610300429"
+  },
+  "apk": {
+    "url": "https://surya-vallala.github.io/tesseract-cad/android/TesseractCAD-20.1.apk",
+    "size": 2572983,
+    "sha256": "f259b64d8361147b6f7b398a3256e75a18ffc6369c875e7f791fcecaf8fbd2d5"
+  }
+}
+
+== apk  want: f259b64d8361147b6f7b398a3256e75a18ffc6369c875e7f791fcecaf8fbd2d5 2572983
+== apk  got:  f259b64d8361147b6f7b398a3256e75a18ffc6369c875e7f791fcecaf8fbd2d5 2572983
+APK MATCHES
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by org.conscrypt.NativeLibraryUtil in an unnamed module (file:/usr/local/lib/android/sdk/build-tools/36.0.0/lib/apksigner.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+Signer #1 certificate DN: CN=Tesseract Studio, O=Tesseract Studio, L=Hyderabad, ST=Telangana, C=IN
+Signer #1 certificate SHA-256 digest: 7f18972b07b1936d4fd6eddb25975c252ea70dd870390b24e2c667637d96cbbb
+Signer #1 certificate SHA-1 digest: d2a520f8639cbc835d795e8dbcec3742453dea71
+== download page
+<h1>Tesseract CAD for Android</h1>
+Download the app (APK)
