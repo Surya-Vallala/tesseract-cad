@@ -619,7 +619,7 @@ function moreTool(T, name, addPt) {
       break;
     case 'point':
       T.start = () => setPrompt('Tap to place a point, or type x,y (or @dx,dy). × ends.');
-      T.onTap = (sn) => { addEntities([{ t: 'POINT', L: state.curLayer, c: 256, lt: '', p: [sn.x, sn.y] }]); state.lastPt = [sn.x, sn.y]; T.n = (T.n || 0) + 1; setResult([['Point', 'X ' + fmtNum(sn.x, 3) + ' · Y ' + fmtNum(sn.y, 3)], ['Placed', String(T.n)]]); };
+      T.onTap = (sn) => { addEntities([{ t: 'POINT', L: state.curLayer, c: 256, lt: '', p: [sn.x, sn.y] }]); state.lastPt = [sn.x, sn.y]; T.n = (T.n || 0) + 1; setResult([['Point', (r => 'X ' + fmtNum(r[0], 3) + ' · Y ' + fmtNum(r[1], 3))(realXY(sn.x, sn.y))], ['Placed', String(T.n)]]); };
       T.onBack = () => { if (T.n > 0) { undo(); T.n--; } };
       break;
     case 'mpen': case 'marrow': case 'mtext': case 'mcloud': case 'mline': case 'mrect': case 'mellipse': case 'mleader': case 'mnum': markupTool(T, name); break;
@@ -1019,7 +1019,7 @@ $('ndOk').addEventListener('click', () => {
 
 // ===================== Copy and paste between drawings (AutoCAD COPYCLIP / COPYBASE / PASTECLIP / PASTEORIG) =====================
 // The clipboard holds copies of the objects, the blocks, layers and linetypes they use, the source units and the base point.
-const clip = { ents: [], blocks: {}, layers: [], ltypes: {}, units: 0, base: [0, 0], src: '', preview: [] };
+const clip = { ents: [], blocks: {}, layers: [], ltypes: {}, units: 0, base: [0, 0], src: '', preview: [], origin: null, doc: 0 };
 function clipCopy(base) {
   const D = state.drawing; const sel = selectedEnts(); if (!D || !sel.length) { toast('Select objects first'); return; }
   const S = getScene(state.spaceIdx); const bb = emptyBox(); const preview = []; let npts = 0;
@@ -1031,7 +1031,7 @@ function clipCopy(base) {
   for (const n of names) for (const e of (D.blocks[n] ? D.blocks[n].ents : [])) { if (e.L && e.L !== '0') usedL.add(e.L); if (e.lt) usedT.add(e.lt); }
   const layers = D.layers.filter(l => usedL.has(l.name)).map(l => structuredClone(l)); for (const l of layers) if (l.lt) usedT.add(l.lt);
   const ltypes = {}; for (const t of usedT) if (D.ltypes[t]) ltypes[t] = D.ltypes[t].slice();
-  Object.assign(clip, { ents: sel.map(e => structuredClone(e)), blocks, layers, ltypes, units: D.header.units || 0, base: b.slice(), src: docTitle(activeDoc).replace(/\.(dwg|dxf)$/i, ''), preview: preview.map(p => { const q = []; for (let i = 0; i < p.length; i += 2) q.push(p[i] - b[0], p[i + 1] - b[1]); return q; }) });
+  Object.assign(clip, { ents: sel.map(e => structuredClone(e)), blocks, layers, ltypes, units: D.header.units || 0, base: b.slice(), origin: realXY(0, 0), doc: activeDoc ? activeDoc.id : 0, src: docTitle(activeDoc).replace(/\.(dwg|dxf)$/i, ''), preview: preview.map(p => { const q = []; for (let i = 0; i < p.length; i += 2) q.push(p[i] - b[0], p[i + 1] - b[1]); return q; }) });
   toast(sel.length + ' object' + (sel.length === 1 ? '' : 's') + ' copied · in another tab: Edit → Paste', 3200);
 }
 function clipScale() { const D = state.drawing; const a = clip.units, b = D.header.units; if (!a || !b || a === b || !UNIT_TO_M[a] || !UNIT_TO_M[b]) return 1; return UNIT_TO_M[a] / UNIT_TO_M[b]; }
@@ -1042,12 +1042,16 @@ function drawClipPreview(c, V, at, col) {
 }
 function clipPaste(at) {
   const D = state.drawing; if (!D || !clip.ents.length) return; const k = clipScale();
-  const M = at ? mMul(mTranslate(at[0], at[1]), mMul(mScale(k, k), mTranslate(-clip.base[0], -clip.base[1]))) : mScale(k, k);
+  const o0 = clip.origin || [0, 0], o1 = realXY(0, 0); // "at the same coordinates" means the same real coordinates
+  const M = at ? mMul(mTranslate(at[0], at[1]), mMul(mScale(k, k), mTranslate(-clip.base[0], -clip.base[1]))) : mMul(mTranslate(-o1[0], -o1[1]), mMul(mScale(k, k), mTranslate(o0[0], o0[1])));
   let kept = 0, addedL = 0;
-  for (const [n, b] of Object.entries(clip.blocks)) { if (D.blocks[n]) { if (!/^TC_(DIM|MK)_/.test(n)) kept++; continue; } const nb = structuredClone(b); for (const e of nb.ents) e.id = nextId(); D.blocks[n] = nb; }
+  // unnamed blocks (dimensions, dynamic-block states) from another drawing get a free name: their *D12 is not this one's
+  const ren = new Map(); if (clip.doc !== (activeDoc ? activeDoc.id : 0)) for (const n of Object.keys(clip.blocks)) if (n.startsWith('*') && D.blocks[n]) { let i = 2, m; do m = n + '_' + i++; while (D.blocks[m] || clip.blocks[m]); ren.set(n, m); }
+  const rn = (e) => { if (e.t === 'INSERT' && ren.has(e.n)) e.n = ren.get(e.n); return e; };
+  for (const [n0, b] of Object.entries(clip.blocks)) { const n = ren.get(n0) || n0; if (D.blocks[n]) { if (!/^TC_(DIM|MK)_/.test(n)) kept++; continue; } const nb = structuredClone(b); for (const e of nb.ents) { e.id = nextId(); rn(e); } D.blocks[n] = nb; }
   for (const l of clip.layers) if (!state.layerMap.has(l.name)) { const nl = structuredClone(l); D.layers.push(nl); state.layerMap.set(nl.name, nl); state.layerVis.set(nl.name, !(nl.off || nl.frozen)); addedL++; }
   for (const [t, pat] of Object.entries(clip.ltypes)) if (!D.ltypes[t]) D.ltypes[t] = pat.map(v => v * k);
-  const list = clip.ents.map(e => { const c = structuredClone(e); c.hd = ''; return transformEntity(c, M); });
+  const list = clip.ents.map(e => { const c = rn(structuredClone(e)); c.hd = ''; return transformEntity(c, M); });
   addEntities(list); state.selection.clear(); for (const e of list) state.selection.add(e.id); if (addedL) renderLayers();
   toast('Pasted ' + list.length + ' object' + (list.length === 1 ? '' : 's') + (at ? '' : ' at the same coordinates') + (k !== 1 ? ' · scaled from ' + (UNIT_NAME[clip.units] || '') + ' to ' + (UNIT_NAME[D.header.units] || '') : '') + (kept ? ' · kept this drawing’s version of ' + kept + ' block' + (kept === 1 ? '' : 's') : '') + (addedL ? ' · ' + addedL + ' layer' + (addedL === 1 ? '' : 's') + ' added' : ''), 3600);
   startTool('select', true); showSelection(); requestFull();

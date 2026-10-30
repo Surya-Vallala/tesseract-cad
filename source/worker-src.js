@@ -60,6 +60,15 @@ function convEntity(e, idc) {
       if (v.length < 2) return null;
       return { ...base, t: 'PLINE', v, closed: !!(e.flag & 1), w: num(e.startWidth) };
     }
+    case 'POLYLINE3D': {
+      // 3D polylines (survey boundaries, contours from total-station data): drawn in plan, heights dropped, no bulges
+      let vs = e.vertices || [];
+      if (vs.some(p => p.flag & 8)) vs = vs.filter(p => (p.flag & 8)); // spline-fit: the generated points
+      else vs = vs.filter(p => !(p.flag & 16));                        // skip spline frame points
+      const v = vs.map(p => [num(p.x), num(p.y), 0]);
+      if (v.length < 2) return null;
+      return { ...base, t: 'PLINE', v, closed: !!(e.flag & 1), w: 0 };
+    }
     case 'ARC': return { ...base, t: 'ARC', ce: P(e.center), r: num(e.radius), a0: num(e.startAngle), a1: num(e.endAngle) };
     case 'CIRCLE': return { ...base, t: 'CIRCLE', ce: P(e.center), r: num(e.radius) };
     case 'ELLIPSE': return { ...base, t: 'ELLIPSE', ce: P(e.center), m: P(e.majorAxisEndPoint), k: num(e.axisRatio, 1), a0: num(e.startAngle), a1: num(e.endAngle, Math.PI * 2) };

@@ -13,6 +13,7 @@ In Chrome on Android, use the ⋮ menu and choose **Add to Home screen** (or **I
 ## What it does
 
 - Opens **.dwg** (including AutoCAD 2018 format) and **.dxf** files: Model space and all Layouts
+- **Survey drawings:** 3D polylines (plot boundaries, contours from total-station data) are drawn in plan. Drawings at map coordinates (UTM, state plane: hundreds of kilometres from 0,0) stay sharp at any zoom; the app quietly works near 0,0, and every coordinate it shows, takes as typed input, writes to DXF or uses for paste at the same coordinates is the real one
 - Shows object and layer **transparency**, true colours, and only the current **visibility state** of dynamic blocks
 - Layers: turn on and off, show all, hide all, invert. Layers frozen in the file stay hidden, and a block inserted on a frozen layer is hidden completely, as in AutoCAD. **Layer** tools: Layer list, New layer (name and colour), Make current (tap an object), Layer off (tap objects), Off others (keep only the layers of what you tap), All on, and Previous (undo the last layer change)
 - **Live measurements:** distances show drawing-style dimensions on the drawing (extension lines, ticks, the value on the line), areas show every side, the area and the perimeter, angles show the arc and degrees, coordinates show a label. Every measured point has a handle: press it and drag (the magnifier shows the point, snapping works) and the numbers update as you move

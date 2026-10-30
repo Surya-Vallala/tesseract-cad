@@ -216,7 +216,7 @@ cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); });
 window.addEventListener('keydown', (ev) => { if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT')) { if (ev.key === 'Escape') ev.target.blur(); return; } if (ev.key === 'Escape') exitToSelect(); else if (ev.key === 'Enter') doneTool(); else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'c' && state.drawing && state.selection.size) { ev.preventDefault(); clipCopy(null); } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'v' && state.drawing && !atHome()) { ev.preventDefault(); startTool('paste'); } else if (ev.key === 'Delete' || ev.key === 'Backspace') { if (state.selection.size) deleteSelection(); } });
 
 function hoverAt(X, Y) { state.hoverScreen = [X, Y]; const V = state.view; const w = toWorld(X, Y, V); const hit = pickAt(w[0], w[1], 10 / V.s); const it = hit ? hit.item : null; if (it !== state.hoverItem) { state.hoverItem = it; requestFast(); } const picking = !!(state.tool && PICK_TOOLS.has(state.tool.name) && state.tool.phase !== 'select'); const sn = snapPoint(X, Y); state.snapMark = (picking && sn.kind) ? sn : null; state.hoverSn = picking ? sn : null; showCoord(sn.x, sn.y, sn.kind, sn); if (picking) otrackFeed(sn); requestFast(); }
-function showCoord(x, y, kind, sn) { $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + (sn ? snapLabel(sn) : SNAP_NAMES[kind]) : ''); }
+function showCoord(x, y, kind, sn) { [x, y] = realXY(x, y); $('coordChip').textContent = 'X ' + fmtNum(x, 2) + ' · Y ' + fmtNum(y, 2) + (kind ? '  ·  ' + (sn ? snapLabel(sn) : SNAP_NAMES[kind]) : ''); }
 
 function onTap(X, Y, ev) {
   if (!state.drawing) return;
@@ -257,9 +257,9 @@ function parseTyped(str, base) {
   str = str.trim(); if (!str) return null;
   const rel = str.startsWith('@'); if (rel) str = str.slice(1);
   let m = str.match(/^(-?[\d.]+)\s*<\s*(-?[\d.]+)$/); // polar
-  if (m) { const L = parseFloat(m[1]), A = rad(parseFloat(m[2])); const b = base || state.lastPt || [0, 0]; return { pt: [b[0] + L * Math.cos(A), b[1] + L * Math.sin(A)], len: L, ang: A }; }
+  if (m) { const L = parseFloat(m[1]), A = rad(parseFloat(m[2])); const b = base || state.lastPt || fromReal(0, 0); return { pt: [b[0] + L * Math.cos(A), b[1] + L * Math.sin(A)], len: L, ang: A }; }
   m = str.match(/^(-?[\d.]+)\s*,\s*(-?[\d.]+)$/);
-  if (m) { const x = parseFloat(m[1]), y = parseFloat(m[2]); if (rel) { const b = base || state.lastPt || [0, 0]; return { pt: [b[0] + x, b[1] + y] }; } return { pt: [x, y] }; }
+  if (m) { const x = parseFloat(m[1]), y = parseFloat(m[2]); if (rel) { const b = base || state.lastPt || fromReal(0, 0); return { pt: [b[0] + x, b[1] + y] }; } return { pt: fromReal(x, y) }; } // typed X,Y are real coordinates
   m = str.match(/^(-?[\d.]+)$/);
   if (m) return { num: parseFloat(m[1]) };
   return null;
@@ -317,19 +317,22 @@ function startTool(name, keepSel) {
 }
 // Anonymous *U blocks are dynamic blocks in a non-default state
 function blockLabel(n) { return /^\*U/i.test(n || '') ? 'Dynamic block' : /^TC_MK_/.test(n || '') ? 'Markup' : /^TC_DIM_/.test(n || '') ? 'Dimension' : 'Block · ' + n; }
+function fmtXY(p) { const r = realXY(p[0], p[1]); return fmtNum(r[0], 2) + ', ' + fmtNum(r[1], 2); }
+// The coordinate tool's reading: through a layout viewport it reads the model
+function coordReading(p) { const ms = measureSpace([p], true), sp = curSpace(); return realXY(ms.pts[0][0], ms.pts[0][1], !sp.paper || !!ms.vp); }
 function describeItem(it) {
   const e = it.ent; const rows = [['Type', e.dim ? 'Dimension' : e.t === 'INSERT' ? blockLabel(e.n) : e.t], ['Layer', resolveLayer(e, { layer: null })]];
   const col = e.rgb ? 'RGB ' + e.rgb : (e.c === 256 || e.c == null) ? 'ByLayer (' + layerAci(e.L) + ')' : e.c === 0 ? 'ByBlock' : String(e.c); rows.push(['Color', col]);
   rows.push(['Linetype', ltName(e.lt) + (e.lts && e.lts !== 1 ? ' ×' + fmtNum(e.lts, 3) : '')]); if (e.al != null) rows.push(['Transparency', alName(e.al)]);
   if (e.t === 'LINE') { const L = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]); rows.push(['Length', fmtLenAll(L)], ['Angle', fmtNum(deg(Math.atan2(e.b[1] - e.a[1], e.b[0] - e.a[0])), 2) + '°'], ['ΔX', fmtLen(e.b[0] - e.a[0])], ['ΔY', fmtLen(e.b[1] - e.a[1])]); }
   else if (e.t === 'PLINE' || e.t === 'SPLINE' || e.t === 'LEADER') { const poly = it.polys[0] || []; rows.push(['Length', fmtLenAll(polyLength(poly, false))]); if (it.closed && it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))]); rows.push(['Vertices', String(e.v ? e.v.length : (e.fit && e.fit.length) || (e.cp && e.cp.length) || poly.length / 2)]); }
-  else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]);
-  else if (e.t === 'ARC') { const sw = normAng(e.a1 - e.a0); rows.push(['Radius', fmtLenAll(e.r)], ['Arc length', fmtLen(e.r * sw)], ['Angle', fmtNum(deg(sw), 2) + '°'], ['Center', fmtNum(e.ce[0], 2) + ', ' + fmtNum(e.ce[1], 2)]); }
-  else if (e.t === 'POINT') rows.push(['X', fmtNum(e.p[0], 3)], ['Y', fmtNum(e.p[1], 3)]);
+  else if (e.t === 'CIRCLE') rows.push(['Radius', fmtLenAll(e.r)], ['Diameter', fmtLen(e.r * 2)], ['Circumference', fmtLen(TAU * e.r)], ['Area', fmtArea(Math.PI * e.r * e.r)], ['Center', fmtXY(e.ce)]);
+  else if (e.t === 'ARC') { const sw = normAng(e.a1 - e.a0); rows.push(['Radius', fmtLenAll(e.r)], ['Arc length', fmtLen(e.r * sw)], ['Angle', fmtNum(deg(sw), 2) + '°'], ['Center', fmtXY(e.ce)]); }
+  else if (e.t === 'POINT') { const r = realXY(e.p[0], e.p[1]); rows.push(['X', fmtNum(r[0], 3)], ['Y', fmtNum(r[1], 3)]); }
   else if (e.t === 'ELLIPSE') { const a = Math.hypot(e.m[0], e.m[1]); rows.push(['Major radius', fmtLen(a)], ['Minor radius', fmtLen(a * e.k)]); }
   else if (e.t === 'TEXT' || e.t === 'MTEXT') rows.push(['Text', textPlain(e.s).slice(0, 120)], ['Height', fmtLen(e.h)]);
   else if (e.t === 'HATCH') { rows.push(['Pattern', e.solid ? 'Solid' : e.name]); if (it.fillPoly) rows.push(['Area', fmtArea(Math.abs(polyArea(it.fillPoly.slice(0, -2))))], ['Perimeter', fmtLen(polyLength(it.fillPoly, false))]); }
-  else if (e.t === 'INSERT') { rows.push(['Insert at', fmtNum(e.p[0], 2) + ', ' + fmtNum(e.p[1], 2)], ['Scale', fmtNum(e.sx, 3) + (e.sy !== e.sx ? ' × ' + fmtNum(e.sy, 3) : '')], ['Rotation', fmtNum(deg(e.rot), 2) + '°']); }
+  else if (e.t === 'INSERT') { rows.push(['Insert at', fmtXY(e.p)], ['Scale', fmtNum(e.sx, 3) + (e.sy !== e.sx ? ' × ' + fmtNum(e.sy, 3) : '')], ['Rotation', fmtNum(deg(e.rot), 2) + '°']); }
   return rows;
 }
 
@@ -364,10 +367,10 @@ function makeTool(name) {
       break;
     case 'coord':
       T.start = () => setPrompt('Tap a point to read its coordinates. Press and hold to magnify for an exact point.');
-      T.update = () => { const p = T.pts[0]; if (!p) { setResult(null); return; } const ms = measureSpace([p], true); const q = ms.pts[0]; saveResult(T, { kind: 'coord', pts: T.pts, text: 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2) }); const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)]]; if (T.snapKind != null) rows.push(['Snap', SNAP_NAMES[T.snapKind].toLowerCase()]); if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(p[0], 2) + ', ' + fmtNum(p[1], 2)]); setResult(rows); };
+      T.update = () => { const p = T.pts[0]; if (!p) { setResult(null); return; } const ms = measureSpace([p], true); const q = coordReading(p); saveResult(T, { kind: 'coord', pts: T.pts, text: 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2) }); const rows = [['X', fmtNum(q[0], 3)], ['Y', fmtNum(q[1], 3)]]; if (T.snapKind != null) rows.push(['Snap', SNAP_NAMES[T.snapKind].toLowerCase()]); if (ms.vp) rows.push(['Model point', 'through viewport'], ['Sheet', fmtNum(p[0], 2) + ', ' + fmtNum(p[1], 2)]); setResult(rows); };
       T.onTap = (sn) => { T.pts = [[sn.x, sn.y]]; T.rec = null; state.lastPt = T.pts[0]; T.snapKind = sn.kind; T.update(); };
       T.onHandleMoved = (i, sn) => { T.snapKind = sn.kind; T.update(); };
-      T.draw = (c, V, acc) => { const p = T.pts[0]; if (!p) return; const q = measureSpace([p], true).pts[0]; const s2 = toScreen(p[0], p[1], V); drawChip(c, s2[0] + 12, s2[1] - 22, 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2), 0, null, 'left'); drawHandles(c, V, T.pts, acc); };
+      T.draw = (c, V, acc) => { const p = T.pts[0]; if (!p) return; const q = coordReading(p); const s2 = toScreen(p[0], p[1], V); drawChip(c, s2[0] + 12, s2[1] - 22, 'X ' + fmtNum(q[0], 2) + ' · Y ' + fmtNum(q[1], 2), 0, null, 'left'); drawHandles(c, V, T.pts, acc); };
       break;
     case 'dist': case 'cont': {
       const chain = name === 'cont'; const first = chain ? 'Tap the first point. Keep tapping to add lengths; Done finishes.' : 'Tap the first point.';
@@ -619,7 +622,7 @@ function handleDragLabel() {
   if (T.name === 'facade') { let L = 0; for (let j = 1; j < P.length; j++) L += mLen(P[j - 1], P[j]); return 'Run ' + fmtLen(L); }
   if (T.name === 'area' && P.length >= 3) { const f = []; for (const p of measureSpace(P).pts) f.push(p[0], p[1]); return fmtAreaShort(Math.abs(polyArea(f))); }
   if (T.name === 'angle' && P.length >= 3) { const [v, a, b] = measureSpace(P.slice(0, 3)).pts; let d = Math.abs(deg(Math.atan2(b[1] - v[1], b[0] - v[0]) - Math.atan2(a[1] - v[1], a[0] - v[0]))) % 360; if (d > 180) d = 360 - d; return fmtAng(d); }
-  if (T.name === 'coord') { const q = measureSpace([P[0]], true).pts[0]; return fmtNum(q[0], 2) + ', ' + fmtNum(q[1], 2); }
+  if (T.name === 'coord') { const q = coordReading(P[0]); return fmtNum(q[0], 2) + ', ' + fmtNum(q[1], 2); }
   return '';
 }
 function endHandleDrag() { otrackFeed(null); state.handleDrag = null; state.loupe = null; state.snapMark = null; gesture = false; dragStart = null; requestFull(); }

@@ -1,19 +1,18 @@
 {
-  "name": "20.0",
-  "code": 2000,
-  "date": "2026-10-14",
+  "name": "20.1",
+  "code": 2001,
+  "date": "2026-10-30",
   "notes": [
-    "Android app that works fully offline",
-    "Check for updates button on the home screen",
-    "Open DWG/DXF from WhatsApp, Files or Gmail straight into the app",
-    "Share DWG, DXF and PDF straight to WhatsApp"
+    "Survey drawings: 3D polylines such as plot boundaries now show",
+    "Drawings at map (UTM) coordinates no longer lose lines when zoomed in",
+    "Dimensions pasted into another drawing keep their own values"
   ],
   "web": {
-    "build": "202610140548"
+    "build": "202610300429"
   },
   "apk": {
-    "url": "https://surya-vallala.github.io/tesseract-cad/android/TesseractCAD-20.0.apk",
-    "size": 2570336,
-    "sha256": "f05f58f832ef4a77f9b2584281f87812abef24fb4db2a81052d53f6d73ec0430"
+    "url": "https://surya-vallala.github.io/tesseract-cad/android/TesseractCAD-20.1.apk",
+    "size": 2572983,
+    "sha256": "f259b64d8361147b6f7b398a3256e75a18ffc6369c875e7f791fcecaf8fbd2d5"
   }
 }

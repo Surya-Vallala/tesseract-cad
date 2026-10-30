@@ -49,7 +49,8 @@ export function parseDxf(text, name) {
         while (p < P && (r = readRecord())) { if (r.type === 'SEQEND') break; if (r.type === 'VERTEX') verts.push(r); }
         const hasFit = verts.some(vr => num(vr.g, 70) & 8); const use = verts.filter(vr => { const f = num(vr.g, 70); return hasFit ? (f & 8) : !(f & 16); });
         const v = use.map(vr => [num(vr.g, 10), num(vr.g, 20), num(vr.g, 42)]); if (v.length < 2) return null;
-        if (flag & 8 || flag & 16 || flag & 64) return null; // 3D polylines / meshes not supported
+        if (flag & 16 || flag & 64) return null; // polygon / polyface meshes not supported
+        if (flag & 8) return { ...b, t: 'PLINE', v: v.map(q => [q[0], q[1], 0]), closed: !!(flag & 1), w: 0 }; // 3D polyline: drawn in plan
         return { ...b, t: 'PLINE', v, closed: !!(flag & 1), w: num(g, 40, 0) };
       }
       case 'ARC': return { ...b, t: 'ARC', ce: pt(g, 10), r: num(g, 40), a0: num(g, 50) * R, a1: num(g, 51) * R };

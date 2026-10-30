@@ -25,6 +25,80 @@ function transformEntity(e, M) {
   }
   return e;
 }
+// ===================== Drawings far from 0,0 =====================
+// Survey drawings and site plans often sit at map coordinates (UTM: about 220 000 E, 1 910 000 N). The canvas keeps
+// paths and transforms in 32-bit floats, so at those numbers lines shake or vanish when zoomed in. Such drawings are
+// moved near 0,0 when they open: D.origin is the shift. Coordinates shown, typed, exported or pasted in place add it
+// back, so only real coordinates are ever seen.
+const REBASE_MIN = 1e4;
+function shiftEntity(e, dx, dy) { // a pure move; new point arrays, so shared arrays are never moved twice
+  const S = (p) => { if (!p) return p; const q = p.slice(); q[0] += dx; q[1] += dy; return q; };
+  switch (e.t) {
+    case 'LINE': e.a = S(e.a); e.b = S(e.b); break;
+    case 'PLINE': e.v = e.v.map(S); break;
+    case 'CIRCLE': case 'ARC': case 'ELLIPSE': e.ce = S(e.ce); break;
+    case 'SPLINE': if (e.cp) e.cp = e.cp.map(S); if (e.fit) e.fit = e.fit.map(S); break;
+    case 'TEXT': e.p = S(e.p); if (e.ap) e.ap = S(e.ap); break;
+    case 'MTEXT': case 'POINT': e.p = S(e.p); break;
+    case 'INSERT': e.p = S(e.p); if (e.att) for (const a of e.att) { a.p = S(a.p); if (a.ap) a.ap = S(a.ap); } break;
+    case 'HATCH':
+      for (const l of e.paths || []) { if (l.v) l.v = l.v.map(S); else for (const ed of l.e || []) { if (ed.t === 1) { ed.a = S(ed.a); ed.b = S(ed.b); } else if (ed.t === 2 || ed.t === 3) ed.c = S(ed.c); else if (ed.t === 4) { if (ed.cp) ed.cp = ed.cp.map(S); if (ed.fit) ed.fit = ed.fit.map(S); } } }
+      if (e.pat && e.pat.lines) e.pat.lines = e.pat.lines.map(ln => ({ ...ln, b: S(ln.b) })); break;
+    case 'VIEWPORT': break; // sheets are never moved
+    default: if (e.pts) e.pts = e.pts.map(S);
+  }
+  return e;
+}
+function rebaseDrawing(D) {
+  if (!D || D.sample || D.origin !== undefined) return; // a saved copy that was already moved keeps its shift
+  D.origin = null; const ms = D.spaces[0]; if (!ms || ms.paper || !ms.ents.length) return;
+  // where the drawing really is: the median of one point per object (stray objects at 0,0 don't pull it away)
+  const memo = new Map();
+  const anchor = (e, depth) => {
+    switch (e.t) {
+      case 'LINE': return e.a; case 'PLINE': return e.v && e.v[0];
+      case 'CIRCLE': case 'ARC': case 'ELLIPSE': return e.ce;
+      case 'SPLINE': return (e.cp && e.cp[0]) || (e.fit && e.fit[0]);
+      case 'TEXT': case 'MTEXT': case 'POINT': return e.p;
+      case 'HATCH': { const l = e.paths && e.paths[0]; if (!l) return null; if (l.v) return l.v[0]; const ed = l.e && l.e[0]; return ed ? (ed.a || ed.c || (ed.cp && ed.cp[0]) || (ed.fit && ed.fit[0])) : null; }
+      case 'INSERT': { const b = D.blocks[e.n]; const a = b && depth < 6 ? blockAnchor(e.n, depth + 1) : null; return a ? mApply(mInsert(e, b.base || [0, 0]), a) : e.p; } // dimensions: their block is drawn at map coordinates
+      case 'VIEWPORT': return null;
+      default: return e.pts && e.pts[0];
+    }
+  };
+  const ok = (a) => a && isFinite(a[0]) && isFinite(a[1]);
+  const blockAnchor = (n, depth) => { if (memo.has(n)) return memo.get(n); memo.set(n, null); let r = null; for (const e of D.blocks[n].ents) { const a = anchor(e, depth); if (ok(a)) { r = a; break; } } memo.set(n, r); return r; };
+  const xs = [], ys = []; for (const e of ms.ents) { const a = anchor(e, 0); if (ok(a)) { xs.push(a[0]); ys.push(a[1]); } }
+  if (!xs.length) return;
+  const X = Float64Array.from(xs).sort(), Y = Float64Array.from(ys).sort(); const q = (A, f) => A[Math.min(A.length - 1, Math.floor(f * A.length))];
+  const mx = q(X, 0.5), my = q(Y, 0.5), mag = Math.max(Math.abs(mx), Math.abs(my)), size = Math.max(q(X, 0.95) - q(X, 0.05), q(Y, 0.95) - q(Y, 0.05));
+  if (mag < REBASE_MIN || (mag < 1e6 && mag < 20 * size)) return; // near 0,0 for its size: nothing to gain
+  const O = [Math.round(mx / 1000) * 1000, Math.round(my / 1000) * 1000], dx = -O[0], dy = -O[1];
+  // blocks whose contents sit at map coordinates (dimension blocks, survey blocks inserted at 0,0) move with their base
+  // point, so every insert of them, in model, layouts or other blocks, draws exactly as before
+  const moved = [];
+  for (const n of Object.keys(D.blocks)) {
+    const a = blockAnchor(n, 1), b = D.blocks[n], base = b.base || [0, 0]; if (!ok(a)) continue;
+    const far = Math.max(Math.abs(a[0] - base[0]), Math.abs(a[1] - base[1])), near = Math.max(Math.abs(a[0] - O[0]), Math.abs(a[1] - O[1]));
+    if (far >= REBASE_MIN && near * 10 < far) moved.push(n);
+  }
+  for (const n of moved) { const b = D.blocks[n], base = b.base || [0, 0]; for (const e of b.ents) shiftEntity(e, dx, dy); b.base = [base[0] + dx, base[1] + dy]; }
+  for (const e of ms.ents) shiftEntity(e, dx, dy);
+  for (const sp of D.spaces) if (sp.paper) for (const e of sp.ents) if (e.t === 'VIEWPORT' && e.vid !== 1 && e.vc) e.vc = [e.vc[0] + dx, e.vc[1] + dy]; // what each layout viewport looks at
+  const H = D.header; for (const k of ['extmin', 'extmax']) if (H[k] && ok(H[k])) H[k] = [H[k][0] + dx, H[k][1] + dy].concat(H[k].slice(2));
+  D.origin = O; D.originBlocks = moved;
+}
+// The drawing at its real coordinates, for files written out (DXF)
+function atRealOrigin(D) {
+  const O = D.origin; if (!O) return D; const dx = O[0], dy = O[1];
+  const spaces = D.spaces.map((sp, i) => i === 0 && !sp.paper ? { ...sp, ents: sp.ents.map(e => shiftEntity(structuredClone(e), dx, dy)) } : sp.paper ? { ...sp, ents: sp.ents.map(e => e.t === 'VIEWPORT' && e.vid !== 1 && e.vc ? { ...e, vc: [e.vc[0] + dx, e.vc[1] + dy] } : e) } : sp);
+  const blocks = { ...D.blocks }; for (const n of D.originBlocks || []) { const b = blocks[n]; if (!b) continue; const base = b.base || [0, 0]; blocks[n] = { ...b, base: [base[0] + dx, base[1] + dy], ents: b.ents.map(e => shiftEntity(structuredClone(e), dx, dy)) }; }
+  const H = { ...D.header }; for (const k of ['extmin', 'extmax']) if (H[k] && isFinite(H[k][0])) H[k] = [H[k][0] + dx, H[k][1] + dy].concat(H[k].slice(2));
+  return { ...D, spaces, blocks, header: H, origin: null, originBlocks: [] };
+}
+// Real (file) coordinates of a point: model-space points add back the shift; sheets (layouts) are never shifted
+function realXY(x, y, model) { const D = state.drawing, o = D && D.origin; if (model === undefined) { const sp = curSpace(); model = !!sp && !sp.paper; } return o && model ? [x + o[0], y + o[1]] : [x, y]; }
+function fromReal(x, y) { const D = state.drawing, o = D && D.origin, sp = curSpace(); return o && sp && !sp.paper ? [x - o[0], y - o[1]] : [x, y]; }
 function cloneEnt(e) { return structuredClone(e); }
 function pushUndo(action) { const wasDirty = state.dirty; state.undo.push(action); if (state.undo.length > 100) state.undo.shift(); state.redo.length = 0; state.dirty = true; updateUndoBtns(); if (!wasDirty) renderTabs(); }
 function updateUndoBtns() { const show = !!(state.drawing && $('welcome').style.display === 'none'); $('btnUndo').hidden = !show; $('btnRedo').hidden = !show; $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; $('btnUndo').title = state.undo.length ? 'Undo (' + state.undo.length + ')' : 'Nothing to undo'; }
@@ -121,7 +195,7 @@ function openProps() {
     row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
     row('Scale X', numInput(same(e => +fmtFixed(e.sx || 1, 6)), 'sx', v => v || 1));
     row('Scale Y', numInput(same(e => +fmtFixed(e.sy || 1, 6)), 'sy', v => v || 1));
-    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'px')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'py')); }
+    if (one) { const r = realXY(one.p[0], one.p[1]); row('Position X', numInput(+fmtFixed(r[0], 4), 'px')); row('Position Y', numInput(+fmtFixed(r[1], 4), 'py')); }
   } else if (t1 === 'TEXT' || t1 === 'MTEXT') {
     head('Text');
     if (one) { const ta = document.createElement(one.t === 'MTEXT' ? 'textarea' : 'input'); const plain = one.t === 'MTEXT' ? mtextPlain(one.s).join('\n') : textPlain(one.s); ta.value = plain; ta.addEventListener('input', () => { if (ta.value !== plain) { ch.s = ta.value; mark(ta); } else delete ch.s; }); row('Contents', ta, one.t === 'MTEXT' ? 'Editing replaces any inline formatting' : null); }
@@ -129,7 +203,7 @@ function openProps() {
     row('Rotation °', numInput(same(e => +fmtFixed(deg(normAng(e.rot || 0)), 4)), 'rot', v => rad(v)));
   } else if (t1 === 'POINT') {
     head(one ? 'Point' : 'Points');
-    if (one) { row('Position X', numInput(+fmtFixed(one.p[0], 4), 'ptx')); row('Position Y', numInput(+fmtFixed(one.p[1], 4), 'pty')); }
+    if (one) { const r = realXY(one.p[0], one.p[1]); row('Position X', numInput(+fmtFixed(r[0], 4), 'ptx')); row('Position Y', numInput(+fmtFixed(r[1], 4), 'pty')); }
     const pb = document.createElement('button'); pb.type = 'button'; pb.className = 'btn'; pb.textContent = 'Point style (all points)…'; pb.addEventListener('click', () => { closeSheets(); openPointStyle(); }); row('Style', pb, 'Style and size are shared by every point in the drawing');
   } else if ((t1 === 'CIRCLE' || t1 === 'ARC') && one) {
     head(t1 === 'CIRCLE' ? 'Circle' : 'Arc'); row('Radius', numInput(+fmtFixed(one.r, 4), 'r', v => v > 0 ? v : undefined));
@@ -159,6 +233,8 @@ function reorderSelection(mode, refId) {
   toast({ front: 'Brought to front', back: 'Sent to back', above: 'Placed above', under: 'Placed under', hatchesBack: moved.length + ' hatches sent to back' }[mode]);
 }
 function fmtFixed(v, d) { return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
+// Position typed in the properties panel is in real coordinates; an unchanged X or Y keeps its value
+function posFromProps(p, x, y) { const r = realXY(p[0], p[1]); return fromReal(x === undefined ? r[0] : x, y === undefined ? r[1] : y); }
 function applyProps(ids, ch) {
   const sp = curSpace(); const idset = new Set(ids); const items = [];
   for (const e of sp.ents) {
@@ -170,7 +246,7 @@ function applyProps(ids, ch) {
     if ('al' in ch) { if (ch.al == null) delete n.al; else n.al = ch.al; }
     if (n.t === 'INSERT' && ('rot' in ch || 'sx' in ch || 'sy' in ch || 'px' in ch || 'py' in ch)) {
       const blk = state.drawing.blocks[n.n]; const base = blk ? blk.base : [0, 0];
-      const tgt = { ...n, rot: 'rot' in ch ? ch.rot : n.rot, sx: 'sx' in ch ? ch.sx : n.sx, sy: 'sy' in ch ? ch.sy : n.sy, p: ['px' in ch ? ch.px : n.p[0], 'py' in ch ? ch.py : n.p[1]] };
+      const tgt = { ...n, rot: 'rot' in ch ? ch.rot : n.rot, sx: 'sx' in ch ? ch.sx : n.sx, sy: 'sy' in ch ? ch.sy : n.sy, p: posFromProps(n.p, ch.px, ch.py) };
       const M = mMul(mInsert(tgt, base), mInverse(mInsert(n, base))); transformEntity(n, M); // moves attributes with the block
       n.rot = tgt.rot; n.sx = tgt.sx; n.sy = tgt.sy; n.p = tgt.p.slice();
     }
@@ -180,7 +256,7 @@ function applyProps(ids, ch) {
       if ('s' in ch) n.s = n.t === 'MTEXT' ? ch.s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\r?\n/g, '\\P') : ch.s.replace(/\r?\n/g, ' ');
     }
     if ((n.t === 'CIRCLE' || n.t === 'ARC') && 'r' in ch) n.r = ch.r;
-    if (n.t === 'POINT' && ('ptx' in ch || 'pty' in ch)) n.p = ['ptx' in ch ? ch.ptx : n.p[0], 'pty' in ch ? ch.pty : n.p[1]];
+    if (n.t === 'POINT' && ('ptx' in ch || 'pty' in ch)) n.p = posFromProps(n.p, ch.ptx, ch.pty);
     items.push({ id: e.id, prev: cloneEnt(e), next: n });
   }
   if (!items.length) return;
@@ -226,6 +302,7 @@ function defaultTextHeight() { const sp = curSpace(); const hs = []; for (const 
 // ===================== DXF export =====================
 function dxfString(s) { return (s || '').replace(/[^\x00-\x7f]/g, (c) => '\\U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')); }
 function buildDxf(D) {
+  D = atRealOrigin(D); // written at its real coordinates
   const out = []; let hs = 0x100; const H = () => (hs++).toString(16).toUpperCase();
   const w = (c, v) => { out.push(c, v); };
   const num = (v) => (Math.round(v * 1e8) / 1e8).toString();
@@ -461,7 +538,7 @@ function loadDrawing(D, name, meta) {
   stashActive();
   let d = reuse ? activeDoc : null; if (!d) { d = { id: ++docSeq }; docs.push(d); }
   activeDoc = d; d.title = name;
-  state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.frzSig = null; state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
+  rebaseDrawing(D); state.drawing = D; state.scenes = new Map(); blockCache = new Map(); state.frzSig = null; state.selection = new Set(); state.undo = []; state.redo = []; state.dirty = false; state.spaceIdx = 0; state.view = { s: 1, tx: 0, ty: 0 }; lastFull = null;
   state.fileBytes = meta.bytes || null; state.fileName = meta.fileName || name; state.kind = meta.kind || (/\.dxf$/i.test(name) ? 'dxf' : 'dwg');
   state.hoverItem = null; state.snapMark = null; state.lastPt = null; state.results = []; state.mscale = 1; state.layerHist = []; state.lastDim = null; state.ltMult = 1; state.cur = { c: 256, lw: -1, lt: '' };
   state.layerMap = new Map(D.layers.map(l => [l.name, l])); state.layerVis = new Map(D.layers.map(l => [l.name, !(l.off || l.frozen)]));
